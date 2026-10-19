@@ -200,15 +200,17 @@ test('encrypted: the repository holds no readable names or data, and needs the r
     assert.strictEqual((await none.manager.listSlots(game)).problem.code, 'NEED_PASSPHRASE');
 });
 
-test('a public repository refuses unencrypted saves', async () => {
+test('a public repository takes plain saves: the owner chose that, and nothing but save data goes up', async () => {
     const remote = remoteRepo();
     const a = computer('Desk PC', remote, { visible: 'public' });
     const slot = await a.manager.createSlot(game, 'Main run');
-    const r = await playSession(a, slot.id, { 'f.bin': 'data' });
-    assert.strictEqual(r.status, 'queued');
-    assert.strictEqual(a.manager.activity().state, 'error');
-    assert.match(a.manager.activity().message, /public/);
-    assert.strictEqual(git(remote, 'branch', '--list').trim(), '', 'nothing was pushed');
+    const r = await playSession(a, slot.id, { 'f.bin': 'moons=12' });
+    assert.strictEqual(r.status, 'saved');
+    const files = git(remote, 'ls-tree', '-r', '--name-only', 'saves');
+    assert.ok(/^saves\/switch__super-mario-odyssey\/[0-9a-f]+\/(data\.zip|meta\.json)$/m.test(files), files);
+    assert.ok(!/prod\.keys|firmware|\.nsp|\.iso/i.test(files), 'no keys, firmware or games are ever uploaded');
+    const author = git(remote, 'log', '-1', '--format=%an <%ae>', 'saves').trim();
+    assert.strictEqual(author, 'Emulator Menu <emulator-menu@localhost>', 'no personal identity in commits');
 });
 
 test('rename and delete reach the cloud', async () => {

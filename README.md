@@ -141,17 +141,37 @@ saves to launch games directly with the emulator's normal shared saves.
 (change it in Settings -> Cloud saves). The menu uses your normal `git` login, so `git push` must already work
 from this computer. History only grows; very old versions can be removed by squashing that branch.
 
-**Privacy.** If the repository is public, anyone can read what is pushed to it. So:
-- Saves are **encrypted before upload** when you set a passphrase in Settings (AES-256-GCM, key from scrypt).
-  Folder names, save names, game names and computer names are encrypted or hashed too: the branch holds only
-  random-looking names and ciphertext. Use the same passphrase on every computer. The passphrase is stored in
-  `~/.config/all-in-one-emulator/config.json` (readable only by you); lose it and the saves cannot be recovered.
-- **Nothing is uploaded to a public repository without a passphrase.**
-- A private repository is still the safer choice. Cloning the project also downloads its `saves` branch unless
-  you clone with `--single-branch`.
+**Privacy.** A save upload contains only the slot's save folders: never games, keys, firmware or emulator
+settings. If the repository is public, anyone can read what is pushed to it: game progress, the save names you
+type, this computer's name (set a neutral one in Settings), and timestamps. Commits carry a generic author, not
+your identity. If you'd rather not, set a passphrase in Settings and saves are encrypted before upload
+(AES-256-GCM, key from scrypt; folder, save, game and computer names are hidden too) or point the menu at a
+private repository. Use the same passphrase on every computer; it is kept in
+`~/.config/all-in-one-emulator/config.json` (readable only by you), and lost passphrases cannot be recovered.
+Cloning the project also downloads its `saves` branch unless you clone with `--single-branch`.
 
 Not yet verified against real emulators: `-r` / `-u` and the save folder layout are from the emulators' documented
 behaviour and were tested here against simulated folders only.
+
+## Game library: share games between your computers
+
+One computer can share its games, and another can browse and download them from inside the menu.
+
+**On the computer that has the games:** Settings -> Game library -> turn on **Share this computer's games**.
+It shows an address (like `192.168.1.20:8765`) and an access key. Nothing is shared without the key.
+
+**On the other computer:** Settings -> Game library -> enter that address and key under **Show games from another
+computer**, then **Save**. The menu downloads the host's game list (generated fresh by the host every time, so it is
+always current). Games you already have are normal tiles. Games you don't have show a download icon and the size;
+click one, press **Download**, and it downloads into the right folder in your ROMs folder. You can keep browsing
+while it downloads, cancel it, and start it again later to continue where it stopped. If the host is off, the
+last list you saw stays visible.
+
+Only files the menu itself lists as games can be downloaded, never anything else on the host. The connection is
+plain HTTP with a key: use it on your home network or over a private network such as [Tailscale](https://tailscale.com)
+for different places, and don't forward the port to the internet. If the host has a firewall, allow the port
+(`sudo ufw allow from 192.168.0.0/16 to any port 8765`, or `sudo ufw allow in on tailscale0 to any port 8765`).
+Games are copyrighted: share only copies you made from games you own, between your own computers.
 
 ## Controller setup per emulator
 

@@ -82,15 +82,6 @@ function createManager({ dir, adapters, getCloud, deviceName = os.hostname(), vi
         return value;
     }
 
-    // Uploads are refused to a public repository unless the saves are encrypted
-    async function assertSafeToUpload() {
-        const cfg = getCloud();
-        if (cfg.passphrase) return;
-        if (await visibilityOf(cfg.repoUrl) === 'public') {
-            throw new SaveError('UNENCRYPTED_PUBLIC', 'This repository is public. Set an encryption passphrase in Settings before saving to it, or use a private repository.');
-        }
-    }
-
     const adapterFor = game => {
         const a = adapters.get(game.emulator);
         if (!a) throw new SaveError('UNSUPPORTED', 'Save slots are not available for this emulator');
@@ -159,7 +150,6 @@ function createManager({ dir, adapters, getCloud, deviceName = os.hostname(), vi
 
     // Zips the slot and uploads it as the next rev. Throws StoreError CONFLICT if the cloud moved on.
     async function upload(adapter, st, s, expectRev, hash) {
-        await assertSafeToUpload();
         const root = adapter.slotRoot(st.id);
         const zip = path.join(tmpDir, `${st.id}-up.zip`);
         try {
@@ -237,7 +227,7 @@ function createManager({ dir, adapters, getCloud, deviceName = os.hostname(), vi
                 if (st) { st.name = clean; saveState(); }
                 const s = await refreshRemote().catch(() => null);
                 const meta = s && s.readMeta(key, slotId);
-                if (meta) { await assertSafeToUpload(); await s.putMeta({ gameKey: key, meta: { ...meta, name: clean } }); }
+                if (meta) { await s.putMeta({ gameKey: key, meta: { ...meta, name: clean } }); }
                 return { id: slotId, name: clean, renamedInCloud: !!meta };
             });
         },
@@ -247,7 +237,7 @@ function createManager({ dir, adapters, getCloud, deviceName = os.hostname(), vi
                 const adapter = adapterFor(game);
                 const key = gameKeyOf(game);
                 const s = await refreshRemote().catch(() => null);
-                if (s && s.readMeta(key, slotId)) { await assertSafeToUpload(); await s.remove(key, slotId); }
+                if (s && s.readMeta(key, slotId)) { await s.remove(key, slotId); }
                 else if (getCloud().enabled && state.slots[slotId] && state.slots[slotId].rev > 0 && !s) {
                     throw new SaveError('OFFLINE', 'Connect to the internet to delete a save that is in the cloud');
                 }
@@ -452,6 +442,7 @@ function createManager({ dir, adapters, getCloud, deviceName = os.hostname(), vi
                 encrypted: !!cfg.passphrase,
                 visibility: cfg.repoUrl ? await visibilityOf(cfg.repoUrl) : 'unknown',
                 device: device().name,
+                deviceName: cfg.deviceName || '',
                 lastSync,
                 lastError,
                 pending: slots.filter(x => x.pending).length,

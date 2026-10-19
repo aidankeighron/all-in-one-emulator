@@ -13,6 +13,7 @@ const artwork = require('./lib/artwork');
 const sounds = require('./lib/sounds');
 const { createManager, SaveError } = require('./lib/saves/manager');
 const saveAdapters = require('./lib/saves/adapters');
+const library = require('./lib/library');
 
 const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'emulators.json'), 'utf8'));
 const emulatorsById = new Map(manifest.emulators.map(e => [e.id, e]));
@@ -46,6 +47,60 @@ const saves = createManager({
     getCloud: config.getCloud,
     log: console.log
 });
+// Game library sharing (see lib/library): this computer as a host, and another computer's games shown here
+const share = library.createShareServer({
+    getKey: () => config.getLibrary().sharing.key,
+    getRomsDir: () => config.getRomsDir(),
+    manifest,
+    name: () => config.getCloud().deviceName || os.hostname(),
+    log: console.log
+});
+let remote = { index: null, at: 0, failedAt: 0, error: null };
+let download = null;   // the one game being downloaded: {game, state, received, total, bytesPerSec, message, controller}
+
+try { remote.index = JSON.parse(fs.readFileSync(config.libraryCacheFile, 'utf8')); } catch { /* nothing cached yet */ }
+
+// The other computer's game list: fresh if it can be had quickly, otherwise what was last seen
+async function remoteIndex({ maxAgeMs = 60000, timeoutMs = 2500, force = false } = {}) {
+    const { address, key } = config.getLibrary().remote;
+    if (!address || !key) { remote.error = null; return null; }
+    const age = Date.now() - remote.at;
+    if (!force && remote.index && age < maxAgeMs) return remote.index;
+    if (!force && Date.now() - remote.failedAt < 30000) return remote.index;
+    try {
+        remote.index = { ...await library.fetchIndex({ address, key, manifest, timeoutMs }), address };
+        remote.at = Date.now();
+        remote.error = null;
+        fs.mkdirSync(path.dirname(config.libraryCacheFile), { recursive: true });
+        fs.writeFileSync(config.libraryCacheFile, JSON.stringify(remote.index));
+    } catch (err) {
+        remote.failedAt = Date.now();
+        remote.error = { code: err.code, message: err.message };
+    }
+    return remote.index && remote.index.address === address ? remote.index : null;
+}
+
+async function applyShareSettings() {
+    const { sharing } = config.getLibrary();
+    await share.stop();
+    if (!sharing.enabled || !sharing.key) return null;
+    try { await share.start(sharing.port); return null; } catch (err) { return err.message; }
+}
+
+function startDownload(game) {
+    const { address, key } = config.getLibrary().remote;
+    const controller = new AbortController();
+    download = { game: { path: game.path, title: game.title, size: game.size }, state: 'running', received: 0, total: game.size, bytesPerSec: 0, message: '', controller };
+    const job = download;
+    library.downloadGame({
+        address, key, game, romsDir: config.getRomsDir(), manifest, signal: controller.signal,
+        onProgress: p => { job.received = p.received; job.total = p.total; job.bytesPerSec = p.bytesPerSec; }
+    }).then(() => { job.state = 'done'; console.log(`[LIBRARY] downloaded ${game.path}`); })
+      .catch(err => { job.state = err.code === 'CANCELLED' ? 'cancelled' : 'error'; job.message = err.message; console.error(`[LIBRARY] ${game.path}: ${err.message}`); });
+}
+
+const downloadSnapshot = () => download && ({ path: download.game.path, title: download.game.title, state: download.state, received: download.received, total: download.total, bytesPerSec: download.bytesPerSec, message: download.message });
+
 let launching = false;   // a game is being prepared (its save downloaded) but has not started yet
 
 function findGame(relPath) {
@@ -229,6 +284,64 @@ function allowed(req) {
     return true;
 }
 
+// What Settings shows about library sharing
+function librarySettings(extra = {}) {
+    const { sharing, remote: r } = config.getLibrary();
+    return {
+        sharing: { enabled: sharing.enabled, port: sharing.port, key: sharing.key, running: share.running(), addresses: library.localAddresses(sharing.port) },
+        remote: { address: r.address, hasKey: !!r.key, error: remote.error, name: remote.index && remote.index.address === r.address ? remote.index.name : null,
+                  games: remote.index && remote.index.address === r.address ? remote.index.games.length : null },
+        ...extra
+    };
+}
+
+// /api/library/*. Returns true when it sent a response.
+async function handleLibrary(route, req, res) {
+    try {
+        if (route === 'GET /api/library/settings') return sendJson(res, 200, librarySettings()), true;
+        if (route === 'POST /api/library/settings') {
+            const body = await readJson(req);
+            const next = { sharing: {}, remote: {} };
+            if (body.sharing) {
+                if (typeof body.sharing.enabled === 'boolean') next.sharing.enabled = body.sharing.enabled;
+                if (Number.isInteger(body.sharing.port)) next.sharing.port = body.sharing.port;
+                if (body.sharing.newKey || (body.sharing.enabled && !config.getLibrary().sharing.key)) next.sharing.key = library.newKey();
+            }
+            if (body.remote) {
+                if (typeof body.remote.address === 'string') next.remote.address = body.remote.address;
+                if (typeof body.remote.key === 'string' && body.remote.key) next.remote.key = body.remote.key;
+            }
+            config.setLibrary(next);
+            const shareError = body.sharing ? await applyShareSettings() : null;
+            if (body.remote) { remote = { index: null, at: 0, failedAt: 0, error: null }; await remoteIndex({ force: true, timeoutMs: 6000 }); }
+            return sendJson(res, 200, librarySettings({ shareError })), true;
+        }
+        if (route === 'POST /api/library/test') {
+            const idx = await remoteIndex({ force: true, timeoutMs: 6000 });
+            return sendJson(res, 200, idx ? { ok: true, name: idx.name, games: idx.games.length } : { ok: false, ...(remote.error || { message: 'Enter the server address and key first' }) }), true;
+        }
+        if (route === 'GET /api/library/download') return sendJson(res, 200, { download: downloadSnapshot() }), true;
+        if (route === 'POST /api/library/cancel') {
+            if (download && download.state === 'running') download.controller.abort();
+            return sendJson(res, 200, { download: downloadSnapshot() }), true;
+        }
+        if (route === 'POST /api/library/download') {
+            const body = await readJson(req);
+            if (download && download.state === 'running') return sendJson(res, 409, { error: 'busy', message: `Already downloading ${download.game.title}` }), true;
+            const idx = await remoteIndex({ force: false, timeoutMs: 6000 });
+            const game = idx && idx.games.find(g => g.path === body.path);
+            if (!game) return sendJson(res, 404, { error: 'unknown', message: 'That game is not on the server any more' }), true;
+            if (fs.existsSync(path.join(config.getRomsDir(), game.path))) return sendJson(res, 409, { error: 'EXISTS', message: 'That game is already on this computer' }), true;
+            startDownload(game);
+            return sendJson(res, 200, { download: downloadSnapshot() }), true;
+        }
+    } catch (err) {
+        console.error(`[LIBRARY] ${route}: ${err.message}`);
+        return sendJson(res, 500, { error: err.code || 'failed', message: err.message }), true;
+    }
+    return false;
+}
+
 // /api/saves/* and /api/cloud. Returns true when it sent a response.
 async function handleSaves(route, url, req, res) {
     const needGame = body => {
@@ -283,7 +396,13 @@ function createServer(onGameState) {
                     covers.ensure(scanned);
                     gamesById = new Map(scanned.map(g => [g.id, g]));
                     const games = scanned.map(g => ({ ...g, installed: installed.has(g.emulator), art: covers.find(g) ? `/api/art/${g.id}` : null }));
-                    return sendJson(res, 200, { games, romsDir, artPending: covers.pending() });
+                    // Games that are on the other computer but not on this one
+                    const theirs = await remoteIndex();
+                    const have = new Set(scanned.map(g => g.path));
+                    const onServer = theirs ? theirs.games.filter(g => !have.has(g.path)).map(g => ({ ...g, remote: true, installed: installed.has(g.emulator), art: null })) : [];
+                    games.push(...onServer);
+                    games.sort((a, b) => a.title.localeCompare(b.title));
+                    return sendJson(res, 200, { games, romsDir, artPending: covers.pending(), server: theirs ? { name: theirs.name, offline: !!remote.error } : null });
                 }
                 const a = url.pathname.match(/^\/api\/art\/(\w+)$/);
                 if (req.method === 'GET' && a) {
@@ -304,6 +423,10 @@ function createServer(onGameState) {
                 if (req.method === 'GET' && snd) {
                     const file = sounds.resolve(config.soundsDir, snd[1], decodeURIComponent(snd[2]));
                     return file ? sounds.serve(req, res, file) : sendJson(res, 404, { error: 'no such sound' });
+                }
+                if (url.pathname.startsWith('/api/library')) {
+                    const handled = await handleLibrary(route, req, res);
+                    if (handled) return;
                 }
                 if (url.pathname.startsWith('/api/saves') || url.pathname === '/api/cloud') {
                     const handled = await handleSaves(route, url, req, res);
@@ -413,6 +536,7 @@ function start({ port = 3000, onGameState } = {}) {
             console.log(`Menu running at: http://localhost:${actual}`);
             console.log(`ROMs folder: ${config.getRomsDir()}`);
             processRoms(); // pick up any zips dropped in while the app was closed
+            applyShareSettings().then(err => err && console.error(`[LIBRARY] ${err}`));
             resolve({ server, port: actual });
         });
     });

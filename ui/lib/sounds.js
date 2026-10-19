@@ -2,6 +2,7 @@
 // Anything missing falls back to the built-in synthesised sounds in the menu itself, so the menu is never silent.
 const fs = require('fs');
 const path = require('path');
+const { serveFile } = require('./serve');
 
 // Menu events that can have a sound. A file named <event>.<ext> replaces the built-in one.
 const EVENTS = {
@@ -83,22 +84,7 @@ function describe(dir) {
 
 // Serves a file with Range support (audio elements ask for ranges to stream and loop)
 function serve(req, res, file) {
-    const type = AUDIO_TYPES[extOf(file)] || 'application/octet-stream';
-    const size = fs.statSync(file).size;
-    const range = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '');
-    if (range && (range[1] || range[2])) {
-        let start = range[1] === '' ? size - Number(range[2]) : Number(range[1]);
-        let end = range[1] === '' || range[2] === '' ? size - 1 : Math.min(Number(range[2]), size - 1);
-        start = Math.max(0, start);
-        if (start > end || start >= size) {
-            res.writeHead(416, { 'Content-Range': `bytes */${size}` });
-            return res.end();
-        }
-        res.writeHead(206, { 'Content-Type': type, 'Accept-Ranges': 'bytes', 'Content-Range': `bytes ${start}-${end}/${size}`, 'Content-Length': end - start + 1 });
-        return fs.createReadStream(file, { start, end }).pipe(res);
-    }
-    res.writeHead(200, { 'Content-Type': type, 'Accept-Ranges': 'bytes', 'Content-Length': size });
-    fs.createReadStream(file).pipe(res);
+    serveFile(req, res, file, AUDIO_TYPES[extOf(file)] || 'application/octet-stream');
 }
 
 module.exports = { EVENTS, scan, ensureDir, resolve, describe, serve };

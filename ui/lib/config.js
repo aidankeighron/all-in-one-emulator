@@ -97,10 +97,34 @@ function setCloud(next) {
     if (typeof next.enabled === 'boolean') cfg.cloudEnabled = next.enabled;
     if (typeof next.repoUrl === 'string') cfg.cloudRepoUrl = next.repoUrl.trim();
     if (typeof next.passphrase === 'string') cfg.cloudPassphrase = next.passphrase;
+    if (typeof next.deviceName === 'string') cfg.deviceName = next.deviceName.trim().slice(0, 30);
     save(cfg);
 }
+
+// Sharing this computer's games, and the other computer whose games to show
+function getLibrary() {
+    const cfg = load();
+    return {
+        sharing: { enabled: !!cfg.libShare, port: Number(cfg.libPort) || 8765, key: cfg.libKey || '' },
+        remote: { address: cfg.libAddress || '', key: cfg.libRemoteKey || '' }
+    };
+}
+
+function setLibrary(next) {
+    const cfg = load();
+    const sh = next.sharing || {};
+    if (typeof sh.enabled === 'boolean') cfg.libShare = sh.enabled;
+    if (Number.isInteger(sh.port) && sh.port >= 1024 && sh.port <= 65535) cfg.libPort = sh.port;
+    if (typeof sh.key === 'string') cfg.libKey = sh.key;
+    const rm = next.remote || {};
+    if (typeof rm.address === 'string') cfg.libAddress = rm.address.trim();
+    if (typeof rm.key === 'string') cfg.libRemoteKey = rm.key.trim();
+    save(cfg);
+}
+
+const libraryCacheFile = path.join(path.dirname(configFile), 'library-cache.json');
 
 const artworkDir = path.join(path.dirname(configFile), 'artwork');
 const soundsDir = process.env.SOUNDS_DIR || path.join(path.dirname(configFile), 'sounds');
 
-module.exports = { getRomsDir, setRomsDir, getAutoControllers, setAutoControllers, getSound, setSound, getCloud, setCloud, configFile, artworkDir, soundsDir };
+module.exports = { getRomsDir, setRomsDir, getAutoControllers, setAutoControllers, getSound, setSound, getCloud, setCloud, getLibrary, setLibrary, libraryCacheFile, configFile, artworkDir, soundsDir };
