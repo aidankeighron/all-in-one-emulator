@@ -30,8 +30,12 @@ function createDefaultFolders(romsDir, manifest) {
 
 // ---------- Game list ----------
 
+// Display name only: the file on disk is never renamed. Drops "(USA)", "(Rev 1)" and similar
+// parenthesised tags, unless that would leave nothing.
 function cleanTitle(name) {
-    return name.replace(/[-_]/g, ' ').trim();
+    const spaced = name.replace(/[-_]/g, ' ');
+    const stripped = spaced.replace(/\([^)]*\)/g, ' ').replace(/\s+/g, ' ').trim();
+    return stripped || spaced.replace(/\s+/g, ' ').trim();
 }
 
 function scanGames(romsDir, manifest) {
@@ -303,4 +307,4 @@ async function processRoms(romsDir, manifest, { keepZips = !!process.env.KEEP_ZI
     return { ok: failed === 0, added, failed, lines };
 }
 
-module.exports = { scanGames, processRoms, createDefaultFolders, folderMap };
+module.exports = { cleanTitle, scanGames, processRoms, createDefaultFolders, folderMap };
