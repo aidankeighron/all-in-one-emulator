@@ -103,3 +103,16 @@ test('scanGames maps folders to emulators and ignores other files', async () => 
         ['gamecube:Melee:dolphin', 'ps3:Demon:rpcs3', 'psp:GTA:ppsspp', 'wii:Super Mario:dolphin']
     );
 });
+
+test('cleanTitle drops parenthesised tags for display only', async () => {
+    assert.strictEqual(roms.cleanTitle('Super Mario Galaxy 2 (USA) (En,Fr,Es)'), 'Super Mario Galaxy 2');
+    assert.strictEqual(roms.cleanTitle('Metroid_Prime (Rev 1)'), 'Metroid Prime');
+    assert.strictEqual(roms.cleanTitle('(Demo)'), '(Demo)', 'never ends up empty');
+
+    const dir = await setup();
+    fs.mkdirSync(path.join(dir, 'wii'));
+    fs.writeFileSync(path.join(dir, 'wii', 'Wii Sports (USA) (Rev 1).iso'), '');
+    const [game] = roms.scanGames(dir, manifest);
+    assert.strictEqual(game.title, 'Wii Sports');
+    assert.strictEqual(game.path, 'wii/Wii Sports (USA) (Rev 1).iso', 'file path is untouched');
+});
