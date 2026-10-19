@@ -12,13 +12,27 @@ GAME_EXTS="iso rvz wbfs gcm ciso gcz wia wad nsp xci"
 mkdir -p "$ROMS/wii" "$ROMS/gamecube"
 
 extract() { # zip dest
-    if command -v unzip >/dev/null 2>&1; then
-        unzip -q -o "$1" -d "$2"
-    elif command -v 7z >/dev/null 2>&1; then
+    if command -v unzip >/dev/null 2>&1 && unzip -q -o "$1" -d "$2"; then
+        return 0
+    fi
+    # unzip can't do everything (e.g. archives that are really 7z/RAR); try 7z, then Python
+    if command -v 7z >/dev/null 2>&1; then
         7z x -y -o"$2" "$1" >/dev/null
     else
         python3 -I -m zipfile -e "$1" "$2"
     fi
+}
+
+describe_file() { # file -> why it isn't a usable zip, or nothing if it looks like a zip
+    case "$(hex "$1" 0 4)" in
+        504b0304|504b0506) return ;;                       # zip
+        377abcaf) echo "it is a 7z archive renamed to .zip (install p7zip-full to import it)" ;;
+        52617221) echo "it is a RAR archive renamed to .zip" ;;
+        1f8b*) echo "it is a gzip file, not a zip" ;;
+        3c21444f|3c68746d|3c48544d) echo "it is an HTML page (a failed download?), not a zip" ;;
+        "") echo "it is empty" ;;
+        *) echo "it does not start like a zip file (incomplete or corrupt download/copy?)" ;;
+    esac
 }
 
 hex() { # file offset bytes
@@ -53,10 +67,23 @@ while IFS= read -r -d '' zip; do
     forced=""
     [ "$parent" != "." ] && forced="${parent%%/*}"
 
+    # Skip files still being written (copy or download in progress)
+    if [ -n "$(find "$zip" -mmin -1 2>/dev/null)" ]; then
+        echo "[ROMS] Skipping $rel: modified in the last minute (still copying?)"
+        continue
+    fi
+
+    why="$(describe_file "$zip")"
+    size="$(stat -c %s "$zip" 2>/dev/null)"
+    if [ -n "$why" ] && ! command -v 7z >/dev/null 2>&1; then
+        echo "[ROMS] FAILED $rel: $why"
+        failed=$((failed + 1)); continue
+    fi
+
     tmp="$(mktemp -d "$ROMS/.extract.XXXXXX")"
     echo "[ROMS] Extracting $rel"
-    if ! extract "$zip" "$tmp"; then
-        echo "[ROMS] FAILED to extract $rel"
+    if ! extract "$zip" "$tmp" 2>/dev/null; then
+        echo "[ROMS] FAILED to extract $rel (${size:-?} bytes): ${why:-the archive is corrupt or incomplete; re-download or re-copy it and compare its size}"
         rm -rf "$tmp"; failed=$((failed + 1)); continue
     fi
 
