@@ -11,10 +11,19 @@
             cursor: default;
         }
 
+        :root {
+            --wii-blue: #3ab4f2;
+            --wii-blue-glow: rgba(58, 180, 242, 0.55);
+            --wii-gray: #8a9199;
+            --wii-edge: #d6dce2;
+        }
+
         body {
             margin: 0;
             padding: 0;
-            background: radial-gradient(circle at center, #f5f5f5 0%, #dcdcdc 100%);
+            background:
+                radial-gradient(ellipse at 50% 0%, #ffffff 0%, rgba(255, 255, 255, 0) 60%),
+                linear-gradient(to bottom, #f4f8fb 0%, #e3eaf0 100%);
             font-family: "Nimbus Sans", "Helvetica Neue", Arial, sans-serif;
             height: 100vh;
             overflow: hidden;
@@ -23,33 +32,36 @@
             justify-content: space-between;
         }
 
-        /* Top Header */
+        /* Top Header: quiet, like the Wii's channel-page header */
         .top-bar {
-            height: 48px;
-            background: linear-gradient(to bottom, #d0d0d0 0%, #b8b8b8 100%);
-            border-bottom: 2px solid #8e8e8e;
+            height: 44px;
             display: flex;
             align-items: center;
             justify-content: space-between;
             padding: 0 40px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
 
         .system-title {
-            font-size: 20px;
-            font-weight: bold;
-            color: #555;
-            letter-spacing: 1px;
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--wii-gray);
+            letter-spacing: 3px;
+            text-transform: uppercase;
         }
 
         .controller-status {
-            font-size: 13px;
-            color: #777;
+            font-size: 12px;
+            color: #aab2ba;
             font-weight: 600;
+            padding: 4px 14px;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.7);
+            border: 1px solid var(--wii-edge);
         }
 
         .controller-status.connected {
-            color: #0088cc;
+            color: var(--wii-blue);
+            border-color: var(--wii-blue);
         }
 
         /* 4x3 Channel Grid Area */
@@ -59,164 +71,174 @@
             align-items: center;
             justify-content: center;
             position: relative;
-            padding: 10px 60px;
+            padding: 6px 80px 18px;
+            min-height: 0;
         }
 
         .page-arrow {
             position: absolute;
             top: 50%;
             transform: translateY(-50%);
-            width: 44px;
-            height: 64px;
-            background: rgba(220, 220, 220, 0.8);
-            border: 2px solid #aaa;
-            border-radius: 8px;
+            width: 52px;
+            height: 52px;
+            background: linear-gradient(to bottom, #ffffff 0%, #e8edf1 100%);
+            border: 2px solid var(--wii-edge);
+            border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 24px;
-            color: #555;
+            font-size: 22px;
+            font-weight: bold;
+            color: var(--wii-blue);
+            box-shadow: 0 3px 8px rgba(0, 0, 0, 0.12), inset 0 -3px 6px rgba(0, 0, 0, 0.04);
             cursor: pointer;
-            transition: all 0.2s;
+            transition: all 0.15s ease;
             z-index: 10;
         }
 
         .page-arrow:hover {
-            background: #fff;
-            border-color: #00a2ff;
-            color: #00a2ff;
-            transform: translateY(-50%) scale(1.08);
+            border-color: var(--wii-blue);
+            box-shadow: 0 0 14px var(--wii-blue-glow), 0 3px 8px rgba(0, 0, 0, 0.12);
+            transform: translateY(-50%) scale(1.1);
         }
 
-        .page-arrow.left { left: 15px; }
-        .page-arrow.right { right: 15px; }
+        .page-arrow.left { left: 16px; }
+        .page-arrow.right { right: 16px; }
 
         .wii-grid {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
             grid-template-rows: repeat(3, 1fr);
-            gap: 16px;
+            gap: 18px;
             width: 100%;
             max-width: 1100px;
-            height: 90%;
-            max-height: 620px;
+            height: 100%;
+            max-height: 600px;
         }
 
-        /* Channel Card (Wii Glass Convex Look) */
+        /* Channel tile: white glossy slab with a soft gray rim */
         .wii-channel {
-            background: linear-gradient(135deg, #ffffff 0%, #e9e9e9 50%, #d8d8d8 100%);
-            border: 3px solid #b8b8b8;
-            border-radius: 18px;
-            box-shadow: inset 0 2px 4px rgba(255, 255, 255, 0.9), 
-                        0 4px 10px rgba(0, 0, 0, 0.15);
+            background: linear-gradient(to bottom, #ffffff 0%, #f3f6f8 55%, #e4e9ed 100%);
+            border: 2px solid var(--wii-edge);
+            border-radius: 16px;
+            box-shadow: 0 3px 8px rgba(80, 100, 120, 0.15),
+                        inset 0 -4px 8px rgba(0, 0, 0, 0.04);
             display: flex;
             flex-direction: column;
             justify-content: space-between;
-            padding: 14px;
+            padding: 12px;
             position: relative;
             cursor: pointer;
             transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
             overflow: hidden;
         }
 
+        /* Gloss highlight across the top half */
         .wii-channel::before {
             content: "";
             position: absolute;
             top: 0;
             left: 0;
             right: 0;
-            height: 45%;
-            background: linear-gradient(to bottom, rgba(255, 255, 255, 0.6) 0%, rgba(255, 255, 255, 0) 100%);
-            border-radius: 15px 15px 100px 100px;
+            height: 50%;
+            background: linear-gradient(to bottom, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.25) 100%);
+            border-radius: 14px 14px 60% 60% / 14px 14px 30% 30%;
             pointer-events: none;
         }
 
-        /* Hover / Selection State */
+        /* Pointer-over / selected: blue outline with glow */
         .wii-channel:hover, .wii-channel.selected {
-            transform: scale(1.06);
-            border-color: #00b4ff;
-            box-shadow: 0 0 16px rgba(0, 180, 255, 0.6), 0 8px 18px rgba(0, 0, 0, 0.2);
+            transform: scale(1.05);
+            border-color: var(--wii-blue);
+            box-shadow: 0 0 0 3px rgba(58, 180, 242, 0.35),
+                        0 0 22px var(--wii-blue-glow),
+                        0 8px 18px rgba(0, 0, 0, 0.18);
             z-index: 5;
         }
 
         .channel-badge {
             align-self: flex-start;
-            font-size: 11px;
+            font-size: 10px;
             font-weight: 800;
-            padding: 3px 8px;
-            border-radius: 6px;
+            padding: 3px 10px;
+            border-radius: 10px;
             color: #fff;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
+            letter-spacing: 0.8px;
+            position: relative;
         }
 
-        .badge-wii { background: #00a2ff; }
-        .badge-gamecube { background: #6a0dad; }
-        .badge-switch { background: #e60012; }
+        .badge-wii { background: linear-gradient(to bottom, #5cc6fa, #2c9fe0); }
+        .badge-gamecube { background: linear-gradient(to bottom, #8a63c9, #5b3a9c); }
+        .badge-switch { background: linear-gradient(to bottom, #f0525c, #d0222e); }
         .badge-empty { background: transparent; }
 
         .channel-title {
             font-size: 15px;
-            font-weight: 700;
-            color: #333;
+            font-weight: 600;
+            color: #4a5258;
             text-align: center;
             margin: auto 0;
             line-height: 1.25;
             word-break: break-word;
+            position: relative;
         }
 
         .channel-empty {
-            opacity: 0.45;
             cursor: default;
-            border-style: dashed;
-            background: rgba(220, 220, 220, 0.4);
-            box-shadow: none;
+            background: linear-gradient(to bottom, #f6f9fb 0%, #e9eef2 100%);
+            border: 2px solid #e3e8ec;
+            box-shadow: inset 0 3px 8px rgba(0, 0, 0, 0.07);
         }
+
+        .channel-empty::before { display: none; }
 
         .channel-empty:hover {
             transform: none;
-            border-color: #b8b8b8;
-            box-shadow: none;
+            border-color: #e3e8ec;
+            box-shadow: inset 0 3px 8px rgba(0, 0, 0, 0.07);
         }
 
-        /* Bottom Control Bar */
+        /* Bottom Control Bar: white platform with a curved top edge */
         .bottom-bar {
-            height: 80px;
-            background: linear-gradient(to top, #cfcfcf 0%, #ebebeb 100%);
-            border-top: 2px solid #a8a8a8;
+            height: 96px;
+            background: linear-gradient(to bottom, #ffffff 0%, #eef2f5 100%);
+            border-top: 2px solid var(--wii-edge);
+            border-radius: 50% 50% 0 0 / 28px 28px 0 0;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 0 40px;
-            box-shadow: 0 -4px 6px rgba(0, 0, 0, 0.08);
+            padding: 8px 60px 0;
+            box-shadow: 0 -4px 14px rgba(80, 100, 120, 0.12);
         }
 
         .round-button {
-            width: 58px;
-            height: 58px;
+            width: 66px;
+            height: 66px;
             border-radius: 50%;
-            background: linear-gradient(135deg, #ffffff 0%, #d4d4d4 100%);
-            border: 2px solid #999;
-            box-shadow: 0 3px 6px rgba(0,0,0,0.2), inset 0 2px 2px rgba(255,255,255,0.8);
+            background: linear-gradient(to bottom, #ffffff 0%, #e6ebef 100%);
+            border: 3px solid #c9d1d8;
+            box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15), inset 0 -4px 8px rgba(0, 0, 0, 0.05);
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 14px;
-            font-weight: bold;
-            color: #444;
+            font-size: 15px;
+            font-weight: 800;
+            color: var(--wii-gray);
             cursor: pointer;
             transition: all 0.15s ease;
         }
 
         .round-button:hover {
-            border-color: #00a2ff;
-            color: #00a2ff;
+            border-color: var(--wii-blue);
+            color: var(--wii-blue);
+            box-shadow: 0 0 16px var(--wii-blue-glow), 0 3px 8px rgba(0, 0, 0, 0.15);
             transform: scale(1.08);
         }
 
         .left-buttons {
             display: flex;
-            gap: 14px;
+            gap: 16px;
         }
 
         .round-button.busy {
@@ -226,15 +248,17 @@
 
         .toast {
             position: fixed;
-            bottom: 96px;
+            bottom: 110px;
             left: 50%;
             transform: translateX(-50%);
-            background: rgba(60, 60, 60, 0.92);
-            color: #fff;
-            padding: 10px 22px;
-            border-radius: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            color: #4a5258;
+            border: 2px solid var(--wii-blue);
+            padding: 10px 24px;
+            border-radius: 22px;
             font-size: 14px;
             font-weight: 600;
+            box-shadow: 0 0 16px var(--wii-blue-glow);
             opacity: 0;
             transition: opacity 0.2s;
             pointer-events: none;
@@ -247,16 +271,16 @@
         }
 
         .time-display {
-            font-size: 30px;
-            font-weight: 800;
-            color: #444;
-            letter-spacing: 1px;
+            font-size: 34px;
+            font-weight: 300;
+            color: #7b848c;
+            letter-spacing: 2px;
         }
 
         .date-display {
             font-size: 13px;
             font-weight: 600;
-            color: #777;
+            color: #a2aab1;
         }
     </style>
 </head>
@@ -326,6 +350,10 @@
             }
         }
 
+        function escapeHtml(str) {
+            return str.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
+
         function renderPage() {
             const grid = document.getElementById('channel-grid');
             grid.innerHTML = '';
@@ -342,7 +370,7 @@
                     channel.className = `wii-channel ${i === selectedIndex ? 'selected' : ''}`;
                     channel.innerHTML = `
                         <span class="channel-badge ${badgeClass}">${game.console}</span>
-                        <div class="channel-title">${game.title}</div>
+                        <div class="channel-title">${escapeHtml(game.title)}</div>
                         <div></div>
                     `;
 
