@@ -38,4 +38,15 @@ function setRomsDir(dir) {
     save({ ...load(), romsDir: path.resolve(dir) });
 }
 
-module.exports = { getRomsDir, setRomsDir, configFile };
+// Auto-configuring emulator controllers before a game starts is on unless turned off
+function getAutoControllers() {
+    return load().autoControllers !== false;
+}
+
+function setAutoControllers(on) {
+    save({ ...load(), autoControllers: !!on });
+}
+
+const artworkDir = path.join(path.dirname(configFile), 'artwork');
+
+module.exports = { getRomsDir, setRomsDir, getAutoControllers, setAutoControllers, configFile, artworkDir };

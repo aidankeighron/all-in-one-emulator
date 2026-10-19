@@ -32,6 +32,7 @@ async function createWindow() {
         autoHideMenuBar: true,
         backgroundColor: '#e3eaf0',
         title: 'Emulator Menu',
+        icon: path.join(__dirname, '..', 'ui', 'assets', 'icon.png'),
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),
             contextIsolation: true,

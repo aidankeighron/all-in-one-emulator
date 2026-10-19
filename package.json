@@ -30,7 +30,8 @@
     ],
     "linux": {
       "target": "AppImage",
-      "category": "Game"
+      "category": "Game",
+      "icon": "ui/assets/icon.png"
     },
     "afterPack": "scripts/after-pack.js"
   }

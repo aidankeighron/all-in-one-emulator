@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Wii System Menu</title>
+    <title>Emulator Menu</title>
+    <link rel="icon" type="image/png" href="/assets/icon.png">
     <style>
         * {
             box-sizing: border-box;
@@ -13,6 +14,7 @@
 
         :root {
             --wii-blue: #3ab4f2;
+            --wii-blue-deep: #2c9fe0;
             --wii-blue-glow: rgba(58, 180, 242, 0.55);
             --wii-gray: #8a9199;
             --wii-edge: #d6dce2;
@@ -22,9 +24,10 @@
             margin: 0;
             padding: 0;
             background:
-                radial-gradient(ellipse at 50% 0%, #ffffff 0%, rgba(255, 255, 255, 0) 60%),
-                linear-gradient(to bottom, #f4f8fb 0%, #e3eaf0 100%);
-            font-family: "Nimbus Sans", "Helvetica Neue", Arial, sans-serif;
+                radial-gradient(ellipse 80% 55% at 50% 0%, #ffffff 0%, rgba(255, 255, 255, 0) 70%),
+                radial-gradient(ellipse 60% 40% at 50% 100%, rgba(58, 180, 242, 0.12) 0%, rgba(58, 180, 242, 0) 70%),
+                linear-gradient(to bottom, #f7fafc 0%, #e6edf2 100%);
+            font-family: "Nunito", "Varela Round", ui-rounded, "Nimbus Sans", "Helvetica Neue", Arial, sans-serif;
             height: 100vh;
             overflow: hidden;
             display: flex;
@@ -34,7 +37,7 @@
 
         /* Top Header: quiet, like the Wii's channel-page header */
         .top-bar {
-            height: 44px;
+            height: 48px;
             display: flex;
             align-items: center;
             justify-content: space-between;
@@ -43,35 +46,43 @@
 
         .system-title {
             font-size: 15px;
-            font-weight: 600;
+            font-weight: 700;
             color: var(--wii-gray);
             letter-spacing: 3px;
             text-transform: uppercase;
         }
 
+        .system-title small {
+            font-size: 12px;
+            letter-spacing: 1px;
+            color: #b2bac1;
+            margin-left: 10px;
+            text-transform: none;
+        }
+
         .controller-status {
             font-size: 12px;
             color: #aab2ba;
-            font-weight: 600;
+            font-weight: 700;
             padding: 4px 14px;
             border-radius: 12px;
-            background: rgba(255, 255, 255, 0.7);
+            background: rgba(255, 255, 255, 0.8);
             border: 1px solid var(--wii-edge);
         }
 
         .controller-status.connected {
-            color: var(--wii-blue);
+            color: var(--wii-blue-deep);
             border-color: var(--wii-blue);
         }
 
-        /* 4x3 Channel Grid Area */
+        /* Channel Grid Area */
         .grid-container {
             flex: 1;
             display: flex;
             align-items: center;
             justify-content: center;
             position: relative;
-            padding: 6px 80px 18px;
+            padding: 6px 96px 18px;
             min-height: 0;
         }
 
@@ -79,31 +90,32 @@
             position: absolute;
             top: 50%;
             transform: translateY(-50%);
-            width: 52px;
-            height: 52px;
-            background: linear-gradient(to bottom, #ffffff 0%, #e8edf1 100%);
+            width: 56px;
+            height: 56px;
+            background: linear-gradient(to bottom, #ffffff 0%, #e6ecf1 100%);
             border: 2px solid var(--wii-edge);
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 22px;
-            font-weight: bold;
-            color: var(--wii-blue);
+            color: var(--wii-blue-deep);
             box-shadow: 0 3px 8px rgba(0, 0, 0, 0.12), inset 0 -3px 6px rgba(0, 0, 0, 0.04);
             cursor: pointer;
-            transition: all 0.15s ease;
+            transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
             z-index: 10;
         }
 
-        .page-arrow:hover {
-            border-color: var(--wii-blue);
-            box-shadow: 0 0 14px var(--wii-blue-glow), 0 3px 8px rgba(0, 0, 0, 0.12);
-            transform: translateY(-50%) scale(1.1);
-        }
+        .page-arrow svg { width: 26px; height: 26px; }
+        .page-arrow.hidden { opacity: 0; pointer-events: none; }
+        .page-arrow.left { left: 18px; }
+        .page-arrow.right { right: 18px; }
 
-        .page-arrow.left { left: 16px; }
-        .page-arrow.right { right: 16px; }
+        .page-arrow:hover, .page-arrow.pad-focus {
+            border-color: var(--wii-blue);
+            box-shadow: 0 0 0 3px rgba(58, 180, 242, 0.3), 0 0 16px var(--wii-blue-glow), 0 3px 8px rgba(0, 0, 0, 0.12);
+            transform: translateY(-50%) scale(1.12);
+            outline: none;
+        }
 
         .wii-grid {
             display: grid;
@@ -116,11 +128,17 @@
             max-height: 600px;
         }
 
+        .wii-grid.pads {
+            grid-template-rows: minmax(0, 330px);
+            grid-auto-rows: minmax(0, 330px);
+            align-content: center;
+        }
+
         /* Channel tile: white glossy slab with a soft gray rim */
         .wii-channel {
             background: linear-gradient(to bottom, #ffffff 0%, #f3f6f8 55%, #e4e9ed 100%);
             border: 2px solid var(--wii-edge);
-            border-radius: 16px;
+            border-radius: 18px;
             box-shadow: 0 3px 8px rgba(80, 100, 120, 0.15),
                         inset 0 -4px 8px rgba(0, 0, 0, 0.04);
             display: flex;
@@ -142,8 +160,10 @@
             right: 0;
             height: 50%;
             background: linear-gradient(to bottom, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.25) 100%);
-            border-radius: 14px 14px 60% 60% / 14px 14px 30% 30%;
+            border-radius: 16px 16px 60% 60% / 16px 16px 30% 30%;
             pointer-events: none;
+            z-index: 2;
+            opacity: 0.7;
         }
 
         /* Pointer-over / selected: blue outline with glow */
@@ -156,16 +176,31 @@
             z-index: 5;
         }
 
+        /* Console pill. Flex-centred with the font's own line gap removed so the text sits in the middle. */
         .channel-badge {
             align-self: flex-start;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            height: 20px;
+            padding: 0 10px 0 calc(10px + 0.8px); /* extra left padding balances the letter-spacing after the last letter */
+            border-radius: 10px;
             font-size: 10px;
             font-weight: 800;
-            padding: 3px 10px;
-            border-radius: 10px;
-            color: #fff;
-            text-transform: uppercase;
+            line-height: 1;
             letter-spacing: 0.8px;
+            text-transform: uppercase;
+            color: #fff;
             position: relative;
+            z-index: 3;
+        }
+
+        @supports (text-box: trim-both cap alphabetic) {
+            .channel-badge { text-box: trim-both cap alphabetic; }
+        }
+
+        @supports not (text-box: trim-both cap alphabetic) {
+            .channel-badge { padding-top: 1px; }
         }
 
         .badge-wii { background: linear-gradient(to bottom, #5cc6fa, #2c9fe0); }
@@ -179,13 +214,55 @@
 
         .channel-title {
             font-size: 15px;
-            font-weight: 600;
+            font-weight: 700;
             color: #4a5258;
             text-align: center;
             margin: auto 0;
             line-height: 1.25;
             word-break: break-word;
             position: relative;
+            z-index: 3;
+        }
+
+        /* Tile with a game picture: the picture fills the tile, the name shows on selection */
+        .channel-art {
+            position: absolute;
+            inset: 30px 10px 10px;
+            width: calc(100% - 20px);
+            height: calc(100% - 40px);
+            object-fit: contain;
+            filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.25));
+            z-index: 1;
+        }
+
+        .has-art .channel-title {
+            position: absolute;
+            left: 8px;
+            right: 8px;
+            bottom: 8px;
+            margin: 0;
+            padding: 5px 10px;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.92);
+            border: 1px solid var(--wii-edge);
+            font-size: 13px;
+            opacity: 0;
+            transform: translateY(6px);
+            transition: opacity 0.15s ease, transform 0.15s ease;
+        }
+
+        .has-art:hover .channel-title, .has-art.selected .channel-title { opacity: 1; transform: none; }
+        .has-art::before { z-index: 0; }
+
+        /* On a picture tile the note moves up beside the console pill so it never covers the name */
+        .has-art .channel-note {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            padding: 3px 8px;
+            border-radius: 9px;
+            background: rgba(255, 255, 255, 0.92);
+            font-size: 10px;
         }
 
         .channel-empty {
@@ -203,46 +280,80 @@
             box-shadow: inset 0 3px 8px rgba(0, 0, 0, 0.07);
         }
 
+        /* Controller cards (the page left of the games) */
+        .pad-card { align-items: center; justify-content: flex-start; gap: 8px; padding: 16px 12px; }
+        .pad-card.waiting { opacity: 0.75; }
+        .pad-leds { display: flex; gap: 6px; position: relative; z-index: 3; }
+        .pad-leds i { width: 12px; height: 12px; border-radius: 50%; background: #d3dae0; box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.15); }
+        .pad-leds i.on { background: radial-gradient(circle at 35% 30%, #bfeaff, var(--wii-blue)); box-shadow: 0 0 8px var(--wii-blue-glow); }
+        .pad-art { flex: 1; width: 100%; min-height: 0; display: flex; align-items: center; justify-content: center; position: relative; z-index: 3; }
+        .pad-art svg { width: 100%; max-height: 100%; filter: drop-shadow(0 4px 5px rgba(0, 0, 0, 0.2)); }
+        .pad-name { font-weight: 800; font-size: 14px; color: #4a5258; text-align: center; line-height: 1.2; position: relative; z-index: 3; }
+        .pad-meta { display: flex; gap: 6px; align-items: center; position: relative; z-index: 3; }
+        .pill {
+            display: inline-flex; align-items: center; justify-content: center; height: 18px;
+            padding: 0 9px; border-radius: 9px; font-size: 10px; font-weight: 800; line-height: 1;
+            letter-spacing: 0.6px; text-transform: uppercase; color: #fff; background: linear-gradient(to bottom, #9aa5af, #75818c);
+        }
+        .pill.bt { background: linear-gradient(to bottom, #5cc6fa, #2c9fe0); }
+        .pad-roles { font-size: 11px; font-weight: 700; color: #7b848c; text-align: center; line-height: 1.35; min-height: 30px; position: relative; z-index: 3; }
+        .pad-hint { font-size: 12px; color: #9aa2a9; text-align: center; position: relative; z-index: 3; margin: auto 0; }
+
         /* Bottom Control Bar: white platform with a curved top edge */
         .bottom-bar {
-            height: 96px;
-            background: linear-gradient(to bottom, #ffffff 0%, #eef2f5 100%);
+            height: 104px;
+            background: linear-gradient(to bottom, #ffffff 0%, #edf1f5 100%);
             border-top: 2px solid var(--wii-edge);
-            border-radius: 50% 50% 0 0 / 28px 28px 0 0;
+            border-radius: 50% 50% 0 0 / 34px 34px 0 0;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 8px 60px 0;
-            box-shadow: 0 -4px 14px rgba(80, 100, 120, 0.12);
+            padding: 10px 56px 0;
+            box-shadow: 0 -4px 16px rgba(80, 100, 120, 0.14);
         }
 
         .round-button {
-            width: 66px;
-            height: 66px;
+            width: 72px;
+            height: 72px;
             border-radius: 50%;
-            background: linear-gradient(to bottom, #ffffff 0%, #e6ebef 100%);
+            background: linear-gradient(to bottom, #ffffff 0%, #e3e9ee 100%);
             border: 3px solid #c9d1d8;
             box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15), inset 0 -4px 8px rgba(0, 0, 0, 0.05);
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 15px;
-            font-weight: 800;
             color: var(--wii-gray);
             cursor: pointer;
-            transition: all 0.15s ease;
+            transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, color 0.15s ease;
+            position: relative;
         }
 
-        .round-button:hover {
+        /* Gloss on the upper half of each button */
+        .round-button::before {
+            content: "";
+            position: absolute;
+            top: 3px;
+            left: 10%;
+            right: 10%;
+            height: 42%;
+            border-radius: 50%;
+            background: linear-gradient(to bottom, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0));
+            pointer-events: none;
+        }
+
+        .round-button svg { width: 30px; height: 30px; position: relative; }
+
+        .round-button:hover, .round-button.pad-focus {
             border-color: var(--wii-blue);
-            color: var(--wii-blue);
-            box-shadow: 0 0 16px var(--wii-blue-glow), 0 3px 8px rgba(0, 0, 0, 0.15);
-            transform: scale(1.08);
+            color: var(--wii-blue-deep);
+            box-shadow: 0 0 0 3px rgba(58, 180, 242, 0.3), 0 0 18px var(--wii-blue-glow), 0 3px 8px rgba(0, 0, 0, 0.15);
+            transform: scale(1.1);
+            outline: none;
         }
 
         .left-buttons {
             display: flex;
-            gap: 16px;
+            gap: 18px;
         }
 
         .round-button.busy {
@@ -256,9 +367,11 @@
             font-size: 11px;
             font-weight: 700;
             color: #c0762a;
+            z-index: 3;
         }
 
-        .channel-uninstalled .channel-title { opacity: 0.6; }
+        .channel-uninstalled:not(.has-art) .channel-title { opacity: 0.6; }
+        .channel-uninstalled .channel-art { opacity: 0.55; filter: grayscale(0.6) drop-shadow(0 4px 6px rgba(0, 0, 0, 0.2)); }
 
         .empty-hint {
             grid-column: 1 / -1;
@@ -273,6 +386,8 @@
             line-height: 1.6;
             z-index: 1;
         }
+
+        .pads .empty-hint { grid-row: auto; grid-column: 1 / -1; padding: 0; font-size: 15px; min-height: 40px; }
 
         .empty-hint code {
             background: rgba(255, 255, 255, 0.8);
@@ -366,7 +481,7 @@
 
         .toast {
             position: fixed;
-            bottom: 110px;
+            bottom: 120px;
             left: 50%;
             transform: translateX(-50%);
             background: rgba(255, 255, 255, 0.95);
@@ -375,11 +490,12 @@
             padding: 10px 24px;
             border-radius: 22px;
             font-size: 14px;
-            font-weight: 600;
+            font-weight: 700;
             box-shadow: 0 0 16px var(--wii-blue-glow);
             opacity: 0;
             transition: opacity 0.2s;
             pointer-events: none;
+            z-index: 60;
         }
 
         .toast.show { opacity: 1; }
@@ -389,7 +505,7 @@
         }
 
         .time-display {
-            font-size: 34px;
+            font-size: 36px;
             font-weight: 300;
             color: #7b848c;
             letter-spacing: 2px;
@@ -397,7 +513,7 @@
 
         .date-display {
             font-size: 13px;
-            font-weight: 600;
+            font-weight: 700;
             color: #a2aab1;
         }
     </style>
@@ -405,30 +521,41 @@
 <body>
 
     <div class="top-bar">
-        <div class="system-title">Wii Menu</div>
-        <div class="controller-status" id="controller-status">No controller detected: press a button on it</div>
+        <div class="system-title"><span id="page-title">Games</span><small id="page-sub"></small></div>
+        <div class="controller-status" id="controller-status">No controller detected</div>
     </div>
 
     <div class="grid-container">
-        <div class="page-arrow left" id="prev-page" onclick="prevPage()">&lt;</div>
-        
-        <div class="wii-grid" id="channel-grid">
-            <!-- 12 Channels dynamically rendered here -->
+        <div class="page-arrow left" id="prev-page" onclick="goPage(page - 1)" title="Previous page (LB)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
         </div>
 
-        <div class="page-arrow right" id="next-page" onclick="nextPage()">&gt;</div>
+        <div class="wii-grid" id="channel-grid">
+            <!-- channels or controller cards rendered here -->
+        </div>
+
+        <div class="page-arrow right" id="next-page" onclick="goPage(page + 1)" title="Next page (RB)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>
+        </div>
     </div>
 
+    <!-- Icons: Feather (MIT) -->
     <div class="bottom-bar">
         <div class="left-buttons">
-            <div class="round-button" onclick="location.reload()" title="Refresh ROMs">Wii</div>
-            <div class="round-button" id="import-button" onclick="importRoms()" title="Import ROM zips (Y)">Zip</div>
+            <div class="round-button" id="bb-rescan" onclick="rescan()" title="Refresh game list">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+            </div>
+            <div class="round-button" id="bb-import" onclick="importRoms()" title="Import ROM zips (Y)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+            </div>
         </div>
         <div class="center-time">
             <div class="time-display" id="clock">12:00</div>
             <div class="date-display" id="date">Mon 10/19</div>
         </div>
-        <div class="round-button" onclick="openSettings()" title="Settings (X)">&#9881;</div>
+        <div class="round-button" id="bb-settings" onclick="openSettings()" title="Settings (X)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </div>
     </div>
 
     <div class="overlay" id="settings-overlay" onclick="if (event.target === this) closeSettings()">
@@ -450,7 +577,16 @@
             </div>
             <div id="emulator-list"></div>
 
-            <h3>Controller</h3>
+            <h3>Controllers</h3>
+            <div class="emu-row" style="border-top:none">
+                <div class="info">
+                    <div class="name">Set up emulator controllers automatically</div>
+                    <div class="desc">Before each game starts, the controllers plugged in right now are written into that emulator's settings.</div>
+                    <div class="progress" id="setup-status"></div>
+                </div>
+                <button class="btn" id="auto-controllers-button" onclick="toggleAutoControllers()">On</button>
+                <button class="btn" id="apply-controllers-button" onclick="applyControllersNow()">Apply now</button>
+            </div>
             <div class="desc" id="pad-debug" style="font-size:13px; color:#8a9199; word-break:break-word"></div>
 
             <div class="row" style="justify-content:flex-end; margin-top:18px">
@@ -463,13 +599,23 @@
 
     <script>
         const CHANNELS_PER_PAGE = 12;
+        const COLUMNS = 4;
+        const CONTROLLERS_PAGE = -1;          // the page to the left of the first games page
+        const BOTTOM_BUTTONS = ['bb-rescan', 'bb-import', 'bb-settings'];
+        const BOTTOM_COLUMN = [0, 1, 3];      // which grid column each bottom button sits under
+
         let allGames = [];
-        let currentPage = 0;
-        let selectedIndex = 0; // Relative to current page (0-11)
+        let padList = [];
+        let padJson = '';
+        let page = 0;                         // CONTROLLERS_PAGE, or a games page
+        let zone = 'grid';                    // 'grid' | 'arrow-left' | 'arrow-right' | 'bottom'
+        let selectedIndex = 0;                // within the grid on this page
+        let bottomIndex = 0;
         let lastInputTime = 0;
         let romsDir = '';
         let gameRunning = false;
         let settingsOpen = false;
+        let emulatorNames = {};
 
         // Clock Update
         function updateClock() {
@@ -477,7 +623,7 @@
             const hours = String(now.getHours()).padStart(2, '0');
             const minutes = String(now.getMinutes()).padStart(2, '0');
             document.getElementById('clock').innerText = `${hours}:${minutes}`;
-            
+
             const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
             const day = days[now.getDay()];
             const month = now.getMonth() + 1;
@@ -487,6 +633,22 @@
         setInterval(updateClock, 1000);
         updateClock();
 
+        function escapeHtml(str) {
+            return String(str).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
+
+        // ================= PAGES =================
+        function pageCount() { return Math.max(1, Math.ceil(allGames.length / CHANNELS_PER_PAGE)); }
+        function onControllers() { return page === CONTROLLERS_PAGE; }
+        function hasLeft() { return page > CONTROLLERS_PAGE; }
+        function hasRight() { return page < pageCount() - 1; }
+
+        // How many tiles/cards on this page can be selected
+        function itemCount() {
+            if (onControllers()) return padList.length;
+            return Math.max(0, Math.min(CHANNELS_PER_PAGE, allGames.length - page * CHANNELS_PER_PAGE));
+        }
+
         // Fetch Games from Server
         async function loadGames() {
             try {
@@ -494,22 +656,39 @@
                 const data = await res.json();
                 allGames = data.games;
                 romsDir = data.romsDir;
-                if (currentPage * CHANNELS_PER_PAGE >= allGames.length) currentPage = 0;
+                if (page >= pageCount()) page = 0;
                 renderPage();
+                // Pictures are fetched in the background: look again shortly
+                if (data.artPending > 0) setTimeout(loadGames, 2500);
             } catch (err) {
                 console.error("Failed to load games:", err);
             }
         }
 
-        function escapeHtml(str) {
-            return str.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        function goPage(target) {
+            if (target < CONTROLLERS_PAGE || target >= pageCount()) return;
+            page = target;
+            selectedIndex = 0;
+            renderPage(); // keeps focus on the arrow if it is still there, otherwise moves it to the grid
         }
 
         function renderPage() {
             const grid = document.getElementById('channel-grid');
             grid.innerHTML = '';
+            grid.classList.toggle('pads', onControllers());
 
-            const startIdx = currentPage * CHANNELS_PER_PAGE;
+            if (onControllers()) renderControllers(grid); else renderGames(grid);
+
+            document.getElementById('page-title').textContent = onControllers() ? 'Controllers' : 'Games';
+            document.getElementById('page-sub').textContent = onControllers() ? '' : (pageCount() > 1 ? `page ${page + 1} of ${pageCount()}` : '');
+            document.getElementById('prev-page').classList.toggle('hidden', !hasLeft());
+            document.getElementById('next-page').classList.toggle('hidden', !hasRight());
+            ensureValidFocus();
+            renderFocus();
+        }
+
+        function renderGames(grid) {
+            const startIdx = page * CHANNELS_PER_PAGE;
             const pageGames = allGames.slice(startIdx, startIdx + CHANNELS_PER_PAGE);
 
             if (allGames.length === 0) {
@@ -517,67 +696,207 @@
                 hint.className = 'empty-hint';
                 hint.innerHTML = `<div>No games found in <code>${escapeHtml(romsDir)}</code><br>
                     Put games or .zip files in folders like <code>wii</code>, <code>gamecube</code>, <code>ps2</code>,
-                    then press <b>Zip</b>.<br>Install emulators from the &#9881; settings.</div>`;
+                    then press the import button.<br>Install emulators from the settings.</div>`;
                 grid.appendChild(hint);
             }
 
             for (let i = 0; i < CHANNELS_PER_PAGE; i++) {
                 const game = pageGames[i];
                 const channel = document.createElement('div');
-                
+
                 if (game) {
                     const badgeClass = `badge-${game.console}`;
-                    channel.className = `wii-channel ${i === selectedIndex ? 'selected' : ''} ${game.installed ? '' : 'channel-uninstalled'}`;
+                    channel.className = `wii-channel ${game.installed ? '' : 'channel-uninstalled'} ${game.art ? 'has-art' : ''}`;
                     channel.innerHTML = `
+                        ${game.art ? `<img class="channel-art" src="${game.art}" alt="" draggable="false">` : ''}
                         <span class="channel-badge ${badgeClass}">${escapeHtml(game.console)}</span>
                         <div class="channel-title">${escapeHtml(game.title)}</div>
                         <div class="channel-note">${game.installed ? '' : 'Emulator not installed'}</div>
                     `;
+                    const img = channel.querySelector('img');
+                    if (img) img.addEventListener('error', () => { img.remove(); channel.classList.remove('has-art'); });
 
-                    // Mouse Events
                     channel.addEventListener('mouseenter', () => {
+                        zone = 'grid';
                         selectedIndex = i;
-                        updateSelectionVisuals();
+                        renderFocus();
                     });
-
-                    channel.addEventListener('click', () => {
-                        launchGame(game);
-                    });
+                    channel.addEventListener('click', () => launchGame(game));
                 } else {
-                    // Empty Wii Channel Slot
                     channel.className = 'wii-channel channel-empty';
                     channel.innerHTML = `<span class="channel-badge badge-empty"></span><div class="channel-title"></div>`;
                 }
-                
+
                 grid.appendChild(channel);
             }
         }
 
-        function updateSelectionVisuals() {
-            const channels = document.querySelectorAll('.wii-channel:not(.channel-empty)');
-            channels.forEach((ch, idx) => {
-                if (idx === selectedIndex) {
-                    ch.classList.add('selected');
+        // ================= CONTROLLERS PAGE =================
+        const BODY = 'M150 168 H362 C414 168 438 206 452 286 C464 352 456 384 422 384 C396 384 384 366 368 340 C360 328 350 322 336 322 H176 C162 322 152 328 144 340 C128 366 116 384 90 384 C56 384 48 352 60 286 C74 206 98 168 150 168 Z';
+        const dpadCross = (x, y, fill) => `<path fill="${fill}" d="M${x - 11} ${y - 33} h22 v22 h22 v22 h-22 v22 h-22 v-22 h-22 v-22 h22 z"/>`;
+        const dot = (x, y, r, fill) => `<circle cx="${x}" cy="${y}" r="${r}" fill="${fill}"/>`;
+
+        function padSvg(kind) {
+            const wrap = inner => `<svg viewBox="40 150 430 250" xmlns="http://www.w3.org/2000/svg">${inner}</svg>`;
+            if (kind === 'wiimote') {
+                return `<svg viewBox="20 170 440 170" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="30" y="200" width="410" height="110" rx="50" fill="#fbfcfd" stroke="#c9d1d8" stroke-width="6"/>
+                    ${dpadCross(110, 255, '#c4ccd3')}${dot(215, 255, 27, '#3ab4f2')}
+                    <rect x="268" y="242" width="26" height="12" rx="6" fill="#c4ccd3"/><rect x="304" y="242" width="26" height="12" rx="6" fill="#c4ccd3"/>
+                    ${dot(375, 255, 12, '#c4ccd3')}${dot(60, 255, 8, '#c4ccd3')}
+                    <g fill="#3ab4f2"><circle cx="410" cy="238" r="5"/><circle cx="410" cy="255" r="5" opacity=".3"/><circle cx="410" cy="272" r="5" opacity=".3"/></g></svg>`;
+            }
+            if (kind === 'gamecube') {
+                return wrap(`<path d="${BODY}" fill="#6f55bd" stroke="#4a3590" stroke-width="6"/>
+                    ${dot(160, 238, 24, '#3a2a78')}${dot(160, 238, 15, '#d9d2f2')}
+                    ${dpadCross(235, 292, '#d9d2f2')}${dot(300, 292, 20, '#f3d447')}
+                    ${dot(384, 250, 30, '#58c06a')}${dot(336, 282, 13, '#e0453a')}
+                    <rect x="404" y="215" width="34" height="14" rx="7" fill="#d9d2f2" transform="rotate(25 421 222)"/>
+                    <rect x="338" y="214" width="34" height="14" rx="7" fill="#d9d2f2" transform="rotate(-25 355 221)"/>`);
+            }
+            if (kind === 'playstation') {
+                return wrap(`<path d="${BODY}" fill="#d6dde4" stroke="#aab4be" stroke-width="6"/>
+                    ${dpadCross(165, 240, '#8d98a5')}
+                    ${dot(215, 296, 22, '#5b6671')}${dot(297, 296, 22, '#5b6671')}
+                    ${dot(392, 212, 12, '#3aa6e8')}${dot(352, 250, 12, '#e86aa6')}${dot(432, 250, 12, '#e0453a')}${dot(392, 288, 12, '#6cbf3e')}`);
+            }
+            if (kind === 'switch') {
+                return wrap(`<path d="${BODY}" fill="#5f666d" stroke="#3f454b" stroke-width="6"/>
+                    ${dot(160, 236, 24, '#2c3136')}${dot(160, 236, 15, '#8d949b')}
+                    ${dpadCross(225, 294, '#2c3136')}${dot(300, 296, 22, '#2c3136')}${dot(300, 296, 14, '#8d949b')}
+                    ${dot(392, 224, 15, '#e8ecef')}${dot(352, 256, 15, '#e8ecef')}${dot(432, 256, 15, '#e8ecef')}${dot(392, 288, 15, '#e8ecef')}
+                    <rect x="236" y="214" width="24" height="12" rx="6" fill="#c8ced3"/>`);
+            }
+            // Xbox and anything unrecognised
+            const xbox = kind === 'xbox';
+            return wrap(`<path d="${BODY}" fill="${xbox ? '#eef1f4' : '#d6dde4'}" stroke="#aab4be" stroke-width="6"/>
+                ${dot(160, 236, 24, '#5b6671')}${dot(160, 236, 15, '#aab4be')}
+                ${dpadCross(225, 294, '#8d98a5')}${dot(300, 296, 22, '#5b6671')}${dot(300, 296, 14, '#aab4be')}
+                ${dot(392, 224, 15, xbox ? '#f2c230' : '#8d98a5')}${dot(352, 256, 15, xbox ? '#2f7fd8' : '#8d98a5')}
+                ${dot(432, 256, 15, xbox ? '#e0453a' : '#8d98a5')}${dot(392, 288, 15, xbox ? '#6cbf3e' : '#8d98a5')}
+                ${dot(256, 236, 11, '#c4ccd3')}`);
+        }
+
+        function renderControllers(grid) {
+            const slots = Math.min(CHANNELS_PER_PAGE, Math.max(4, padList.length));
+            for (let i = 0; i < slots; i++) {
+                const c = padList[i];
+                const card = document.createElement('div');
+                if (c) {
+                    const leds = [1, 2, 3, 4].map(n => `<i class="${n === c.player ? 'on' : ''}"></i>`).join('');
+                    card.className = 'wii-channel pad-card';
+                    card.innerHTML = `
+                        <div class="pad-leds">${leds}</div>
+                        <div class="pad-art">${padSvg(c.kind)}</div>
+                        <div class="pad-name">${escapeHtml(c.adapter ? 'GameCube Adapter' : c.name)}</div>
+                        <div class="pad-meta">
+                            <span class="pill ${c.connection === 'Bluetooth' ? 'bt' : ''}">${escapeHtml(c.connection)}</span>
+                            <span class="pill">${escapeHtml(c.label)}</span>
+                        </div>
+                        <div class="pad-roles">${(c.roles || []).map(escapeHtml).join('<br>') || 'Not used by an emulator'}</div>`;
+                    card.addEventListener('mouseenter', () => { zone = 'grid'; selectedIndex = i; renderFocus(); });
                 } else {
-                    ch.classList.remove('selected');
+                    card.className = 'wii-channel pad-card channel-empty waiting';
+                    card.innerHTML = `
+                        <div class="pad-leds">${[1, 2, 3, 4].map(n => `<i class="${n === i + 1 ? 'on' : ''}" style="${n === i + 1 ? 'opacity:.35' : ''}"></i>`).join('')}</div>
+                        <div class="pad-hint">Player ${i + 1}<br>Waiting for a controller</div>`;
                 }
-            });
-        }
-
-        function nextPage() {
-            if ((currentPage + 1) * CHANNELS_PER_PAGE < allGames.length) {
-                currentPage++;
-                selectedIndex = 0;
-                renderPage();
+                grid.appendChild(card);
+            }
+            if (padList.length === 0) {
+                const hint = document.createElement('div');
+                hint.className = 'empty-hint';
+                hint.innerHTML = `<div>Plug in or connect an Xbox, Switch or GameCube controller, or a Wii Remote.<br>It shows up here and is set up in the emulators when a game starts.</div>`;
+                grid.appendChild(hint);
             }
         }
 
-        function prevPage() {
-            if (currentPage > 0) {
-                currentPage--;
-                selectedIndex = 0;
-                renderPage();
+        async function refreshControllers() {
+            try {
+                const data = await (await fetch('/api/controllers')).json();
+                const json = JSON.stringify(data.controllers);
+                const changed = json !== padJson;
+                padJson = json;
+                padList = data.controllers;
+                updateControllerChip();
+                if (changed && onControllers() && !settingsOpen) renderPage();
+            } catch { /* server hiccup: try again next time */ }
+        }
+        setInterval(refreshControllers, 2000);
+
+        function updateControllerChip() {
+            const chip = document.getElementById('controller-status');
+            const n = padList.length;
+            chip.innerText = n ? `${n} controller${n === 1 ? '' : 's'} connected` : 'No controller detected';
+            chip.classList.toggle('connected', n > 0);
+        }
+
+        // ================= FOCUS (controller / keyboard) =================
+        function ensureValidFocus() {
+            if (zone === 'arrow-left' && !hasLeft()) zone = 'grid';
+            if (zone === 'arrow-right' && !hasRight()) zone = 'grid';
+            if (zone === 'grid' && itemCount() === 0) zone = hasRight() ? 'arrow-right' : 'bottom';
+            const n = itemCount();
+            if (selectedIndex >= n) selectedIndex = Math.max(0, n - 1);
+        }
+
+        function renderFocus() {
+            const tiles = document.querySelectorAll('#channel-grid .wii-channel:not(.channel-empty)');
+            tiles.forEach((el, idx) => el.classList.toggle('selected', zone === 'grid' && idx === selectedIndex));
+            document.querySelectorAll('.page-arrow, .round-button').forEach(el => el.classList.remove('pad-focus'));
+            if (zone === 'arrow-left') document.getElementById('prev-page').classList.add('pad-focus');
+            if (zone === 'arrow-right') document.getElementById('next-page').classList.add('pad-focus');
+            if (zone === 'bottom') document.getElementById(BOTTOM_BUTTONS[bottomIndex]).classList.add('pad-focus');
+        }
+
+        // Where a move from the grid goes: another tile, an arrow, or the bottom buttons
+        function navigate(dir) {
+            const n = itemCount();
+            const col = selectedIndex % COLUMNS;
+            const lastRow = Math.floor((n - 1) / COLUMNS);
+
+            if (zone === 'grid') {
+                if (dir === 'right') {
+                    if (col < COLUMNS - 1 && selectedIndex + 1 < n) selectedIndex++;
+                    else if (hasRight()) zone = 'arrow-right';
+                } else if (dir === 'left') {
+                    if (col > 0) selectedIndex--;
+                    else if (hasLeft()) zone = 'arrow-left';
+                } else if (dir === 'down') {
+                    if (selectedIndex + COLUMNS < n) selectedIndex += COLUMNS;
+                    else if (Math.floor(selectedIndex / COLUMNS) < lastRow) selectedIndex = n - 1;  // short last row
+                    else { zone = 'bottom'; bottomIndex = BOTTOM_COLUMN.findIndex(c => c >= col); if (bottomIndex < 0) bottomIndex = BOTTOM_BUTTONS.length - 1; }
+                } else if (dir === 'up') {
+                    if (selectedIndex - COLUMNS >= 0) selectedIndex -= COLUMNS;
+                }
+            } else if (zone === 'arrow-left' || zone === 'arrow-right') {
+                if (dir === 'down') { bottomIndex = zone === 'arrow-left' ? 0 : BOTTOM_BUTTONS.length - 1; zone = 'bottom'; }
+                else if ((dir === 'right' && zone === 'arrow-left') || (dir === 'left' && zone === 'arrow-right')) {
+                    zone = 'grid';
+                    const row = Math.floor(selectedIndex / COLUMNS);
+                    selectedIndex = Math.min(n - 1, row * COLUMNS + (dir === 'right' ? 0 : COLUMNS - 1));
+                }
+            } else if (zone === 'bottom') {
+                if (dir === 'left') bottomIndex = Math.max(0, bottomIndex - 1);
+                else if (dir === 'right') bottomIndex = Math.min(BOTTOM_BUTTONS.length - 1, bottomIndex + 1);
+                else if (dir === 'up') {
+                    if (n > 0) { zone = 'grid'; selectedIndex = Math.min(n - 1, lastRow * COLUMNS + BOTTOM_COLUMN[bottomIndex]); }
+                    else if (hasRight()) zone = 'arrow-right';
+                    else if (hasLeft()) zone = 'arrow-left';
+                }
             }
+            ensureValidFocus();
+            renderFocus();
+        }
+
+        // A button: whatever is focused
+        function activate() {
+            if (zone === 'arrow-left') return goPage(page - 1);
+            if (zone === 'arrow-right') return goPage(page + 1);
+            if (zone === 'bottom') return document.getElementById(BOTTOM_BUTTONS[bottomIndex]).click();
+            if (onControllers()) return;
+            const game = allGames[page * CHANNELS_PER_PAGE + selectedIndex];
+            if (game) launchGame(game);
         }
 
         function showToast(msg) {
@@ -587,9 +906,14 @@
             setTimeout(() => toast.classList.remove('show'), 3000);
         }
 
+        async function rescan() {
+            await Promise.all([loadGames(), refreshControllers()]);
+            showToast('Refreshed');
+        }
+
         // Unzip any archives dropped in roms/ and refresh the grid
         async function importRoms() {
-            const btn = document.getElementById('import-button');
+            const btn = document.getElementById('bb-import');
             if (btn.classList.contains('busy')) return;
             btn.classList.add('busy');
             showToast('Importing ROMs...');
@@ -654,6 +978,10 @@
             loadGames();
         }
 
+        function renderAutoButton(on) {
+            document.getElementById('auto-controllers-button').textContent = on ? 'On' : 'Off';
+        }
+
         async function refreshSettings() {
             const focusedId = document.querySelector('#settings-overlay .pad-focus')?.id;
             const data = await (await fetch('/api/settings')).json();
@@ -663,6 +991,8 @@
             document.getElementById('flatpak-warning').style.display = data.flatpak ? 'none' : 'block';
             const folders = [...new Set(data.emulators.flatMap(e => e.folders))];
             document.getElementById('folder-list').innerHTML = folders.map(f => `<code>${escapeHtml(f)}</code>`).join(' ');
+            emulatorNames = Object.fromEntries(data.emulators.map(e => [e.id, e.name]));
+            renderAutoButton(data.autoControllers);
 
             const list = document.getElementById('emulator-list');
             list.innerHTML = '';
@@ -687,6 +1017,32 @@
             if (focusedId) setPadFocus(document.getElementById(focusedId) || firstFocusable());
         }
 
+        function describeSetup(results) {
+            return results.map(r => `${emulatorNames[r.emulator] || r.emulator}: ${r.message || r.status}`).join(' · ');
+        }
+
+        async function toggleAutoControllers() {
+            const on = document.getElementById('auto-controllers-button').textContent !== 'On';
+            await fetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ autoControllers: on })
+            });
+            renderAutoButton(on);
+            showToast(on ? 'Controllers will be set up before each game' : 'Automatic controller setup is off');
+        }
+
+        async function applyControllersNow() {
+            const status = document.getElementById('setup-status');
+            status.textContent = 'Applying...';
+            try {
+                const { setup } = await (await fetch('/api/controllers/apply', { method: 'POST' })).json();
+                status.textContent = setup.length ? describeSetup(setup) : 'No emulators installed yet';
+            } catch {
+                status.textContent = 'Could not apply';
+            }
+        }
+
         // ---- Controller focus inside Settings: d-pad / stick moves between buttons, A presses ----
         function focusables() {
             return [...document.querySelectorAll('#settings-overlay button:not(:disabled), #settings-overlay input')]
@@ -695,7 +1051,7 @@
         function firstFocusable() { return focusables()[0]; }
 
         function setPadFocus(el) {
-            document.querySelectorAll('.pad-focus').forEach(e => e.classList.remove('pad-focus'));
+            document.querySelectorAll('#settings-overlay .pad-focus').forEach(e => e.classList.remove('pad-focus'));
             if (!el) return;
             el.classList.add('pad-focus');
             el.scrollIntoView({ block: 'nearest' });
@@ -824,38 +1180,24 @@
             return st;
         }
 
-        function navigate(dir) {
-            const startIdx = currentPage * CHANNELS_PER_PAGE;
-            const pageGamesCount = Math.min(CHANNELS_PER_PAGE, allGames.length - startIdx);
-            if (dir === 'right') {
-                if (selectedIndex + 1 < pageGamesCount) { selectedIndex++; updateSelectionVisuals(); }
-                else nextPage();
-            } else if (dir === 'left') {
-                if (selectedIndex > 0) { selectedIndex--; updateSelectionVisuals(); }
-                else if (currentPage > 0) { prevPage(); selectedIndex = CHANNELS_PER_PAGE - 1; updateSelectionVisuals(); }
-            } else if (dir === 'down') {
-                if (selectedIndex + 4 < pageGamesCount) { selectedIndex += 4; updateSelectionVisuals(); }
-            } else if (dir === 'up') {
-                if (selectedIndex - 4 >= 0) { selectedIndex -= 4; updateSelectionVisuals(); }
-            }
-        }
-
-        function launchSelected() {
-            const game = allGames[currentPage * CHANNELS_PER_PAGE + selectedIndex];
-            if (game) launchGame(game);
+        // LB / RB: change page without leaving the grid
+        function pagePress(delta) {
+            const before = page;
+            goPage(page + delta);
+            if (page !== before) { zone = 'grid'; ensureValidFocus(); renderFocus(); }
         }
 
         let lastStatusUpdate = 0;
         function updatePadStatus(st, now) {
             if (now - lastStatusUpdate < 400) return;
             lastStatusUpdate = now;
-            const chip = document.getElementById('controller-status');
-            if (st.count > 0) {
-                chip.innerText = `Controller: ${st.ids[0].split('(')[0].trim()}`;
-                chip.classList.add('connected');
-            } else {
-                chip.innerText = 'No controller detected: press a button on it';
-                chip.classList.remove('connected');
+            if (!padList.length) {
+                // The server list is empty (or not reachable): fall back to what the window itself can see
+                const chip = document.getElementById('controller-status');
+                if (st.count > 0) {
+                    chip.innerText = `Controller: ${st.ids[0].split('(')[0].trim()}`;
+                    chip.classList.add('connected');
+                }
             }
             if (settingsOpen) {
                 document.getElementById('pad-debug').innerText = st.count === 0
@@ -880,11 +1222,11 @@
                 } else if (now - lastInputTime > 180) { // debounce
                     const dir = st.right ? 'right' : st.left ? 'left' : st.down ? 'down' : st.up ? 'up' : null;
                     if (dir) { navigate(dir); lastInputTime = now; }
-                    else if (st.rb) { nextPage(); lastInputTime = now; }
-                    else if (st.lb) { prevPage(); lastInputTime = now; }
+                    else if (st.rb) { pagePress(1); lastInputTime = now; }
+                    else if (st.lb) { pagePress(-1); lastInputTime = now; }
                     else if (st.x) { openSettings(); lastInputTime = now + 500; }
                     else if (st.y) { importRoms(); lastInputTime = now + 500; }
-                    else if (st.a) { launchSelected(); lastInputTime = now + 500; }
+                    else if (st.a) { activate(); lastInputTime = now + 500; }
                 }
             }
             requestAnimationFrame(pollGamepad);
@@ -896,14 +1238,15 @@
             if (settingsOpen || gameRunning || e.target.tagName === 'INPUT') return;
             const dirs = { ArrowRight: 'right', ArrowLeft: 'left', ArrowDown: 'down', ArrowUp: 'up' };
             if (dirs[e.key]) { navigate(dirs[e.key]); e.preventDefault(); }
-            else if (e.key === 'Enter') launchSelected();
-            else if (e.key === 'PageDown') nextPage();
-            else if (e.key === 'PageUp') prevPage();
+            else if (e.key === 'Enter') activate();
+            else if (e.key === 'PageDown') pagePress(1);
+            else if (e.key === 'PageUp') pagePress(-1);
             else if (e.key.toLowerCase() === 's') openSettings();
         });
 
         // Start Loop & Load
         loadGames();
+        refreshControllers();
         requestAnimationFrame(pollGamepad);
     </script>
 </body>

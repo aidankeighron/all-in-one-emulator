@@ -6,6 +6,9 @@ const config = require('./lib/config');
 const flatpak = require('./lib/flatpak');
 const roms = require('./lib/roms');
 const hotkey = require('./lib/hotkey');
+const controllers = require('./lib/controllers');
+const inputconfig = require('./lib/inputconfig');
+const artwork = require('./lib/artwork');
 
 const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'emulators.json'), 'utf8'));
 const emulatorsById = new Map(manifest.emulators.map(e => [e.id, e]));
@@ -14,7 +17,10 @@ const emulatorsByFolder = roms.folderMap(manifest);
 const contentTypes = {
     '.html': 'text/html',
     '.css': 'text/css',
-    '.png': 'image/png'
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.webp': 'image/webp'
 };
 
 // ---------- State ----------
@@ -24,6 +30,28 @@ let current = null;     // running game {emulator, path}
 let lastError = null;   // last failed launch, shown once in the UI
 const jobs = new Map(); // emulator install/uninstall jobs
 let nextJob = 1;
+let lastSetup = [];     // result of the last controller setup, per emulator
+let art = null;         // artwork cache for the current ROMs folder
+let gamesById = new Map();
+
+function artworkFor(romsDir) {
+    if (!art || art.romsDir !== romsDir) {
+        art = { romsDir, ...artwork.create({ cacheDir: config.artworkDir, romsDir }) };
+    }
+    return art;
+}
+
+// Writes the controller settings of one emulator (or all installed ones) from what is plugged in now
+function setupControllers(emulatorIds) {
+    const connected = controllers.detect();
+    const results = emulatorIds.map(id => {
+        const result = inputconfig.apply(id, connected);
+        console.log(`[PADS] ${id}: ${result.status}${result.message ? ` (${result.message})` : ''}`);
+        return result;
+    });
+    lastSetup = [...lastSetup.filter(r => !emulatorIds.includes(r.emulator)), ...results];
+    return results;
+}
 
 function processRoms() {
     if (!importing) {
@@ -76,6 +104,7 @@ async function launchGame(relPath, onGameState) {
     }
 
     await flatpak.grantAccess(emu.flatpak, romsDir);
+    if (config.getAutoControllers()) setupControllers([emu.id]);
     const args = emu.args.map(a => a === '{rom}' ? abs : a);
     console.log(`[LAUNCH] ${emu.name}: ${abs}`);
 
@@ -168,22 +197,54 @@ function createServer(onGameState) {
                 if (route === 'GET /api/games') {
                     const states = await emulatorStates();
                     const installed = new Set(states.emulators.filter(e => e.installed).map(e => e.id));
-                    const games = roms.scanGames(config.getRomsDir(), manifest)
-                        .map(g => ({ ...g, installed: installed.has(g.emulator) }));
-                    return sendJson(res, 200, { games, romsDir: config.getRomsDir() });
+                    const romsDir = config.getRomsDir();
+                    const scanned = roms.scanGames(romsDir, manifest);
+                    const covers = artworkFor(romsDir);
+                    covers.ensure(scanned);
+                    gamesById = new Map(scanned.map(g => [g.id, g]));
+                    const games = scanned.map(g => ({ ...g, installed: installed.has(g.emulator), art: covers.find(g) ? `/api/art/${g.id}` : null }));
+                    return sendJson(res, 200, { games, romsDir, artPending: covers.pending() });
+                }
+                const a = url.pathname.match(/^\/api\/art\/(\w+)$/);
+                if (req.method === 'GET' && a) {
+                    const game = gamesById.get(a[1]);
+                    const file = game && artworkFor(config.getRomsDir()).find(game);
+                    if (!file) return sendJson(res, 404, { error: 'no artwork' });
+                    res.writeHead(200, {
+                        'Content-Type': contentTypes[path.extname(file)] || 'application/octet-stream',
+                        'Cache-Control': 'no-cache'
+                    });
+                    return fs.createReadStream(file).pipe(res);
+                }
+                if (route === 'GET /api/controllers') {
+                    const list = controllers.detect();
+                    const roles = inputconfig.assignments(list);
+                    return sendJson(res, 200, {
+                        controllers: list.map(c => ({ ...c, roles: roles[c.id] })),
+                        autoSetup: config.getAutoControllers(),
+                        setup: lastSetup
+                    });
+                }
+                if (route === 'POST /api/controllers/apply') {
+                    const states = await emulatorStates();
+                    const ids = states.emulators.filter(e => e.installed).map(e => e.id);
+                    return sendJson(res, 200, { setup: setupControllers(ids) });
                 }
                 if (route === 'GET /api/settings') {
-                    return sendJson(res, 200, { romsDir: config.getRomsDir(), ...await emulatorStates() });
+                    return sendJson(res, 200, { romsDir: config.getRomsDir(), autoControllers: config.getAutoControllers(), ...await emulatorStates() });
                 }
                 if (route === 'POST /api/settings') {
                     const body = await readJson(req);
-                    if (typeof body.romsDir !== 'string' || !path.isAbsolute(body.romsDir)) {
-                        return sendJson(res, 400, { error: 'romsDir must be an absolute path' });
+                    if (body.romsDir !== undefined) {
+                        if (typeof body.romsDir !== 'string' || !path.isAbsolute(body.romsDir)) {
+                            return sendJson(res, 400, { error: 'romsDir must be an absolute path' });
+                        }
+                        fs.mkdirSync(body.romsDir, { recursive: true });
+                        config.setRomsDir(body.romsDir);
+                        roms.createDefaultFolders(config.getRomsDir(), manifest);
                     }
-                    fs.mkdirSync(body.romsDir, { recursive: true });
-                    config.setRomsDir(body.romsDir);
-                    roms.createDefaultFolders(config.getRomsDir(), manifest);
-                    return sendJson(res, 200, { romsDir: config.getRomsDir() });
+                    if (typeof body.autoControllers === 'boolean') config.setAutoControllers(body.autoControllers);
+                    return sendJson(res, 200, { romsDir: config.getRomsDir(), autoControllers: config.getAutoControllers() });
                 }
                 const m = url.pathname.match(/^\/api\/emulators\/([\w-]+)\/(install|uninstall)$/);
                 if (req.method === 'POST' && m) {

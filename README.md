@@ -35,7 +35,7 @@ Nothing else to install: the AppImage already contains the menu and its runtime.
 
 # Using it
 
-1. Click the gear (or press **X** on the controller) to open Settings.
+1. Click the gear at the bottom right (or press **X** on the controller) to open Settings.
 2. Click **Install** next to the emulators you want. They download from Flathub in the background.
    Once installed, **Open** starts the emulator itself so you can map controllers, add BIOS files and
    change settings. Close it to return to the menu.
@@ -64,32 +64,79 @@ Nothing else to install: the AppImage already contains the menu and its runtime.
 your existing `roms/wii` and `roms/gamecube` work as they are). The AppImage uses `~/ROMs`. Change it
 any time in Settings, or set the `ROMS_DIR` environment variable.
 
-**Zip files.** Drop `.zip` files anywhere in the ROMs folder, then press the **Zip** button (or **Y**).
+**Zip files.** Drop `.zip` files anywhere in the ROMs folder, then press the import button (the box icon, or **Y**).
 They are also processed whenever the menu starts. Games are unzipped into the right system folder
 and the zip is deleted (set `KEEP_ZIPS=1` to keep it). A zip placed inside a system folder (for
 example `roms/ps2/game.zip`) goes into that folder. Wii/GameCube images are told apart automatically;
 for other systems, put the zip in the system folder so the menu knows where it belongs. Zips that
 are broken, still copying, or really 7z/RAR files are left alone with a message explaining why.
 
-**Controller.** Move with the d-pad or left stick, **A** launches, **LB/RB** change page, **X**
-opens Settings, **Y** imports zips, **B** closes Settings. Inside Settings, the d-pad or stick moves between buttons and **A** presses
-the highlighted one. While a game runs, the menu ignores the
-controller and (in fullscreen) steps out of the way. The keyboard works too: arrow keys, **Enter** to
-launch, **PageUp/PageDown** for pages, **S** for Settings, **Esc** to close it.
+**Controller.** Move with the d-pad or left stick, **A** selects, **LB/RB** change page, **X**
+opens Settings, **Y** imports zips, **B** closes Settings. Press **down** from the last row of games to
+reach the bottom buttons (refresh, import zips, settings) and **left/right** at the edge of the grid to
+reach the page arrows. Inside Settings, the d-pad or stick moves between buttons and **A** presses
+the highlighted one. While a game runs, the menu ignores the controller and (in fullscreen) steps out
+of the way. The keyboard works too: arrow keys, **Enter** to select, **PageUp/PageDown** for pages,
+**S** for Settings, **Esc** to close it.
 
-If the controller does nothing, open Settings: the **Controller** section lists every pad the
+**Controllers page.** One page to the left of the first games page (**LB** from the games, or the left
+arrow) shows every controller the system can see, which player it is, whether it is USB or Bluetooth,
+and where it will play (GameCube port, Wii Remote slot, PS1/PS2 pad).
+
+If the controller does nothing in the menu, open Settings: the **Controllers** section lists every pad the
 window can see and which buttons it reads as pressed. If it says none are detected, press a button
 with the window focused (browsers only expose a controller after its first button press).
 
+**Artwork.** Each game tile shows a picture when one can be found, and the game's name otherwise:
+
+| System | Where the picture comes from |
+|---|---|
+| Wii, GameCube | The game ID in the disc header (`.iso`, `.gcm`, `.wbfs`, `.rvz`, `.wia`), then the cover from [GameTDB](https://www.gametdb.com), the same source Dolphin's own cover view uses |
+| PS2 | The serial in `SYSTEM.CNF` on a `.iso`, then the cover from GameTDB |
+| PSP | `ICON0.PNG` stored inside the `.iso` or `EBOOT.PBP` (nothing is downloaded) |
+| PS3 | `PS3_GAME/ICON0.PNG` in a game folder or `.iso` |
+| Anything else | A picture you put next to the game with the same name: `Game.iso` + `Game.png` (`.jpg` and `.webp` work too). This also overrides the automatic picture. |
+
+Downloaded pictures are cached in `~/.config/all-in-one-emulator/artwork`, so each is fetched once and
+games work offline afterwards. Compressed `.ciso`/`.gcz` Dolphin images, `.chd`/`.cso` discs, PS1 and
+Switch games have no automatic source; use the same-name picture for those.
+
 ## Controller setup per emulator
 
-Each emulator keeps its own settings, so map your controller once in each one (for Dolphin:
-Controllers -> Port 1 -> Configure). To reuse a Dolphin setup from the old Docker version:
+The menu detects the controllers plugged in (Xbox, Switch Pro/Joy-Con, GameCube via the official
+adapter, Wii Remote, PlayStation, other gamepads) and, right before a game starts, writes them into that
+emulator's settings. Plug a controller in, start a game, and it works. Turn this off with the toggle in
+Settings -> Controllers; **Apply now** does it for every installed emulator without starting a game.
+
+| Emulator | What is set up |
+|---|---|
+| Dolphin | GameCube ports 1-4 and Wii Remotes 1-4. A gamepad becomes both a GameCube controller and an emulated Wii Remote with Nunchuk (right stick points, left stick is the Nunchuk stick). A connected Wii Remote is set to *Real Wiimote*. With an official GameCube adapter, ports without a gamepad use the adapter. |
+| PCSX2 | Pad 1 and 2 (DualShock 2) |
+| DuckStation | Pad 1 and 2 (analog controller) |
+| PPSSPP | Nothing needed: it maps connected gamepads by itself |
+| RPCS3, Ryujinx | Not automatic: their controller settings depend on per-device IDs. Set them up once with **Open** in Settings. |
+
+Players are numbered in the order the system registered the controllers. Existing settings in the files
+are kept; only the controller entries are replaced, and the first time a file is changed the original is
+copied next to it as `<file>.emulator-menu.bak`. PCSX2 and DuckStation must have been opened once so
+their settings files exist (use **Open** in Settings). Nothing is written when no suitable controller is
+connected, so keyboard setups are left alone.
+
+Things to know:
+- A real Wii Remote is paired by Dolphin itself (hold 1+2); the menu only tells Dolphin to use it. Dolphin
+  needs Bluetooth access, which the Flatpak has by default.
+- The official GameCube adapter needs the udev rule from Dolphin's documentation so the Flatpak may use it.
+  Adapter controllers play on the port they are plugged into.
+- Third-party GameCube adapters in "PC" mode look like ordinary gamepads and are not assigned to GameCube ports.
+- The Dolphin, PCSX2 and DuckStation control names are written from those emulators' documented formats and
+  have not been checked against every version. If a button is wrong, fix it once in the emulator; the menu
+  rewrites the controller entries each launch, so turn automatic setup off if you want to keep manual changes.
+
+To reuse a Dolphin setup from the old Docker version instead (turn automatic setup off first):
 ```
 mkdir -p ~/.var/app/org.DolphinEmu.dolphin-emu/config
 cp -r ~/all-in-one-emulator/profiles/profile_1/home/.config/dolphin-emu ~/.var/app/org.DolphinEmu.dolphin-emu/config/
 ```
-(after installing Dolphin from the menu).
 
 ## BIOS and firmware
 
