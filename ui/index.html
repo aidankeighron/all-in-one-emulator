@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wii System Menu</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            cursor: default;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background: radial-gradient(circle at center, #f5f5f5 0%, #dcdcdc 100%);
+            font-family: "Nimbus Sans", "Helvetica Neue", Arial, sans-serif;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        /* Top Header */
+        .top-bar {
+            height: 48px;
+            background: linear-gradient(to bottom, #d0d0d0 0%, #b8b8b8 100%);
+            border-bottom: 2px solid #8e8e8e;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 40px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .system-title {
+            font-size: 20px;
+            font-weight: bold;
+            color: #555;
+            letter-spacing: 1px;
+        }
+
+        .controller-status {
+            font-size: 13px;
+            color: #777;
+            font-weight: 600;
+        }
+
+        .controller-status.connected {
+            color: #0088cc;
+        }
+
+        /* 4x3 Channel Grid Area */
+        .grid-container {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            padding: 10px 60px;
+        }
+
+        .page-arrow {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 44px;
+            height: 64px;
+            background: rgba(220, 220, 220, 0.8);
+            border: 2px solid #aaa;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: #555;
+            cursor: pointer;
+            transition: all 0.2s;
+            z-index: 10;
+        }
+
+        .page-arrow:hover {
+            background: #fff;
+            border-color: #00a2ff;
+            color: #00a2ff;
+            transform: translateY(-50%) scale(1.08);
+        }
+
+        .page-arrow.left { left: 15px; }
+        .page-arrow.right { right: 15px; }
+
+        .wii-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            grid-template-rows: repeat(3, 1fr);
+            gap: 16px;
+            width: 100%;
+            max-width: 1100px;
+            height: 90%;
+            max-height: 620px;
+        }
+
+        /* Channel Card (Wii Glass Convex Look) */
+        .wii-channel {
+            background: linear-gradient(135deg, #ffffff 0%, #e9e9e9 50%, #d8d8d8 100%);
+            border: 3px solid #b8b8b8;
+            border-radius: 18px;
+            box-shadow: inset 0 2px 4px rgba(255, 255, 255, 0.9), 
+                        0 4px 10px rgba(0, 0, 0, 0.15);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 14px;
+            position: relative;
+            cursor: pointer;
+            transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+            overflow: hidden;
+        }
+
+        .wii-channel::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 45%;
+            background: linear-gradient(to bottom, rgba(255, 255, 255, 0.6) 0%, rgba(255, 255, 255, 0) 100%);
+            border-radius: 15px 15px 100px 100px;
+            pointer-events: none;
+        }
+
+        /* Hover / Selection State */
+        .wii-channel:hover, .wii-channel.selected {
+            transform: scale(1.06);
+            border-color: #00b4ff;
+            box-shadow: 0 0 16px rgba(0, 180, 255, 0.6), 0 8px 18px rgba(0, 0, 0, 0.2);
+            z-index: 5;
+        }
+
+        .channel-badge {
+            align-self: flex-start;
+            font-size: 11px;
+            font-weight: 800;
+            padding: 3px 8px;
+            border-radius: 6px;
+            color: #fff;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .badge-wii { background: #00a2ff; }
+        .badge-gamecube { background: #6a0dad; }
+        .badge-switch { background: #e60012; }
+        .badge-empty { background: transparent; }
+
+        .channel-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: #333;
+            text-align: center;
+            margin: auto 0;
+            line-height: 1.25;
+            word-break: break-word;
+        }
+
+        .channel-empty {
+            opacity: 0.45;
+            cursor: default;
+            border-style: dashed;
+            background: rgba(220, 220, 220, 0.4);
+            box-shadow: none;
+        }
+
+        .channel-empty:hover {
+            transform: none;
+            border-color: #b8b8b8;
+            box-shadow: none;
+        }
+
+        /* Bottom Control Bar */
+        .bottom-bar {
+            height: 80px;
+            background: linear-gradient(to top, #cfcfcf 0%, #ebebeb 100%);
+            border-top: 2px solid #a8a8a8;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 40px;
+            box-shadow: 0 -4px 6px rgba(0, 0, 0, 0.08);
+        }
+
+        .round-button {
+            width: 58px;
+            height: 58px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #ffffff 0%, #d4d4d4 100%);
+            border: 2px solid #999;
+            box-shadow: 0 3px 6px rgba(0,0,0,0.2), inset 0 2px 2px rgba(255,255,255,0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: bold;
+            color: #444;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .round-button:hover {
+            border-color: #00a2ff;
+            color: #00a2ff;
+            transform: scale(1.08);
+        }
+
+        .center-time {
+            text-align: center;
+        }
+
+        .time-display {
+            font-size: 30px;
+            font-weight: 800;
+            color: #444;
+            letter-spacing: 1px;
+        }
+
+        .date-display {
+            font-size: 13px;
+            font-weight: 600;
+            color: #777;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="top-bar">
+        <div class="system-title">Wii Menu</div>
+        <div class="controller-status" id="controller-status">Xbox Pad: Press any button to activate</div>
+    </div>
+
+    <div class="grid-container">
+        <div class="page-arrow left" id="prev-page" onclick="prevPage()">&lt;</div>
+        
+        <div class="wii-grid" id="channel-grid">
+            <!-- 12 Channels dynamically rendered here -->
+        </div>
+
+        <div class="page-arrow right" id="next-page" onclick="nextPage()">&gt;</div>
+    </div>
+
+    <div class="bottom-bar">
+        <div class="round-button" onclick="location.reload()" title="Refresh ROMs">Wii</div>
+        <div class="center-time">
+            <div class="time-display" id="clock">12:00</div>
+            <div class="date-display" id="date">Mon 10/19</div>
+        </div>
+        <div class="round-button" title="Message Board">&#9993;</div>
+    </div>
+
+    <script>
+        const CHANNELS_PER_PAGE = 12;
+        let allGames = [];
+        let currentPage = 0;
+        let selectedIndex = 0; // Relative to current page (0-11)
+        let activeGamepadIndex = null;
+        let lastInputTime = 0;
+
+        // Clock Update
+        function updateClock() {
+            const now = new Date();
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            document.getElementById('clock').innerText = `${hours}:${minutes}`;
+            
+            const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            const day = days[now.getDay()];
+            const month = now.getMonth() + 1;
+            const date = now.getDate();
+            document.getElementById('date').innerText = `${day} ${month}/${date}`;
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // Fetch Games from Server
+        async function loadGames() {
+            try {
+                const res = await fetch('/api/games');
+                allGames = await res.json();
+                renderPage();
+            } catch (err) {
+                console.error("Failed to load games:", err);
+            }
+        }
+
+        function renderPage() {
+            const grid = document.getElementById('channel-grid');
+            grid.innerHTML = '';
+
+            const startIdx = currentPage * CHANNELS_PER_PAGE;
+            const pageGames = allGames.slice(startIdx, startIdx + CHANNELS_PER_PAGE);
+
+            for (let i = 0; i < CHANNELS_PER_PAGE; i++) {
+                const game = pageGames[i];
+                const channel = document.createElement('div');
+                
+                if (game) {
+                    const badgeClass = `badge-${game.console}`;
+                    channel.className = `wii-channel ${i === selectedIndex ? 'selected' : ''}`;
+                    channel.innerHTML = `
+                        <span class="channel-badge ${badgeClass}">${game.console}</span>
+                        <div class="channel-title">${game.title}</div>
+                        <div></div>
+                    `;
+
+                    // Mouse Events
+                    channel.addEventListener('mouseenter', () => {
+                        selectedIndex = i;
+                        updateSelectionVisuals();
+                    });
+
+                    channel.addEventListener('click', () => {
+                        launchGame(game);
+                    });
+                } else {
+                    // Empty Wii Channel Slot
+                    channel.className = 'wii-channel channel-empty';
+                    channel.innerHTML = `<span class="channel-badge badge-empty"></span><div class="channel-title"></div>`;
+                }
+                
+                grid.appendChild(channel);
+            }
+        }
+
+        function updateSelectionVisuals() {
+            const channels = document.querySelectorAll('.wii-channel:not(.channel-empty)');
+            channels.forEach((ch, idx) => {
+                if (idx === selectedIndex) {
+                    ch.classList.add('selected');
+                } else {
+                    ch.classList.remove('selected');
+                }
+            });
+        }
+
+        function nextPage() {
+            if ((currentPage + 1) * CHANNELS_PER_PAGE < allGames.length) {
+                currentPage++;
+                selectedIndex = 0;
+                renderPage();
+            }
+        }
+
+        function prevPage() {
+            if (currentPage > 0) {
+                currentPage--;
+                selectedIndex = 0;
+                renderPage();
+            }
+        }
+
+        async function launchGame(game) {
+            console.log(`Launching ${game.title}...`);
+            await fetch(`/api/launch?console=${game.console}&path=${encodeURIComponent(game.fullPath)}`);
+        }
+
+        // ================= GAMEPAD ENGINE =================
+        window.addEventListener("gamepadconnected", (e) => {
+            activeGamepadIndex = e.gamepad.index;
+            document.getElementById('controller-status').innerText = `Connected: ${e.gamepad.id.split('(')[0]}`;
+            document.getElementById('controller-status').classList.add('connected');
+        });
+
+        window.addEventListener("gamepaddisconnected", () => {
+            activeGamepadIndex = null;
+            document.getElementById('controller-status').innerText = "Xbox Pad: Disconnected";
+            document.getElementById('controller-status').classList.remove('connected');
+        });
+
+        function pollGamepad() {
+            const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
+            let gp = null;
+
+            // Search dynamically for first active gamepad
+            for (let i = 0; i < gamepads.length; i++) {
+                if (gamepads[i]) {
+                    gp = gamepads[i];
+                    break;
+                }
+            }
+
+            const now = Date.now();
+            if (gp && now - lastInputTime > 180) { // 180ms debounce for responsive navigation
+                const leftStickX = gp.axes[0] || 0;
+                const leftStickY = gp.axes[1] || 0;
+                const dpadUp = gp.buttons[12]?.pressed;
+                const dpadDown = gp.buttons[13]?.pressed;
+                const dpadLeft = gp.buttons[14]?.pressed;
+                const dpadRight = gp.buttons[15]?.pressed;
+                const buttonA = gp.buttons[0]?.pressed;
+                const bumperL = gp.buttons[4]?.pressed;
+                const bumperR = gp.buttons[5]?.pressed;
+
+                const startIdx = currentPage * CHANNELS_PER_PAGE;
+                const pageGamesCount = Math.min(CHANNELS_PER_PAGE, allGames.length - startIdx);
+
+                // Grid Navigation (4 Columns x 3 Rows)
+                if (dpadRight || leftStickX > 0.5) {
+                    if (selectedIndex + 1 < pageGamesCount) {
+                        selectedIndex++;
+                        updateSelectionVisuals();
+                        lastInputTime = now;
+                    } else if ((currentPage + 1) * CHANNELS_PER_PAGE < allGames.length) {
+                        nextPage();
+                        lastInputTime = now;
+                    }
+                } else if (dpadLeft || leftStickX < -0.5) {
+                    if (selectedIndex > 0) {
+                        selectedIndex--;
+                        updateSelectionVisuals();
+                        lastInputTime = now;
+                    } else if (currentPage > 0) {
+                        prevPage();
+                        selectedIndex = CHANNELS_PER_PAGE - 1;
+                        lastInputTime = now;
+                    }
+                } else if (dpadDown || leftStickY > 0.5) {
+                    if (selectedIndex + 4 < pageGamesCount) {
+                        selectedIndex += 4;
+                        updateSelectionVisuals();
+                        lastInputTime = now;
+                    }
+                } else if (dpadUp || leftStickY < -0.5) {
+                    if (selectedIndex - 4 >= 0) {
+                        selectedIndex -= 4;
+                        updateSelectionVisuals();
+                        lastInputTime = now;
+                    }
+                }
+
+                // Bumpers for Page Flipping
+                if (bumperR) { nextPage(); lastInputTime = now; }
+                if (bumperL) { prevPage(); lastInputTime = now; }
+
+                // Launch (A Button)
+                if (buttonA) {
+                    const targetGame = allGames[startIdx + selectedIndex];
+                    if (targetGame) {
+                        launchGame(targetGame);
+                        lastInputTime = now + 500; // longer debounce on launch
+                    }
+                }
+            }
+
+            requestAnimationFrame(pollGamepad);
+        }
+
+        // Start Loop & Load
+        loadGames();
+        requestAnimationFrame(pollGamepad);
+    </script>
+</body>
+</html>
