@@ -26,20 +26,20 @@ xhost +local:docker
 
 Make run-dolphin.sh executable
 ```
-cd ~/all-in-one-emulator-box
+cd ~/all-in-one-emulator
 chmod +x run-dolphin.sh
 ```
 
 Build dolphin
 ```
-cd ~/all-in-one-emulator-box/dolphin
+cd ~/all-in-one-emulator/dolphin
 docker build -t emu-dolphin:latest .
 ```
 
 ## Configure dolphin
 Run the container manually
 ```
-~/all-in-one-emulator-box/run-dolphin.sh
+~/all-in-one-emulator/run-dolphin.sh
 ```
 The Dolphin window will open. Plug your Xbox controller into the Ubuntu PC.
 
@@ -49,11 +49,17 @@ Go to Graphics -> Check Start in Fullscreen.
 
 Go to Options -> Hotkey Settings -> Map Exit to a button combo on your controller (like Select + Start).
 
-Close Dolphin. Your settings are now permanently saved to ~/all-in-one-emulator/profiles/profile_1/dolphin_config.
+Close Dolphin. Your settings are now permanently saved to ~/all-in-one-emulator/profiles/profile_1/config.
 
 # Run
 
 ```
-cd ~/all-in-one-emulator-box/ui-router
+cd ~/all-in-one-emulator/ui
 node server.js
 ```
+
+# Adding games
+
+Put game files (or `.zip` archives containing them) in `roms/`, then press the **Zip** button
+in the menu (or **Y** on the controller). `process-roms.sh` unzips archives and files `.iso`,
+`.rvz`, etc. into `roms/wii/` or `roms/gamecube/`. It also runs when the server starts.

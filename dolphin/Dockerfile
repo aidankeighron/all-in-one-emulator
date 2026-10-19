@@ -13,4 +13,5 @@ RUN apt-get update && apt-get install -y \
     apt-get update && apt-get install -y dolphin-emu && \
     rm -rf /var/lib/apt/lists/*
 
-ENTRYPOINT ["dolphin-emu"]
+# Ubuntu installs games to /usr/games, which is not on Docker's default PATH
+ENTRYPOINT ["/usr/games/dolphin-emu"]

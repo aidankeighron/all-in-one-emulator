@@ -1,2 +1,3 @@
-/roms/wii
-/roms/gamecube
+/roms
+/profiles
+node_modules
