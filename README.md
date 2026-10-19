@@ -26,20 +26,20 @@ xhost +local:docker
 
 Make run-dolphin.sh executable
 ```
-cd ~/retro-box
+cd ~/all-in-one-emulator-box
 chmod +x run-dolphin.sh
 ```
 
 Build dolphin
 ```
-cd ~/retro-box/dolphin
+cd ~/all-in-one-emulator-box/dolphin
 docker build -t emu-dolphin:latest .
 ```
 
 ## Configure dolphin
 Run the container manually
 ```
-~/retro-box/run-dolphin.sh
+~/all-in-one-emulator-box/run-dolphin.sh
 ```
 The Dolphin window will open. Plug your Xbox controller into the Ubuntu PC.
 
@@ -54,6 +54,6 @@ Close Dolphin. Your settings are now permanently saved to ~/all-in-one-emulator/
 # Run
 
 ```
-cd ~/retro-box/ui-router
+cd ~/all-in-one-emulator-box/ui-router
 node server.js
 ```
