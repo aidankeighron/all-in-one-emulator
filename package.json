@@ -6,7 +6,7 @@
   "license": "UNLICENSED",
   "main": "electron/main.js",
   "scripts": {
-    "start": "electron .",
+    "start": "electron . --no-sandbox",
     "server": "node ui/server.js",
     "test": "node --test test/*.test.js",
     "dist": "electron-builder --linux AppImage"
@@ -22,10 +22,16 @@
   "build": {
     "appId": "com.aidankeighron.emulatormenu",
     "productName": "Emulator Menu",
-    "files": ["electron/**", "ui/**", "emulators.json", "package.json"],
+    "files": [
+      "electron/**",
+      "ui/**",
+      "emulators.json",
+      "package.json"
+    ],
     "linux": {
       "target": "AppImage",
       "category": "Game"
-    }
+    },
+    "afterPack": "scripts/after-pack.js"
   }
 }

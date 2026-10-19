@@ -2,9 +2,8 @@ const { app, BrowserWindow, dialog, ipcMain, Menu } = require('electron');
 const path = require('path');
 const server = require('../ui/server');
 
-// Ubuntu 24.04 blocks the Chromium sandbox for unpackaged/AppImage apps. This window only
-// ever loads our own server on localhost, so running without it is acceptable.
-if (process.platform === 'linux') app.commandLine.appendSwitch('no-sandbox');
+// Note: Ubuntu 24.04 blocks Chromium's sandbox for apps like this. That is checked before any JS
+// runs, so --no-sandbox is passed by `npm start` and by the AppImage launcher (scripts/after-pack.js).
 
 const startFullscreen = process.argv.includes('--fullscreen') || process.env.FULLSCREEN === '1';
 let win = null;

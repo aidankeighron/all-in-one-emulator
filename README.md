@@ -93,7 +93,9 @@ npm run server     # menu server only, then open http://localhost:3000 in any br
 ```
 
 Notes:
-- The window runs without Chromium's sandbox, because Ubuntu 24.04 blocks it for AppImages. It only
+- The window runs without Chromium's sandbox (`--no-sandbox`), because Ubuntu 24.04 blocks it for
+  apps like this and Electron exits with a "SUID sandbox helper" error otherwise. `npm start` and the
+  AppImage pass the flag for you; if you run `electron .` yourself, add `--no-sandbox`. The window only
   ever loads the menu server on `127.0.0.1`.
 - Xbox 360 (Xenia) has no Linux build, and Switch emulators aren't included. A `switch` folder is
   ignored.
