@@ -78,6 +78,16 @@ test('bad, recent and ambiguous zips are left alone with a clear message', async
     for (const n of ['trunc', 'rar', 'fresh', 'amb']) assert.ok(fs.existsSync(path.join(dir, `${n}.zip`)), `${n}.zip kept`);
 });
 
+test('switch zips are sorted by extension and scanned for Ryujinx', async () => {
+    const dir = await setup();
+    await makeZip(path.join(dir, 's.zip'), { 'Zelda.nsp': Buffer.alloc(32) });
+    old(path.join(dir, 's.zip'));
+    const result = await roms.processRoms(dir, manifest);
+    assert.ok(result.ok, result.lines.join('\n'));
+    assert.ok(fs.existsSync(path.join(dir, 'switch', 'Zelda.nsp')));
+    assert.deepStrictEqual(roms.scanGames(dir, manifest).map(g => [g.title, g.emulator]), [['Zelda', 'ryujinx']]);
+});
+
 test('scanGames maps folders to emulators and ignores other files', async () => {
     const dir = await setup();
     for (const [folder, file] of [['wii', 'Super_Mario.iso'], ['gamecube', 'Melee.rvz'], ['psp', 'GTA.cso'], ['wii', 'notes.txt'], ['other', 'x.iso']]) {

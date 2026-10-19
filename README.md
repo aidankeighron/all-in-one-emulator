@@ -1,7 +1,7 @@
 # Emulator Menu
 
 A Wii-style menu that launches your games in Dolphin (Wii/GameCube), PCSX2 (PS2), DuckStation (PS1),
-RPCS3 (PS3) and PPSSPP (PSP). Emulators are installed from inside the menu as Flatpaks, so there is
+RPCS3 (PS3), PPSSPP (PSP) and Ryujinx (Switch). Emulators are installed from inside the menu as Flatpaks, so there is
 no Docker and no per-emulator setup. Drop games (or `.zip` files) into your ROMs folder and play.
 
 # Setup (Ubuntu)
@@ -46,6 +46,7 @@ Nothing else to install: the AppImage already contains the menu and its runtime.
    | `ps1` | DuckStation | cue (+ bin), chd, pbp, m3u, iso |
    | `ps3` | RPCS3 | iso, or a game folder containing `PS3_GAME` |
    | `psp` | PPSSPP | iso, cso, pbp |
+   | `switch` | Ryujinx (Ryubing) | nsp, xci, nca, nro, nso |
 
 4. Click a game (or press **A**) to play. Closing the emulator brings you back to the menu.
 
@@ -62,7 +63,12 @@ are broken, still copying, or really 7z/RAR files are left alone with a message 
 
 **Controller.** Move with the d-pad or left stick, **A** launches, **LB/RB** change page, **X**
 opens Settings, **Y** imports zips, **B** closes Settings. While a game runs, the menu ignores the
-controller and (in fullscreen) steps out of the way.
+controller and (in fullscreen) steps out of the way. The keyboard works too: arrow keys, **Enter** to
+launch, **PageUp/PageDown** for pages, **S** for Settings, **Esc** to close it.
+
+If the controller does nothing, open Settings: the **Controller** section lists every pad the
+window can see and which buttons it reads as pressed. If it says none are detected, press a button
+with the window focused (browsers only expose a controller after its first button press).
 
 ## Controller setup per emulator
 
@@ -76,8 +82,8 @@ cp -r ~/all-in-one-emulator/profiles/profile_1/home/.config/dolphin-emu ~/.var/a
 
 ## BIOS and firmware
 
-PS1 (DuckStation), PS2 (PCSX2) and PS3 (RPCS3) need BIOS or firmware files that cannot be
-redistributed. Each person installs their own through the emulator's own settings.
+PS1 (DuckStation), PS2 (PCSX2), PS3 (RPCS3) and Switch (Ryujinx, which needs `prod.keys` plus a
+firmware install) need BIOS, key or firmware files that cannot be redistributed. Each person installs their own through the emulator's own settings.
 
 # Adding another emulator
 
@@ -97,5 +103,7 @@ Notes:
   apps like this and Electron exits with a "SUID sandbox helper" error otherwise. `npm start` and the
   AppImage pass the flag for you; if you run `electron .` yourself, add `--no-sandbox`. The window only
   ever loads the menu server on `127.0.0.1`.
-- Xbox 360 (Xenia) has no Linux build, and Switch emulators aren't included. A `switch` folder is
-  ignored.
+- Xbox 360 (Xenia) has no Linux build, so it isn't included.
+- Switch uses the Ryubing fork of Ryujinx from Flathub (a community package; the original Ryujinx and
+  Yuzu were discontinued). Other forks such as Eden ship as AppImages rather than Flatpaks, so they
+  would need a different install method than this menu has today.

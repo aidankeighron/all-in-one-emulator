@@ -45,6 +45,15 @@
       "folders": ["psp"],
       "extensions": ["iso", "cso", "pbp"],
       "args": ["{rom}"]
+    },
+    {
+      "id": "ryujinx",
+      "name": "Ryujinx (Ryubing)",
+      "description": "Nintendo Switch, community-maintained Ryujinx (needs prod.keys and firmware)",
+      "flatpak": "io.github.ryubing.Ryujinx",
+      "folders": ["switch"],
+      "extensions": ["nsp", "xci", "nca", "nro", "nso"],
+      "args": ["{rom}"]
     }
   ]
 }
