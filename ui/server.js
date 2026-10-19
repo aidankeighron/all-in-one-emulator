@@ -5,6 +5,7 @@ const path = require('path');
 const config = require('./lib/config');
 const flatpak = require('./lib/flatpak');
 const roms = require('./lib/roms');
+const hotkey = require('./lib/hotkey');
 
 const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'emulators.json'), 'utf8'));
 const emulatorsById = new Map(manifest.emulators.map(e => [e.id, e]));
@@ -78,10 +79,12 @@ async function launchGame(relPath, onGameState) {
     const args = emu.args.map(a => a === '{rom}' ? abs : a);
     console.log(`[LAUNCH] ${emu.name}: ${abs}`);
 
-    current = { emulator: emu.id, path: relPath };
+    current = { emulator: emu.id, path: relPath, flatpak: emu.flatpak };
     lastError = null;
     const started = Date.now();
-    flatpak.launch(emu.flatpak, args, (code, stderr) => {
+    const stopWatching = process.env.EMU_NO_HOTKEY ? () => {} : hotkey.start(stopCurrent);
+    current.child = flatpak.launch(emu.flatpak, args, (code, stderr) => {
+        stopWatching();
         current = null;
         if (code !== 0 && Date.now() - started < 10000) {
             lastError = `${emu.name} exited with an error: ${(stderr || '').trim().split('\n').pop()}`;
@@ -91,6 +94,15 @@ async function launchGame(relPath, onGameState) {
     });
     if (onGameState) onGameState(true);
     return { status: 200, body: { status: 'launched', emulator: emu.id } };
+}
+
+// Back+Start (Share+Options on PlayStation pads) held for 1.5s: quit the running game
+function stopCurrent() {
+    if (!current || !current.child) return;
+    const { flatpak: id } = current;
+    console.log(`[HOTKEY] Stopping ${id}`);
+    current.child.kill('SIGTERM');
+    setTimeout(() => { if (current && current.flatpak === id) flatpak.kill(id); }, 3000);
 }
 
 // Opens the emulator's own window (no game) so the user can set up controllers, BIOS, etc.
@@ -104,10 +116,10 @@ async function openEmulator(id, onGameState) {
 
     await flatpak.grantAccess(emu.flatpak, config.getRomsDir());
     console.log(`[OPEN] ${emu.name}`);
-    current = { emulator: emu.id, path: null };
+    current = { emulator: emu.id, path: null, flatpak: emu.flatpak };
     lastError = null;
     const started = Date.now();
-    flatpak.launch(emu.flatpak, emu.guiArgs || [], (code, stderr) => {
+    current.child = flatpak.launch(emu.flatpak, emu.guiArgs || [], (code, stderr) => {
         current = null;
         if (code !== 0 && Date.now() - started < 10000) {
             lastError = `${emu.name} exited with an error: ${(stderr || '').trim().split('\n').pop()}`;
@@ -198,7 +210,7 @@ function createServer(onGameState) {
                 if (route === 'GET /api/status') {
                     const error = lastError;
                     lastError = null;
-                    return sendJson(res, 200, { running: !!current, game: current, error });
+                    return sendJson(res, 200, { running: !!current, game: current && { emulator: current.emulator, path: current.path }, error });
                 }
                 if (route === 'POST /api/process-roms') {
                     return sendJson(res, 200, await processRoms());

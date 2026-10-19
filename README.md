@@ -52,6 +52,14 @@ Nothing else to install: the AppImage already contains the menu and its runtime.
 
 4. Click a game (or press **A**) to play. Closing the emulator brings you back to the menu.
 
+   **Back to the menu from inside a game:** hold **Back + Start** (**Share + Options** on PlayStation
+   controllers) for about 1.5 seconds. This works in every emulator, no mapping needed, but it ends
+   the game like closing the emulator, so save first. The menu reads the controller through
+   `/dev/input/js*`; if that isn't readable on your system, the combo does nothing, and you can still
+   quit with each emulator's own Stop/Exit (Dolphin's Stop, for example, also returns to the menu).
+   Set `EMU_NO_HOTKEY=1` to turn the combo off. The Wii's own **Home -> Wii Menu** can't be hooked:
+   Dolphin runs it as the Wii's real software, so it opens the emulated Wii System Menu, not this one.
+
 **ROMs folder.** From a source checkout this is `roms/` inside the project (same layout as before, so
 your existing `roms/wii` and `roms/gamecube` work as they are). The AppImage uses `~/ROMs`. Change it
 any time in Settings, or set the `ROMS_DIR` environment variable.
