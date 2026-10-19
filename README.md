@@ -16,10 +16,10 @@ sudo usermod -aG docker $USER
 newgrp docker
 ```
 
-Allow Local Windows
+Allow local windows (needs `xhost`, from `x11-xserver-utils`; `run-dolphin.sh` runs this for you at every launch)
 ```
-echo "xhost +local:docker > /dev/null" >> ~/.profile
-xhost +local:docker
+sudo apt install -y x11-xserver-utils
+xhost +SI:localuser:$USER
 ```
 
 # Setup Dolphin
