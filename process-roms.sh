@@ -9,7 +9,9 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROMS="$ROOT/roms"
 GAME_EXTS="iso rvz wbfs gcm ciso gcz wia wad nsp xci"
 
-mkdir -p "$ROMS/wii" "$ROMS/gamecube"
+for d in wii gamecube; do
+    mkdir -p "$ROMS/$d" 2>/dev/null || echo "[ROMS] warning: cannot create $ROMS/$d (permissions? try: sudo chown -R \$USER \"$ROMS\")"
+done
 
 extract() { # zip dest
     if command -v unzip >/dev/null 2>&1 && unzip -q -o "$1" -d "$2"; then

@@ -23,11 +23,6 @@ if ! curl -fs "$URL/api/games" >/dev/null 2>&1; then
     done
 fi
 
-# A dedicated profile makes the browser start its own process instead of
-# handing the URL to an already-running browser (which would ignore the flags).
-PROFILE_DIR="$ROOT/profiles/ui-browser"
-mkdir -p "$PROFILE_DIR"
-
 BROWSER_BIN="${UI_BROWSER:-}"
 if [ -z "$BROWSER_BIN" ]; then
     for b in google-chrome chromium chromium-browser firefox; do
@@ -39,6 +34,24 @@ if [ -z "$BROWSER_BIN" ]; then
     [ -n "$SERVER_PID" ] && wait "$SERVER_PID"
     exit 1
 fi
+
+# A dedicated profile makes the browser start its own process instead of
+# handing the URL to an already-running browser (which would ignore the flags).
+# Kept outside the repo so it is always writable by you. Snap browsers (the Ubuntu
+# default) cannot read hidden folders like ~/.local, so they get a folder under
+# ~/snap/<name>/common instead.
+SNAP_NAME="$(basename "$BROWSER_BIN")"; SNAP_NAME="${SNAP_NAME%-browser}"
+if command -v snap >/dev/null 2>&1 && snap list "$SNAP_NAME" >/dev/null 2>&1; then
+    PROFILE_DIR="$HOME/snap/$SNAP_NAME/common/all-in-one-emulator"
+else
+    PROFILE_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/all-in-one-emulator/ui-browser"
+fi
+if ! mkdir -p "$PROFILE_DIR" 2>/dev/null; then
+    PROFILE_DIR="$(mktemp -d)"
+    echo "[start-ui] could not create the browser profile dir, using $PROFILE_DIR" >&2
+fi
+LOG="$PROFILE_DIR/browser.log"
+export NO_AT_BRIDGE=1   # silences the harmless GTK "atk-bridge" warning
 
 case "$(basename "$BROWSER_BIN")" in
     firefox*)
@@ -52,4 +65,12 @@ case "$(basename "$BROWSER_BIN")" in
 esac
 
 # Runs until the window is closed, then the trap stops the server
-"$BROWSER_BIN" "${FLAGS[@]}"
+START=$SECONDS
+"$BROWSER_BIN" "${FLAGS[@]}" >"$LOG" 2>&1
+if [ $((SECONDS - START)) -lt 5 ]; then
+    # Exiting this fast means the browser failed or handed off to another process
+    # (common with snap browsers). Keep the server up rather than killing the menu.
+    echo "[start-ui] the browser exited immediately; see $LOG" >&2
+    echo "[start-ui] the menu is still running: open $URL in any browser. Ctrl+C to stop." >&2
+    [ -n "$SERVER_PID" ] && wait "$SERVER_PID"
+fi
