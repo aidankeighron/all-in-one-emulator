@@ -37,6 +37,8 @@ Nothing else to install: the AppImage already contains the menu and its runtime.
 
 1. Click the gear (or press **X** on the controller) to open Settings.
 2. Click **Install** next to the emulators you want. They download from Flathub in the background.
+   Once installed, **Open** starts the emulator itself so you can map controllers, add BIOS files and
+   change settings. Close it to return to the menu.
 3. Put your games in the ROMs folder, in a subfolder named after the system:
 
    | Folder | Emulator | File types |
@@ -62,7 +64,8 @@ for other systems, put the zip in the system folder so the menu knows where it b
 are broken, still copying, or really 7z/RAR files are left alone with a message explaining why.
 
 **Controller.** Move with the d-pad or left stick, **A** launches, **LB/RB** change page, **X**
-opens Settings, **Y** imports zips, **B** closes Settings. While a game runs, the menu ignores the
+opens Settings, **Y** imports zips, **B** closes Settings. Inside Settings, the d-pad or stick moves between buttons and **A** presses
+the highlighted one. While a game runs, the menu ignores the
 controller and (in fullscreen) steps out of the way. The keyboard works too: arrow keys, **Enter** to
 launch, **PageUp/PageDown** for pages, **S** for Settings, **Esc** to close it.
 

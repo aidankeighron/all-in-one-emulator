@@ -331,6 +331,12 @@
 
         .btn:hover { border-color: var(--wii-blue); color: var(--wii-blue); }
         .btn:disabled { opacity: 0.5; pointer-events: none; }
+        .pad-focus {
+            outline: 3px solid var(--wii-blue);
+            outline-offset: 2px;
+            box-shadow: 0 0 14px var(--wii-blue-glow);
+        }
+
         .btn.primary { background: linear-gradient(to bottom, #5cc6fa, #2c9fe0); border-color: #2c9fe0; color: #fff; }
 
         .emu-row {
@@ -637,16 +643,19 @@
             settingsOpen = true;
             document.getElementById('settings-overlay').classList.add('open');
             await refreshSettings();
+            setPadFocus(firstFocusable());
         }
 
         function closeSettings() {
             settingsOpen = false;
+            setPadFocus(null);
             document.getElementById('settings-overlay').classList.remove('open');
             lastInputTime = Date.now() + 300;
             loadGames();
         }
 
         async function refreshSettings() {
+            const focusedId = document.querySelector('#settings-overlay .pad-focus')?.id;
             const data = await (await fetch('/api/settings')).json();
             romsDir = data.romsDir;
             const input = document.getElementById('roms-dir');
@@ -666,12 +675,58 @@
                         <div class="desc">${escapeHtml(emu.description)} &middot; folders: ${emu.folders.map(escapeHtml).join(', ')}</div>
                         <div class="progress" id="progress-${emu.id}"></div>
                     </div>
+                    ${emu.installed ? `<button class="btn" id="open-${emu.id}" title="Open ${escapeHtml(emu.name)} to set up controllers, BIOS and other settings">Open</button>` : ''}
                     <button class="btn ${emu.installed ? '' : 'primary'}" id="btn-${emu.id}" ${data.flatpak ? '' : 'disabled'}>
                         ${emu.installed ? 'Remove' : 'Install'}
                     </button>`;
-                row.querySelector('button').addEventListener('click', () => runEmulatorJob(emu, emu.installed ? 'uninstall' : 'install'));
+                row.querySelector(`#btn-${emu.id}`).addEventListener('click', () => runEmulatorJob(emu, emu.installed ? 'uninstall' : 'install'));
+                const openBtn = row.querySelector(`#open-${emu.id}`);
+                if (openBtn) openBtn.addEventListener('click', () => openEmulator(emu));
                 list.appendChild(row);
             }
+            if (focusedId) setPadFocus(document.getElementById(focusedId) || firstFocusable());
+        }
+
+        // ---- Controller focus inside Settings: d-pad / stick moves between buttons, A presses ----
+        function focusables() {
+            return [...document.querySelectorAll('#settings-overlay button:not(:disabled), #settings-overlay input')]
+                .filter(el => el.offsetParent !== null);
+        }
+        function firstFocusable() { return focusables()[0]; }
+
+        function setPadFocus(el) {
+            document.querySelectorAll('.pad-focus').forEach(e => e.classList.remove('pad-focus'));
+            if (!el) return;
+            el.classList.add('pad-focus');
+            el.scrollIntoView({ block: 'nearest' });
+        }
+
+        // Moves focus to the nearest element in the pressed direction
+        function moveFocus(dir) {
+            const items = focusables();
+            const cur = document.querySelector('#settings-overlay .pad-focus');
+            if (!cur || !items.includes(cur)) return setPadFocus(items[0]);
+            const c = cur.getBoundingClientRect();
+            const cx = c.left + c.width / 2, cy = c.top + c.height / 2;
+            let best = null, bestScore = Infinity;
+            for (const el of items) {
+                if (el === cur) continue;
+                const r = el.getBoundingClientRect();
+                const dx = r.left + r.width / 2 - cx, dy = r.top + r.height / 2 - cy;
+                const along = dir === 'right' ? dx : dir === 'left' ? -dx : dir === 'down' ? dy : -dy;
+                const across = (dir === 'left' || dir === 'right') ? Math.abs(dy) : Math.abs(dx);
+                if (along <= 4) continue;
+                if ((dir === 'left' || dir === 'right') && across > Math.max(c.height, r.height)) continue; // same row only
+                const score = along + across * 3;
+                if (score < bestScore) { bestScore = score; best = el; }
+            }
+            if (best) setPadFocus(best);
+        }
+
+        function pressFocused() {
+            const el = document.querySelector('#settings-overlay .pad-focus');
+            if (!el) return;
+            if (el.tagName === 'INPUT') el.focus(); else el.click();
         }
 
         async function runEmulatorJob(emu, action) {
@@ -696,6 +751,18 @@
                 progress.textContent = `Failed: ${job.lines[job.lines.length - 1] || 'see terminal'}`;
             } else {
                 await refreshSettings();
+            }
+        }
+
+        async function openEmulator(emu) {
+            const res = await fetch(`/api/emulators/${emu.id}/open`, { method: 'POST' });
+            const body = await res.json();
+            if (res.ok) {
+                gameRunning = true;
+                showToast(`${emu.name} opened. Close it to come back here.`);
+                pollStatus();
+            } else {
+                showToast(body.message || 'Could not open emulator');
             }
         }
 
@@ -802,10 +869,15 @@
             const now = Date.now();
             updatePadStatus(st, now);
 
-            if (st.count > 0) {
+            if (st.count > 0 && !gameRunning) {
                 if (settingsOpen) {
-                    if (st.b && now - lastInputTime > 300) closeSettings(); // B closes settings
-                } else if (!gameRunning && now - lastInputTime > 180) { // debounce
+                    if (now - lastInputTime > 180) {
+                        const dir = st.right ? 'right' : st.left ? 'left' : st.down ? 'down' : st.up ? 'up' : null;
+                        if (dir) { moveFocus(dir); lastInputTime = now; }
+                        else if (st.a) { pressFocused(); lastInputTime = now + 300; }
+                        else if (st.b) { closeSettings(); } // B closes settings
+                    }
+                } else if (now - lastInputTime > 180) { // debounce
                     const dir = st.right ? 'right' : st.left ? 'left' : st.down ? 'down' : st.up ? 'up' : null;
                     if (dir) { navigate(dir); lastInputTime = now; }
                     else if (st.rb) { nextPage(); lastInputTime = now; }

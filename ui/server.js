@@ -93,6 +93,31 @@ async function launchGame(relPath, onGameState) {
     return { status: 200, body: { status: 'launched', emulator: emu.id } };
 }
 
+// Opens the emulator's own window (no game) so the user can set up controllers, BIOS, etc.
+async function openEmulator(id, onGameState) {
+    const emu = emulatorsById.get(id);
+    if (!emu) return { status: 404, body: { error: 'unknown', message: 'Unknown emulator' } };
+    if (current) return { status: 409, body: { error: 'busy', message: 'An emulator is already running' } };
+    if (!await flatpak.isInstalled(emu.flatpak)) {
+        return { status: 409, body: { error: 'not_installed', emulator: emu.id, message: `${emu.name} is not installed` } };
+    }
+
+    await flatpak.grantAccess(emu.flatpak, config.getRomsDir());
+    console.log(`[OPEN] ${emu.name}`);
+    current = { emulator: emu.id, path: null };
+    lastError = null;
+    const started = Date.now();
+    flatpak.launch(emu.flatpak, emu.guiArgs || [], (code, stderr) => {
+        current = null;
+        if (code !== 0 && Date.now() - started < 10000) {
+            lastError = `${emu.name} exited with an error: ${(stderr || '').trim().split('\n').pop()}`;
+        }
+        if (onGameState) onGameState(false);
+    });
+    if (onGameState) onGameState(true);
+    return { status: 200, body: { status: 'opened', emulator: emu.id } };
+}
+
 // ---------- HTTP ----------
 
 function sendJson(res, status, body) {
@@ -154,6 +179,11 @@ function createServer(onGameState) {
                     if (!emu) return sendJson(res, 404, { error: 'unknown emulator' });
                     if (!await flatpak.available()) return sendJson(res, 409, { error: 'flatpak_missing' });
                     return sendJson(res, 200, startJob(emu, m[2]));
+                }
+                const o = url.pathname.match(/^\/api\/emulators\/([\w-]+)\/open$/);
+                if (req.method === 'POST' && o) {
+                    const result = await openEmulator(o[1], onGameState);
+                    return sendJson(res, result.status, result.body);
                 }
                 const j = url.pathname.match(/^\/api\/jobs\/(\d+)$/);
                 if (req.method === 'GET' && j) {
