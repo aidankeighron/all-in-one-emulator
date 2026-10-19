@@ -54,9 +54,12 @@ Close Dolphin. Your settings are now permanently saved to ~/all-in-one-emulator/
 # Run
 
 ```
-cd ~/all-in-one-emulator/ui
-node server.js
+cd ~/all-in-one-emulator
+./start-ui.sh               # windowed, can be minimized
+./start-ui.sh --fullscreen  # fullscreen
 ```
+This starts the menu server and opens it as an app window. Closing the window stops the server.
+(Chromium/Chrome gives a clean app window; Firefox also works. Override with `UI_BROWSER=/path/to/browser`.)
 
 # Adding games
 
