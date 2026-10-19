@@ -1,135 +1,230 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const { execFile } = require('child_process');
 
-const PORT = 3000;
-const ROMS_DIR = path.resolve(__dirname, '../roms');
+const config = require('./lib/config');
+const flatpak = require('./lib/flatpak');
+const roms = require('./lib/roms');
 
-// Scan roms directory dynamically
-function getGames() {
-    const games = [];
-    if (!fs.existsSync(ROMS_DIR)) return games;
+const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'emulators.json'), 'utf8'));
+const emulatorsById = new Map(manifest.emulators.map(e => [e.id, e]));
+const emulatorsByFolder = roms.folderMap(manifest);
 
-    const consoles = fs.readdirSync(ROMS_DIR, { withFileTypes: true })
-        .filter(dirent => dirent.isDirectory() && !dirent.name.startsWith('.'))
-        .map(dirent => dirent.name);
+const contentTypes = {
+    '.html': 'text/html',
+    '.css': 'text/css',
+    '.png': 'image/png'
+};
 
-    consoles.forEach(consoleName => {
-        const consolePath = path.join(ROMS_DIR, consoleName);
-        const files = fs.readdirSync(consolePath);
+// ---------- State ----------
 
-        files.forEach(file => {
-            // Ignore hidden files and metadata text files
-            if (file.startsWith('.') || file.endsWith('.txt') || file.toLowerCase().endsWith('.zip')) return;
+let importing = null;   // in-flight ROM import
+let current = null;     // running game {emulator, path}
+let lastError = null;   // last failed launch, shown once in the UI
+const jobs = new Map(); // emulator install/uninstall jobs
+let nextJob = 1;
 
-            const ext = path.extname(file);
-            const rawTitle = path.basename(file, ext);
-            
-            // Clean title: replace underscores/dashes with spaces
-            const cleanTitle = rawTitle.replace(/[-_]/g, ' ').trim();
-            // Generate ID: alphanumeric only
-            const id = cleanTitle.toLowerCase().replace(/[^a-z0-9]/g, '');
-
-            games.push({
-                id: id || Math.random().toString(36).substring(2, 9),
-                title: cleanTitle,
-                console: consoleName.toLowerCase(),
-                filename: file,
-                fullPath: `/roms/${consoleName}/${file}`
-            });
-        });
-    });
-
-    return games;
-}
-
-// Unzip and file any new ROM archives via process-roms.sh (one run at a time)
-let importing = null;
 function processRoms() {
     if (!importing) {
-        importing = new Promise(resolve => {
-            execFile(path.resolve(__dirname, '../process-roms.sh'), (err, stdout, stderr) => {
-                importing = null;
-                const output = (stdout + stderr).trim();
-                console.log(output);
-                resolve({ ok: !err, output });
-            });
-        });
+        importing = roms.processRoms(config.getRomsDir(), manifest)
+            .catch(err => ({ ok: false, lines: [err.message] }))
+            .finally(() => { importing = null; });
     }
     return importing;
 }
 
-const server = http.createServer((req, res) => {
-    // API: Dynamic game list
-    if (req.url === '/api/games') {
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        return res.end(JSON.stringify(getGames()));
+async function emulatorStates() {
+    const hasFlatpak = await flatpak.available();
+    const list = await Promise.all(manifest.emulators.map(async e => ({
+        id: e.id,
+        name: e.name,
+        description: e.description,
+        folders: e.folders,
+        flatpak: e.flatpak,
+        installed: hasFlatpak && await flatpak.isInstalled(e.flatpak)
+    })));
+    return { flatpak: hasFlatpak, emulators: list };
+}
+
+function startJob(emu, action) {
+    const id = String(nextJob++);
+    const job = { id, emulator: emu.id, action, state: 'running', lines: [] };
+    jobs.set(id, job);
+    const onLine = line => { job.lines = [...job.lines, line].slice(-15); };
+    (action === 'install' ? flatpak.install(emu.flatpak, onLine) : flatpak.uninstall(emu.flatpak, onLine))
+        .then(code => { job.state = code === 0 ? 'done' : 'error'; });
+    return job;
+}
+
+// ---------- Launching ----------
+
+async function launchGame(relPath, onGameState) {
+    if (current) return { status: 409, body: { error: 'busy', message: 'A game is already running' } };
+
+    const romsDir = config.getRomsDir();
+    const abs = path.resolve(romsDir, relPath || '');
+    if (!relPath || !abs.startsWith(romsDir + path.sep) || !fs.existsSync(abs)) {
+        return { status: 400, body: { error: 'invalid', message: 'Invalid ROM path' } };
+    }
+    const folder = path.relative(romsDir, abs).split(path.sep)[0].toLowerCase();
+    const emu = emulatorsByFolder.get(folder);
+    if (!emu) return { status: 400, body: { error: 'invalid', message: `No emulator for folder "${folder}"` } };
+
+    if (!await flatpak.isInstalled(emu.flatpak)) {
+        return { status: 409, body: { error: 'not_installed', emulator: emu.id, message: `${emu.name} is not installed` } };
     }
 
-    // API: Unzip new ROM archives
-    if (req.url === '/api/process-roms') {
-        return processRoms().then(result => {
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify(result));
-        });
-    }
+    await flatpak.grantAccess(emu.flatpak, romsDir);
+    const args = emu.args.map(a => a === '{rom}' ? abs : a);
+    console.log(`[LAUNCH] ${emu.name}: ${abs}`);
 
-    // API: Launch Game Container
-    if (req.url.startsWith('/api/launch')) {
-        const urlParams = new URLSearchParams(req.url.split('?')[1]);
-        const consoleType = urlParams.get('console');
-        const romPath = urlParams.get('path') || '';
-
-        // Only launch files that actually exist under roms/ (path is the in-container /roms/... path)
-        const hostPath = path.resolve(ROMS_DIR, path.relative('/roms', path.posix.normalize(romPath)));
-        if (!romPath.startsWith('/roms/') || !hostPath.startsWith(ROMS_DIR + path.sep) || !fs.existsSync(hostPath)) {
-            res.writeHead(400, { 'Content-Type': 'application/json' });
-            return res.end(JSON.stringify({ status: 'error', message: 'Invalid ROM path' }));
+    current = { emulator: emu.id, path: relPath };
+    lastError = null;
+    const started = Date.now();
+    flatpak.launch(emu.flatpak, args, (code, stderr) => {
+        current = null;
+        if (code !== 0 && Date.now() - started < 10000) {
+            lastError = `${emu.name} exited with an error: ${(stderr || '').trim().split('\n').pop()}`;
+            console.error(`[LAUNCH] ${lastError}`);
         }
-
-        console.log(`[LAUNCH] ${consoleType}: ${romPath}`);
-        execFile(path.resolve(__dirname, '../run-dolphin.sh'), [romPath], (err) => {
-            if (err) console.error(`[EXEC ERROR] ${err.message}`);
-        });
-
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        return res.end(JSON.stringify({ status: 'launched', console: consoleType, path: romPath }));
-    }
-
-    // Serve Static UI Files
-    let urlPath;
-    try {
-        urlPath = decodeURIComponent(req.url.split('?')[0]);
-    } catch {
-        res.writeHead(400);
-        return res.end('Bad Request');
-    }
-    let filePath = path.join(__dirname, urlPath === '/' ? 'index.html' : urlPath);
-    if (!filePath.startsWith(__dirname + path.sep)) {
-        res.writeHead(403);
-        return res.end('Forbidden');
-    }
-    const ext = path.extname(filePath);
-    const contentTypes = {
-        '.html': 'text/html',
-        '.css': 'text/css',
-        '.js': 'application/javascript',
-        '.png': 'image/png'
-    };
-
-    fs.readFile(filePath, (err, content) => {
-        if (err) {
-            res.writeHead(404);
-            res.end('Not Found');
-        } else {
-            res.writeHead(200, { 'Content-Type': contentTypes[ext] || 'text/plain' });
-            res.end(content);
-        }
+        if (onGameState) onGameState(false);
     });
-});
+    if (onGameState) onGameState(true);
+    return { status: 200, body: { status: 'launched', emulator: emu.id } };
+}
 
-server.listen(PORT, () => {
-    processRoms();
-    console.log(`Wii System Menu running at: http://localhost:${PORT}`);
-});
+// ---------- HTTP ----------
+
+function sendJson(res, status, body) {
+    res.writeHead(status, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(body));
+}
+
+function readJson(req) {
+    return new Promise((resolve, reject) => {
+        let data = '';
+        req.on('data', chunk => {
+            data += chunk;
+            if (data.length > 65536) { reject(new Error('Body too large')); req.destroy(); }
+        });
+        req.on('end', () => {
+            try { resolve(data ? JSON.parse(data) : {}); } catch (err) { reject(err); }
+        });
+    });
+}
+
+// Only this machine's own pages may use the API (blocks DNS rebinding and cross-site requests)
+function allowed(req) {
+    if (!/^(localhost|127\.0\.0\.1)(:\d+)?$/.test(req.headers.host || '')) return false;
+    if (req.method !== 'GET' && !/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(req.headers.origin || '')) return false;
+    return true;
+}
+
+function createServer(onGameState) {
+    return http.createServer(async (req, res) => {
+        const url = new URL(req.url, 'http://localhost');
+        const route = `${req.method} ${url.pathname}`;
+
+        if (url.pathname.startsWith('/api/')) {
+            if (!allowed(req)) return sendJson(res, 403, { error: 'forbidden' });
+            try {
+                if (route === 'GET /api/games') {
+                    const states = await emulatorStates();
+                    const installed = new Set(states.emulators.filter(e => e.installed).map(e => e.id));
+                    const games = roms.scanGames(config.getRomsDir(), manifest)
+                        .map(g => ({ ...g, installed: installed.has(g.emulator) }));
+                    return sendJson(res, 200, { games, romsDir: config.getRomsDir() });
+                }
+                if (route === 'GET /api/settings') {
+                    return sendJson(res, 200, { romsDir: config.getRomsDir(), ...await emulatorStates() });
+                }
+                if (route === 'POST /api/settings') {
+                    const body = await readJson(req);
+                    if (typeof body.romsDir !== 'string' || !path.isAbsolute(body.romsDir)) {
+                        return sendJson(res, 400, { error: 'romsDir must be an absolute path' });
+                    }
+                    fs.mkdirSync(body.romsDir, { recursive: true });
+                    config.setRomsDir(body.romsDir);
+                    roms.createDefaultFolders(config.getRomsDir(), manifest);
+                    return sendJson(res, 200, { romsDir: config.getRomsDir() });
+                }
+                const m = url.pathname.match(/^\/api\/emulators\/([\w-]+)\/(install|uninstall)$/);
+                if (req.method === 'POST' && m) {
+                    const emu = emulatorsById.get(m[1]);
+                    if (!emu) return sendJson(res, 404, { error: 'unknown emulator' });
+                    if (!await flatpak.available()) return sendJson(res, 409, { error: 'flatpak_missing' });
+                    return sendJson(res, 200, startJob(emu, m[2]));
+                }
+                const j = url.pathname.match(/^\/api\/jobs\/(\d+)$/);
+                if (req.method === 'GET' && j) {
+                    const job = jobs.get(j[1]);
+                    return job ? sendJson(res, 200, job) : sendJson(res, 404, { error: 'unknown job' });
+                }
+                if (route === 'POST /api/launch') {
+                    const body = await readJson(req);
+                    const result = await launchGame(body.path, onGameState);
+                    return sendJson(res, result.status, result.body);
+                }
+                if (route === 'GET /api/status') {
+                    const error = lastError;
+                    lastError = null;
+                    return sendJson(res, 200, { running: !!current, game: current, error });
+                }
+                if (route === 'POST /api/process-roms') {
+                    return sendJson(res, 200, await processRoms());
+                }
+                return sendJson(res, 404, { error: 'not found' });
+            } catch (err) {
+                console.error(`[API ERROR] ${route}: ${err.message}`);
+                return sendJson(res, 500, { error: err.message });
+            }
+        }
+
+        // Static UI files
+        let urlPath;
+        try {
+            urlPath = decodeURIComponent(url.pathname);
+        } catch {
+            res.writeHead(400);
+            return res.end('Bad Request');
+        }
+        const filePath = path.join(__dirname, urlPath === '/' ? 'index.html' : urlPath);
+        if (!filePath.startsWith(__dirname + path.sep) || !contentTypes[path.extname(filePath)]) {
+            res.writeHead(404);
+            return res.end('Not Found');
+        }
+        fs.readFile(filePath, (err, content) => {
+            if (err) {
+                res.writeHead(404);
+                res.end('Not Found');
+            } else {
+                res.writeHead(200, { 'Content-Type': contentTypes[path.extname(filePath)] });
+                res.end(content);
+            }
+        });
+    });
+}
+
+// Starts the server on localhost only. port 0 picks a free port.
+function start({ port = 3000, onGameState } = {}) {
+    return new Promise((resolve, reject) => {
+        const server = createServer(onGameState);
+        server.on('error', reject);
+        server.listen(port, '127.0.0.1', () => {
+            const actual = server.address().port;
+            console.log(`Menu running at: http://localhost:${actual}`);
+            console.log(`ROMs folder: ${config.getRomsDir()}`);
+            processRoms(); // pick up any zips dropped in while the app was closed
+            resolve({ server, port: actual });
+        });
+    });
+}
+
+module.exports = { start };
+
+if (require.main === module) {
+    start({ port: Number(process.env.PORT) || 3000 }).catch(err => {
+        console.error(err.message);
+        process.exit(1);
+    });
+}
