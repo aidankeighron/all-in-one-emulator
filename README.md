@@ -73,6 +73,10 @@ the highlighted one. While a game runs, the menu ignores the controller and (in 
 of the way. The keyboard works too: arrow keys, **Enter** to select, **PageUp/PageDown** for pages,
 **S** for Settings, **Esc** to close it.
 
+Only the controller you are actually using steers the menu (the one whose buttons or sticks moved
+last), and a stick that rests off-centre is learned as its centre after a second, so a drifting stick or
+a second device can't take over the menu.
+
 **Controllers page.** One page to the left of the first games page (**LB** from the games, or the left
 arrow) shows every controller the system can see, which player it is, whether it is USB or Bluetooth,
 and where it will play (GameCube port, Wii Remote slot).
@@ -91,6 +95,21 @@ with the window focused (browsers only expose a controller after its first butto
 Downloaded pictures are cached in `~/.config/all-in-one-emulator/artwork`, so each is fetched once and
 games work offline afterwards. Compressed `.ciso`/`.gcz` Dolphin images and Switch games have no automatic source; use the
 same-name picture for those.
+
+**Sound.** The menu has sound effects (moving, selecting, paging, opening Settings, starting a game,
+errors) and background music that pauses while a game runs. Out of the box it plays small built-in
+synthesised sounds and a quiet ambient loop. To use your own, put audio files (wav, mp3, ogg, m4a, flac)
+in `~/.config/all-in-one-emulator/sounds` (the menu creates the folder with a `README.txt` the first
+time it runs):
+
+| File | Plays when |
+|---|---|
+| `boot`, `move`, `select`, `back`, `page`, `open`, `close`, `launch`, `error`, `toggle` | the menu starts, the selection moves, a button is pressed, you go back, change page, open or close Settings, start a game, hit an error, flip an option |
+| `music/` folder | any number of tracks, played in name order on repeat |
+
+A file named after an event replaces just that sound. Reopen Settings after adding files. Turn sound
+off or change the effects and music volume in Settings -> Sound. No sound files are bundled: use
+recordings you have the right to use. Set `SOUNDS_DIR` to keep the pack somewhere else.
 
 ## Controller setup per emulator
 

@@ -47,6 +47,27 @@ function setAutoControllers(on) {
     save({ ...load(), autoControllers: !!on });
 }
 
-const artworkDir = path.join(path.dirname(configFile), 'artwork');
+const clamp01 = (v, fallback) => (typeof v === 'number' && v >= 0 && v <= 1 ? v : fallback);
 
-module.exports = { getRomsDir, setRomsDir, getAutoControllers, setAutoControllers, configFile, artworkDir };
+function getSound() {
+    const cfg = load();
+    return {
+        enabled: cfg.soundEnabled !== false,
+        sfxVolume: clamp01(cfg.sfxVolume, 0.7),
+        musicVolume: clamp01(cfg.musicVolume, 0.35)
+    };
+}
+
+// Accepts any of {enabled, sfxVolume, musicVolume}; invalid values are ignored
+function setSound(next) {
+    const cfg = load();
+    if (typeof next.enabled === 'boolean') cfg.soundEnabled = next.enabled;
+    if (clamp01(next.sfxVolume, null) !== null) cfg.sfxVolume = next.sfxVolume;
+    if (clamp01(next.musicVolume, null) !== null) cfg.musicVolume = next.musicVolume;
+    save(cfg);
+}
+
+const artworkDir = path.join(path.dirname(configFile), 'artwork');
+const soundsDir = process.env.SOUNDS_DIR || path.join(path.dirname(configFile), 'sounds');
+
+module.exports = { getRomsDir, setRomsDir, getAutoControllers, setAutoControllers, getSound, setSound, configFile, artworkDir, soundsDir };

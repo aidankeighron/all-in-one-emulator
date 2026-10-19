@@ -176,7 +176,8 @@
             z-index: 5;
         }
 
-        /* Console pill. Flex-centred with the font's own line gap removed so the text sits in the middle. */
+        /* Console pill. Horizontally centred here; the vertical centring of the letters themselves is
+           measured per font in centerPills(), because fonts disagree about where capitals sit in a line. */
         .channel-badge {
             align-self: flex-start;
             display: inline-flex;
@@ -193,14 +194,6 @@
             color: #fff;
             position: relative;
             z-index: 3;
-        }
-
-        @supports (text-box: trim-both cap alphabetic) {
-            .channel-badge { text-box: trim-both cap alphabetic; }
-        }
-
-        @supports not (text-box: trim-both cap alphabetic) {
-            .channel-badge { padding-top: 1px; }
         }
 
         .badge-wii { background: linear-gradient(to bottom, #5cc6fa, #2c9fe0); }
@@ -573,6 +566,17 @@
             </div>
             <div id="emulator-list"></div>
 
+            <h3>Sound</h3>
+            <div class="emu-row" style="border-top:none">
+                <div class="info">
+                    <div class="name">Menu sounds and music</div>
+                    <div class="desc" id="sound-desc"></div>
+                </div>
+                <button class="btn" id="sound-toggle-button" onclick="toggleSound()">On</button>
+                <button class="btn" id="sfx-volume-button" onclick="cycleVolume('sfxVolume')">Effects</button>
+                <button class="btn" id="music-volume-button" onclick="cycleVolume('musicVolume')">Music</button>
+            </div>
+
             <h3>Controllers</h3>
             <div class="emu-row" style="border-top:none">
                 <div class="info">
@@ -593,6 +597,7 @@
 
     <div class="toast" id="toast"></div>
 
+    <script src="/assets/audio.js"></script>
     <script>
         const CHANNELS_PER_PAGE = 12;
         const COLUMNS = 4;
@@ -663,10 +668,41 @@
 
         function goPage(target) {
             if (target < CONTROLLERS_PAGE || target >= pageCount()) return;
+            Sfx.play('page');
             page = target;
             selectedIndex = 0;
             renderPage(); // keeps focus on the arrow if it is still there, otherwise moves it to the grid
         }
+
+        // Centres the capital letters in each pill, whatever font is used. The letters' real ink height is measured,
+        // the pill is sized to leave equal whole-pixel margins above and below, and the text is shifted so its
+        // laid-out baseline lands exactly there (fonts disagree about where capitals sit inside a line).
+        const pillCanvas = document.createElement('canvas').getContext('2d');
+        function centerPills() {
+            document.querySelectorAll('.channel-badge:not(.badge-empty), .pill').forEach(el => {
+                const text = el.textContent.trim().toUpperCase();
+                if (!text) return;
+                el.style.height = el.style.paddingTop = el.style.paddingBottom = '';
+                const cs = getComputedStyle(el);
+                pillCanvas.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+                const m = pillCanvas.measureText(text);
+                const above = Math.round(m.actualBoundingBoxAscent);
+                const below = Math.max(0, Math.round(m.actualBoundingBoxDescent));
+                const margin = el.classList.contains('pill') ? 6 : 7;
+                el.style.height = `${above + below + 2 * margin}px`;
+
+                // Where the baseline is right now: the text box's top plus the font's (rounded) ascent
+                const range = document.createRange();
+                range.selectNodeContents(el);
+                const box = range.getBoundingClientRect();
+                const descent = Math.round(m.fontBoundingBoxDescent);
+                const baseline = box.top + (box.height - descent) - el.getBoundingClientRect().top;
+                const shift = margin + above - baseline;      // + moves the text down
+                el.style.paddingTop = shift > 0 ? `${2 * shift}px` : '0';
+                el.style.paddingBottom = shift < 0 ? `${-2 * shift}px` : '0';
+            });
+        }
+        document.fonts.ready.then(centerPills);
 
         function renderPage() {
             const grid = document.getElementById('channel-grid');
@@ -679,6 +715,7 @@
             document.getElementById('page-sub').textContent = onControllers() ? '' : (pageCount() > 1 ? `page ${page + 1} of ${pageCount()}` : '');
             document.getElementById('prev-page').classList.toggle('hidden', !hasLeft());
             document.getElementById('next-page').classList.toggle('hidden', !hasRight());
+            centerPills();
             ensureValidFocus();
             renderFocus();
         }
@@ -713,6 +750,7 @@
                     if (img) img.addEventListener('error', () => { img.remove(); channel.classList.remove('has-art'); });
 
                     channel.addEventListener('mouseenter', () => {
+                        if (zone !== 'grid' || selectedIndex !== i) Sfx.play('move');
                         zone = 'grid';
                         selectedIndex = i;
                         renderFocus();
@@ -784,7 +822,7 @@
                             <span class="pill">${escapeHtml(c.label)}</span>
                         </div>
                         <div class="pad-roles">${(c.roles || []).map(escapeHtml).join('<br>') || 'Not used by an emulator'}</div>`;
-                    card.addEventListener('mouseenter', () => { zone = 'grid'; selectedIndex = i; renderFocus(); });
+                    card.addEventListener('mouseenter', () => { if (zone !== 'grid' || selectedIndex !== i) Sfx.play('move'); zone = 'grid'; selectedIndex = i; renderFocus(); });
                 } else {
                     card.className = 'wii-channel pad-card channel-empty waiting';
                     card.innerHTML = `
@@ -841,6 +879,12 @@
 
         // Where a move from the grid goes: another tile, an arrow, or the bottom buttons
         function navigate(dir) {
+            const before = `${zone}/${selectedIndex}/${bottomIndex}`;
+            moveWithinMenu(dir);
+            if (before !== `${zone}/${selectedIndex}/${bottomIndex}`) Sfx.play('move');
+        }
+
+        function moveWithinMenu(dir) {
             const n = itemCount();
             const col = selectedIndex % COLUMNS;
             const lastRow = Math.floor((n - 1) / COLUMNS);
@@ -878,6 +922,8 @@
             ensureValidFocus();
             renderFocus();
         }
+
+        document.querySelector('.bottom-bar').addEventListener('click', () => Sfx.play('select'));
 
         // A button: whatever is focused
         function activate() {
@@ -929,12 +975,16 @@
             const body = await res.json();
             if (res.ok) {
                 gameRunning = true;
+                Sfx.play('launch');
+                Sfx.duck(true);
                 showToast(`Launching ${game.title}...`);
                 pollStatus();
             } else if (body.error === 'not_installed') {
+                Sfx.play('error');
                 showToast(`${body.message}. Install it from Settings.`);
                 openSettings();
             } else {
+                Sfx.play('error');
                 showToast(body.message || 'Could not launch game');
             }
         }
@@ -945,15 +995,17 @@
                 await new Promise(r => setTimeout(r, 1500));
                 try {
                     const status = await (await fetch('/api/status')).json();
-                    if (status.error) showToast(status.error);
+                    if (status.error) { Sfx.play('error'); showToast(status.error); }
                     if (!status.running) gameRunning = false;
                 } catch { /* server hiccup: keep waiting */ }
             }
+            Sfx.duck(false);
             lastInputTime = Date.now() + 500;
         }
 
         // ================= SETTINGS =================
         async function openSettings() {
+            Sfx.play('open');
             settingsOpen = true;
             document.getElementById('settings-overlay').classList.add('open');
             await refreshSettings();
@@ -961,6 +1013,7 @@
         }
 
         function closeSettings() {
+            Sfx.play('close');
             settingsOpen = false;
             setPadFocus(null);
             document.getElementById('settings-overlay').classList.remove('open');
@@ -983,6 +1036,7 @@
             document.getElementById('folder-list').innerHTML = folders.map(f => `<code>${escapeHtml(f)}</code>`).join(' ');
             emulatorNames = Object.fromEntries(data.emulators.map(e => [e.id, e.name]));
             renderAutoButton(data.autoControllers);
+            renderSound(await Sfx.load());
 
             const list = document.getElementById('emulator-list');
             list.innerHTML = '';
@@ -1007,6 +1061,41 @@
             if (focusedId) setPadFocus(document.getElementById(focusedId) || firstFocusable());
         }
 
+        const percent = v => `${Math.round(v * 100)}%`;
+
+        function renderSound(info) {
+            const st = Sfx.settings;
+            document.getElementById('sound-toggle-button').textContent = st.enabled ? 'On' : 'Off';
+            document.getElementById('sfx-volume-button').textContent = `Effects ${percent(st.sfxVolume)}`;
+            document.getElementById('music-volume-button').textContent = `Music ${percent(st.musicVolume)}`;
+            if (info) {
+                document.getElementById('sound-desc').textContent = info.effects || info.tracks
+                    ? `Using your sounds: ${info.effects} effect(s), ${info.tracks} music track(s). Folder: ${info.dir}`
+                    : `Using the built-in sounds. Put your own files in ${info.dir} (see README.txt there).`;
+            }
+        }
+
+        function saveSound(next) {
+            Sfx.setSettings(next);
+            renderSound();
+            return fetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sound: next })
+            });
+        }
+
+        async function toggleSound() {
+            const enabled = !Sfx.settings.enabled;
+            await saveSound({ enabled });
+            if (enabled) Sfx.play('toggle');
+        }
+
+        async function cycleVolume(key) {
+            await saveSound({ [key]: Sfx.nextLevel(Sfx.settings[key]) });
+            Sfx.play(key === 'sfxVolume' ? 'select' : 'toggle');
+        }
+
         function describeSetup(results) {
             return results.map(r => `${emulatorNames[r.emulator] || r.emulator}: ${r.message || r.status}`).join(' · ');
         }
@@ -1019,6 +1108,7 @@
                 body: JSON.stringify({ autoControllers: on })
             });
             renderAutoButton(on);
+            Sfx.play('toggle');
             showToast(on ? 'Controllers will be set up before each game' : 'Automatic controller setup is off');
         }
 
@@ -1066,12 +1156,13 @@
                 const score = along + across * 3;
                 if (score < bestScore) { bestScore = score; best = el; }
             }
-            if (best) setPadFocus(best);
+            if (best) { setPadFocus(best); Sfx.play('move'); }
         }
 
         function pressFocused() {
             const el = document.querySelector('#settings-overlay .pad-focus');
             if (!el) return;
+            Sfx.play('select');
             if (el.tagName === 'INPUT') el.focus(); else el.click();
         }
 
@@ -1105,6 +1196,7 @@
             const body = await res.json();
             if (res.ok) {
                 gameRunning = true;
+                Sfx.duck(true);
                 showToast(`${emu.name} opened. Close it to come back here.`);
                 pollStatus();
             } else {
@@ -1141,9 +1233,29 @@
         }
 
         // ================= INPUT (gamepad + keyboard) =================
-        // Merge every connected controller. Linux can report extra "gamepads" (keyboards, mice,
-        // remotes) that sit at a stuck axis value, so prefer standard-mapped pads when there are any.
+        // Several devices can look like gamepads (a Wii Remote, a Switch pad that is also on, a pad with a
+        // drifting stick). Only the controller you are actually using counts: the one whose buttons or sticks
+        // changed most recently. A stick that sits at one exact value is learned as its resting position.
+        const padState = new Map();     // gamepad index -> {sig, changedAt, rest: {axis: {value, since}}}
+        const STILL_MS = 1000;          // an axis this still, this long, is resting (hands are never this steady)
+
+        function trackPad(gp, now) {
+            let s = padState.get(gp.index);
+            if (!s) { s = { sig: '', changedAt: 0, rest: {} }; padState.set(gp.index, s); }
+            const sig = gp.buttons.map(b => (b.pressed ? 1 : 0)).join('') + gp.axes.map(a => Math.round(a * 10)).join(',');
+            if (s.sig !== '' && sig !== s.sig) s.changedAt = now;
+            s.sig = sig;
+            for (let i = 0; i < Math.min(4, gp.axes.length); i++) {     // sticks only, not hats or triggers
+                const v = gp.axes[i] || 0;
+                const r = s.rest[i] || (s.rest[i] = { value: v, since: now, offset: 0 });
+                if (Math.abs(v - r.value) > 0.004) { r.value = v; r.since = now; }
+                else if (now - r.since > STILL_MS && Math.abs(v) < 0.95) r.offset = v;   // still: that is its centre
+            }
+            return s;
+        }
+
         function readPads() {
+            const now = Date.now();
             let pads = (navigator.getGamepads ? [...navigator.getGamepads()] : []).filter(Boolean);
             const standard = pads.filter(gp => gp.mapping === 'standard');
             if (standard.length) pads = standard;
@@ -1151,22 +1263,30 @@
 
             const st = { count: pads.length, up: false, down: false, left: false, right: false,
                          a: false, b: false, x: false, y: false, lb: false, rb: false, ids: [], pressed: [] };
-            for (const gp of pads) {
-                const btn = i => !!gp.buttons[i]?.pressed;
-                const ax = i => gp.axes[i] || 0;
-                // Non-standard Xbox layouts report the d-pad as a hat on axes 6/7
-                const hatX = gp.mapping === 'standard' ? 0 : ax(6);
-                const hatY = gp.mapping === 'standard' ? 0 : ax(7);
-                st.left  = st.left  || btn(14) || ax(0) < -0.5 || hatX < -0.5;
-                st.right = st.right || btn(15) || ax(0) > 0.5  || hatX > 0.5;
-                st.up    = st.up    || btn(12) || ax(1) < -0.5 || hatY < -0.5;
-                st.down  = st.down  || btn(13) || ax(1) > 0.5  || hatY > 0.5;
-                st.a = st.a || btn(0);  st.b = st.b || btn(1);
-                st.x = st.x || btn(2);  st.y = st.y || btn(3);
-                st.lb = st.lb || btn(4); st.rb = st.rb || btn(5);
-                st.ids.push(`${gp.id} [${gp.mapping || 'non-standard'}]`);
-                gp.buttons.forEach((b, i) => { if (b.pressed) st.pressed.push(i); });
-            }
+            if (!pads.length) return st;
+
+            const tracked = pads.map(gp => ({ gp, s: trackPad(gp, now) }));
+            const active = tracked.reduce((best, t) => (t.s.changedAt > best.s.changedAt ? t : best), tracked[0]);
+            const { gp, s } = active;
+
+            const btn = i => !!gp.buttons[i]?.pressed;
+            const ax = i => (gp.axes[i] || 0) - (s.rest[i]?.offset || 0);
+            // Non-standard Xbox layouts report the d-pad as a hat on axes 6/7
+            const hatX = gp.mapping === 'standard' ? 0 : (gp.axes[6] || 0);
+            const hatY = gp.mapping === 'standard' ? 0 : (gp.axes[7] || 0);
+            // The stick counts as one direction: whichever way it is pushed furthest
+            const dx = ax(0), dy = ax(1);
+            const horizontal = Math.abs(dx) > Math.abs(dy);
+            const stickX = !horizontal ? 0 : dx, stickY = horizontal ? 0 : dy;
+            st.left  = btn(14) || hatX < -0.5 || stickX < -0.5;
+            st.right = btn(15) || hatX > 0.5  || stickX > 0.5;
+            st.up    = btn(12) || hatY < -0.5 || stickY < -0.5;
+            st.down  = btn(13) || hatY > 0.5  || stickY > 0.5;
+            st.a = btn(0);  st.b = btn(1);
+            st.x = btn(2);  st.y = btn(3);
+            st.lb = btn(4); st.rb = btn(5);
+            st.ids = pads.map(p => `${p.id} [${p.mapping || 'non-standard'}]`);
+            gp.buttons.forEach((b, i) => { if (b.pressed) st.pressed.push(i); });
             return st;
         }
 
@@ -1201,22 +1321,24 @@
             const now = Date.now();
             updatePadStatus(st, now);
 
+            if (st.pressed.length) Sfx.unlock();
             if (st.count > 0 && !gameRunning) {
                 if (settingsOpen) {
                     if (now - lastInputTime > 180) {
-                        const dir = st.right ? 'right' : st.left ? 'left' : st.down ? 'down' : st.up ? 'up' : null;
-                        if (dir) { moveFocus(dir); lastInputTime = now; }
-                        else if (st.a) { pressFocused(); lastInputTime = now + 300; }
+                        const dir = st.down ? 'down' : st.up ? 'up' : st.right ? 'right' : st.left ? 'left' : null;
+                        if (st.a) { pressFocused(); lastInputTime = now + 300; }
                         else if (st.b) { closeSettings(); } // B closes settings
+                        else if (dir) { moveFocus(dir); lastInputTime = now; }
                     }
                 } else if (now - lastInputTime > 180) { // debounce
-                    const dir = st.right ? 'right' : st.left ? 'left' : st.down ? 'down' : st.up ? 'up' : null;
-                    if (dir) { navigate(dir); lastInputTime = now; }
-                    else if (st.rb) { pagePress(1); lastInputTime = now; }
+                    // Buttons first, so a held direction can never hide them
+                    const dir = st.down ? 'down' : st.up ? 'up' : st.right ? 'right' : st.left ? 'left' : null;
+                    if (st.rb) { pagePress(1); lastInputTime = now; }
                     else if (st.lb) { pagePress(-1); lastInputTime = now; }
                     else if (st.x) { openSettings(); lastInputTime = now + 500; }
                     else if (st.y) { importRoms(); lastInputTime = now + 500; }
                     else if (st.a) { activate(); lastInputTime = now + 500; }
+                    else if (dir) { navigate(dir); lastInputTime = now; }
                 }
             }
             requestAnimationFrame(pollGamepad);
@@ -1234,7 +1356,11 @@
             else if (e.key.toLowerCase() === 's') openSettings();
         });
 
+        // Browsers block sound until the first input; the Electron window allows it from the start
+        ['keydown', 'pointerdown'].forEach(ev => window.addEventListener(ev, () => Sfx.unlock(), { capture: true }));
+
         // Start Loop & Load
+        Sfx.load().then(() => { Sfx.play('boot'); Sfx.startMusic(); }).catch(() => {});
         loadGames();
         refreshControllers();
         requestAnimationFrame(pollGamepad);

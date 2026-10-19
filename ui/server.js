@@ -9,6 +9,7 @@ const hotkey = require('./lib/hotkey');
 const controllers = require('./lib/controllers');
 const inputconfig = require('./lib/inputconfig');
 const artwork = require('./lib/artwork');
+const sounds = require('./lib/sounds');
 
 const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'emulators.json'), 'utf8'));
 const emulatorsById = new Map(manifest.emulators.map(e => [e.id, e]));
@@ -20,7 +21,8 @@ const contentTypes = {
     '.png': 'image/png',
     '.jpg': 'image/jpeg',
     '.jpeg': 'image/jpeg',
-    '.webp': 'image/webp'
+    '.webp': 'image/webp',
+    '.js': 'text/javascript'
 };
 
 // ---------- State ----------
@@ -216,6 +218,15 @@ function createServer(onGameState) {
                     });
                     return fs.createReadStream(file).pipe(res);
                 }
+                if (route === 'GET /api/sounds') {
+                    sounds.ensureDir(config.soundsDir);
+                    return sendJson(res, 200, { ...sounds.describe(config.soundsDir), settings: config.getSound() });
+                }
+                const snd = url.pathname.match(/^\/api\/sounds\/(effects|music)\/([^/]+)$/);
+                if (req.method === 'GET' && snd) {
+                    const file = sounds.resolve(config.soundsDir, snd[1], decodeURIComponent(snd[2]));
+                    return file ? sounds.serve(req, res, file) : sendJson(res, 404, { error: 'no such sound' });
+                }
                 if (route === 'GET /api/controllers') {
                     const list = controllers.detect();
                     const roles = inputconfig.assignments(list);
@@ -231,7 +242,7 @@ function createServer(onGameState) {
                     return sendJson(res, 200, { setup: setupControllers(ids) });
                 }
                 if (route === 'GET /api/settings') {
-                    return sendJson(res, 200, { romsDir: config.getRomsDir(), autoControllers: config.getAutoControllers(), ...await emulatorStates() });
+                    return sendJson(res, 200, { romsDir: config.getRomsDir(), autoControllers: config.getAutoControllers(), sound: config.getSound(), ...await emulatorStates() });
                 }
                 if (route === 'POST /api/settings') {
                     const body = await readJson(req);
@@ -244,6 +255,7 @@ function createServer(onGameState) {
                         roms.createDefaultFolders(config.getRomsDir(), manifest);
                     }
                     if (typeof body.autoControllers === 'boolean') config.setAutoControllers(body.autoControllers);
+                    if (body.sound && typeof body.sound === 'object') config.setSound(body.sound);
                     return sendJson(res, 200, { romsDir: config.getRomsDir(), autoControllers: config.getAutoControllers() });
                 }
                 const m = url.pathname.match(/^\/api\/emulators\/([\w-]+)\/(install|uninstall)$/);
@@ -292,7 +304,8 @@ function createServer(onGameState) {
             return res.end('Bad Request');
         }
         const filePath = path.join(__dirname, urlPath === '/' ? 'index.html' : urlPath);
-        if (!filePath.startsWith(__dirname + path.sep) || !contentTypes[path.extname(filePath)]) {
+        const scriptOutsideAssets = path.extname(filePath) === '.js' && !filePath.startsWith(path.join(__dirname, 'assets') + path.sep);
+        if (!filePath.startsWith(__dirname + path.sep) || !contentTypes[path.extname(filePath)] || scriptOutsideAssets) {
             res.writeHead(404);
             return res.end('Not Found');
         }

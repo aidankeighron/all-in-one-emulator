@@ -36,7 +36,8 @@ async function createWindow() {
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),
             contextIsolation: true,
-            nodeIntegration: false
+            nodeIntegration: false,
+            autoplayPolicy: 'no-user-gesture-required'
         }
     });
     win.webContents.on('before-input-event', (event, input) => {
