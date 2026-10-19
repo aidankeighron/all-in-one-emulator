@@ -111,6 +111,48 @@ A file named after an event replaces just that sound. Reopen Settings after addi
 off or change the effects and music volume in Settings -> Sound. No sound files are bundled: use
 recordings you have the right to use. Set `SOUNDS_DIR` to keep the pack somewhere else.
 
+## Save slots and cloud saves
+
+Clicking a game opens a sheet from the bottom of the screen: **Which save do you want to play with?**
+Each save is a named slot with its own save data, showing when it was last updated and on which computer.
+Pick one, or choose **New save** and name it on the on-screen keyboard. On the sheet: **A** plays,
+**X** renames, **Y** deletes, **Start** shows older versions, **B** closes.
+
+How it syncs (only these three moments, nothing in the background):
+
+| When | What happens |
+|---|---|
+| The menu starts | Checks the cloud, uploads anything that was waiting, and downloads newer versions of saves already on this computer |
+| You click a game | Checks again, shows the slots, and downloads a newer cloud save before the emulator starts |
+| The game closes | The slot you played is uploaded (queued for later if you are offline) |
+
+If the same save changed on two computers, a sheet asks: **use the cloud save**, **keep this computer's**, or
+**keep both**. The other one is never lost: the local copy is zipped to `~/.config/all-in-one-emulator/saves/backups`
+first, and every upload is a new version you can restore from the **Start** history.
+
+**How slots work.** Each slot gets its own data root that links back to the emulator's real folder for settings,
+firmware, keys and caches, except the folders holding game saves. The emulator is started pointed at that root
+(Ryujinx `-r`, Dolphin `-u`), so slots are isolated without locating or parsing any game's save files. Dolphin slots
+cover GameCube memory cards and Wii game saves; Ryujinx slots cover the Switch save folders. Open each emulator
+once from Settings before using slots (Ryujinx needs its folders to exist). Turn slots off in Settings -> Cloud
+saves to launch games directly with the emulator's normal shared saves.
+
+**Where saves go.** To the `saves` branch of a git repository, by default the repository the menu was cloned from
+(change it in Settings -> Cloud saves). The menu uses your normal `git` login, so `git push` must already work
+from this computer. History only grows; very old versions can be removed by squashing that branch.
+
+**Privacy.** If the repository is public, anyone can read what is pushed to it. So:
+- Saves are **encrypted before upload** when you set a passphrase in Settings (AES-256-GCM, key from scrypt).
+  Folder names, save names, game names and computer names are encrypted or hashed too: the branch holds only
+  random-looking names and ciphertext. Use the same passphrase on every computer. The passphrase is stored in
+  `~/.config/all-in-one-emulator/config.json` (readable only by you); lose it and the saves cannot be recovered.
+- **Nothing is uploaded to a public repository without a passphrase.**
+- A private repository is still the safer choice. Cloning the project also downloads its `saves` branch unless
+  you clone with `--single-branch`.
+
+Not yet verified against real emulators: `-r` / `-u` and the save folder layout are from the emulators' documented
+behaviour and were tested here against simulated folders only.
+
 ## Controller setup per emulator
 
 The menu detects the controllers plugged in (Xbox, Switch Pro/Joy-Con, GameCube via the official

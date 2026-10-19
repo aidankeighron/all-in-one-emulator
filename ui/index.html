@@ -412,7 +412,7 @@
         .panel h2 { margin: 0 0 14px; font-size: 20px; color: #6b747c; letter-spacing: 1px; }
         .panel h3 { margin: 22px 0 8px; font-size: 14px; color: #8a9199; text-transform: uppercase; letter-spacing: 1.5px; }
         .panel .row { display: flex; gap: 10px; align-items: center; }
-        .panel input[type=text] {
+        .panel input[type=text], .panel input[type=password] {
             flex: 1;
             font: inherit;
             padding: 8px 12px;
@@ -505,6 +505,97 @@
             font-weight: 700;
             color: #a2aab1;
         }
+
+        /* ---- Save slots: a sheet that rises from the bottom; the menu stays visible above it ---- */
+        /* The grid keeps its size; it slides up just enough to keep the chosen game visible above the sheet */
+        .wii-grid { transition: transform 0.28s cubic-bezier(.2, .8, .2, 1); }
+        body.sheet-open .grid-container { overflow: hidden; -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 36px); mask-image: linear-gradient(to bottom, transparent 0, #000 36px); }
+        body.sheet-open .page-arrow { display: none; }
+
+        .sheet {
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 45;
+            box-sizing: border-box;
+            padding: 12px 40px 20px;
+            background: linear-gradient(to bottom, #ffffff 0%, #edf1f5 100%);
+            border-top: 2px solid var(--wii-edge);
+            border-radius: 30px 30px 0 0;
+            box-shadow: 0 -10px 30px rgba(80, 100, 120, 0.28);
+            transform: translateY(105%);
+            transition: transform 0.28s cubic-bezier(.2, .8, .2, 1);
+            color: #3f474d;
+        }
+
+        .sheet.open { transform: none; }
+        .sheet-handle { width: 54px; height: 5px; border-radius: 3px; background: #c9d1d8; margin: 0 auto 12px; }
+        .sheet h1 { margin: 0; font-size: 22px; font-weight: 800; }
+        .sheet-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+        .sheet-head .who { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+        .sheet-head .game { font-size: 15px; font-weight: 700; color: #4f5860; }
+        .sheet-chip { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; padding: 5px 14px; border-radius: 16px; background: #eaf6fd; border: 1.5px solid #9bd4f2; color: #14507a; }
+        .sheet-chip.warn { background: #fff3dc; border-color: #f0c777; color: #6b3b00; }
+        .sheet-chip.bad { background: #fdecea; border-color: #f1a9a4; color: #8a1a14; }
+        .sheet-hints { display: flex; justify-content: center; gap: 28px; flex-wrap: wrap; font-size: 13px; font-weight: 800; color: #4f5860; margin-top: 14px; }
+        .sheet-busy { display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 22px; margin-top: 10px; font-size: 14px; font-weight: 800; color: #14507a; }
+        .spinner { width: 20px; height: 20px; border-radius: 50%; border: 3px solid #1a78b8; border-top-color: transparent; animation: spin 0.8s linear infinite; box-sizing: border-box; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .slot-row { display: flex; gap: 18px; justify-content: center; align-items: stretch; overflow-x: auto; padding: 8px 6px 10px; }
+        .slot-card {
+            width: 200px; flex-shrink: 0; box-sizing: border-box; padding: 16px 12px 14px; border-radius: 20px;
+            display: flex; flex-direction: column; align-items: center; gap: 7px; cursor: pointer;
+            background: linear-gradient(to bottom, #ffffff 0%, #f3f6f8 55%, #e4e9ed 100%);
+            border: 3px solid var(--wii-edge); box-shadow: 0 3px 8px rgba(80, 100, 120, 0.15);
+            transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+        }
+        .slot-card.focus, .slot-card:hover { border-color: var(--wii-blue); transform: scale(1.04); box-shadow: 0 0 0 4px rgba(58, 180, 242, 0.35), 0 0 22px var(--wii-blue-glow); }
+        .slot-card.new { background: rgba(255, 255, 255, 0.6); border: 3px dashed #b7c0c8; justify-content: center; }
+        .slot-card.new.focus, .slot-card.new:hover { border-style: solid; border-color: var(--wii-blue); }
+        .slot-avatar { width: 56px; height: 56px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 26px; font-weight: 800; color: #fff; }
+        .slot-avatar.plus { background: #fff; border: 3px solid #b7c0c8; color: #4f5860; }
+        .slot-name { font-size: 17px; font-weight: 800; text-align: center; line-height: 1.2; word-break: break-word; }
+        .slot-meta { font-size: 12px; font-weight: 700; color: #4f5860; text-align: center; line-height: 1.5; }
+        .slot-tag { font-size: 11px; font-weight: 800; padding: 2px 10px; border-radius: 10px; background: #eef1f4; color: #4f5860; border: 1.5px solid #c9d1d8; }
+        .slot-tag.wait { background: #fff3dc; color: #6b3b00; border-color: #f0c777; }
+        .slot-tag.bad { background: #fdecea; color: #8a1a14; border-color: #f1a9a4; }
+
+        .kb-field { display: flex; align-items: center; gap: 12px; min-height: 52px; box-sizing: border-box; padding: 6px 18px; border-radius: 14px; background: #fff; border: 3px solid var(--wii-blue); box-shadow: 0 0 0 3px rgba(58, 180, 242, 0.25); max-width: 820px; margin: 0 auto 12px; }
+        .kb-field .text { flex: 1; font-size: 24px; font-weight: 700; word-break: break-all; min-height: 32px; }
+        .kb-field .caret { display: inline-block; width: 3px; height: 26px; margin-left: 2px; vertical-align: -4px; background: #1a78b8; animation: blink 1s steps(1) infinite; }
+        @keyframes blink { 50% { opacity: 0; } }
+        .kb-field .count { font-size: 13px; font-weight: 700; color: #5d666e; white-space: nowrap; }
+        .kb-rows { display: flex; flex-direction: column; gap: 7px; align-items: center; }
+        .kb-row { display: flex; gap: 7px; justify-content: center; }
+        .kb-key {
+            min-width: 56px; height: 44px; padding: 0 8px; border-radius: 12px; font: inherit; font-size: 19px; font-weight: 800; cursor: pointer;
+            background: linear-gradient(to bottom, #fff, #e6ebef); color: #3f474d; border: 2px solid #c9d1d8; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.12);
+        }
+        .kb-key.wide { font-size: 15px; min-width: 100px; }
+        .kb-key.space { min-width: 300px; font-size: 15px; }
+        .kb-key.warn { background: linear-gradient(to bottom, #fff3dc, #f4dca8); color: #6b3b00; border-color: #d9a948; }
+        .kb-key.primary { background: linear-gradient(to bottom, #3aa3dd, #1a78b8); color: #fff; border-color: #14659a; }
+        .kb-key.on { background: linear-gradient(to bottom, #3aa3dd, #1a78b8); color: #fff; border-color: #14659a; }
+        .kb-key.focus, .kb-key:hover { outline: 3px solid var(--wii-blue); outline-offset: 1px; box-shadow: 0 0 14px var(--wii-blue-glow); }
+
+        .compare { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 14px; }
+        .compare > div { flex: 1 1 280px; min-width: 0; box-sizing: border-box; padding: 14px 18px; border-radius: 16px; background: #fff; border: 2px solid var(--wii-edge); font-size: 13px; font-weight: 700; color: #4f5860; line-height: 1.6; }
+        .compare > div.cloud { background: #eaf6fd; border-color: var(--wii-blue); color: #14507a; box-shadow: 0 0 0 3px rgba(58, 180, 242, 0.25); }
+        .compare b { display: block; font-size: 16px; margin-bottom: 2px; color: inherit; }
+        .sheet-buttons { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
+        .sheet-buttons .btn { padding: 9px 22px; font-size: 15px; }
+        .sheet-buttons .btn.focus { outline: 3px solid var(--wii-blue); outline-offset: 2px; box-shadow: 0 0 14px var(--wii-blue-glow); }
+
+        .hist-list { max-width: 700px; margin: 0 auto; }
+        .hist-row { display: flex; align-items: center; gap: 12px; padding: 9px 14px; border-radius: 12px; cursor: pointer; border: 2px solid transparent; }
+        .hist-row.focus, .hist-row:hover { border-color: var(--wii-blue); background: #eaf6fd; }
+        .hist-row .when { flex: 1; font-size: 15px; font-weight: 800; }
+        .hist-row .what { font-size: 13px; font-weight: 700; color: #4f5860; }
+        .hist-row .restore { font-size: 12px; font-weight: 800; padding: 3px 12px; border-radius: 12px; background: #1a78b8; color: #fff; }
+
+        body.sheet-open .toast { bottom: auto; top: 64px; }
     </style>
 </head>
 <body>
@@ -577,6 +668,34 @@
                 <button class="btn" id="music-volume-button" onclick="cycleVolume('musicVolume')">Music</button>
             </div>
 
+            <h3>Cloud saves</h3>
+            <div id="cloud-warning" class="notice" style="display:none"></div>
+            <div class="emu-row" style="border-top:none">
+                <div class="info">
+                    <div class="name">Save slots</div>
+                    <div class="desc">Choosing a game lets you pick or create a named save.</div>
+                </div>
+                <button class="btn" id="slots-toggle-button" onclick="toggleCloud('slotsEnabled')">On</button>
+            </div>
+            <div class="emu-row">
+                <div class="info">
+                    <div class="name">Sync saves to the cloud</div>
+                    <div class="desc">Saves go to the <code>saves</code> branch of this repository. They are checked when the menu starts and when you pick a game, and uploaded when the game closes.</div>
+                    <div class="progress" id="cloud-status"></div>
+                </div>
+                <button class="btn" id="cloud-toggle-button" onclick="toggleCloud('enabled')">On</button>
+                <button class="btn" id="cloud-sync-button" onclick="syncNow()">Sync now</button>
+            </div>
+            <div class="row" style="margin-top:6px">
+                <input type="text" id="cloud-repo" spellcheck="false" placeholder="Repository (git URL)">
+                <button class="btn primary" id="cloud-repo-save" onclick="saveCloudRepo()">Save</button>
+            </div>
+            <div class="row" style="margin-top:8px">
+                <input type="password" id="cloud-pass" spellcheck="false" placeholder="Encryption passphrase (same on every computer)">
+                <button class="btn primary" id="cloud-pass-save" onclick="saveCloudPassphrase()">Save</button>
+            </div>
+            <div class="desc" id="cloud-devices" style="font-size:13px; margin-top:8px"></div>
+
             <h3>Controllers</h3>
             <div class="emu-row" style="border-top:none">
                 <div class="info">
@@ -593,6 +712,11 @@
                 <button class="btn" onclick="closeSettings()">Close (B)</button>
             </div>
         </div>
+    </div>
+
+    <div class="sheet" id="sheet" aria-hidden="true">
+        <div class="sheet-handle"></div>
+        <div id="sheet-body"></div>
     </div>
 
     <div class="toast" id="toast"></div>
@@ -750,12 +874,13 @@
                     if (img) img.addEventListener('error', () => { img.remove(); channel.classList.remove('has-art'); });
 
                     channel.addEventListener('mouseenter', () => {
+                        if (sheet.open) return;   // the grid slides under the pointer while a sheet is open
                         if (zone !== 'grid' || selectedIndex !== i) Sfx.play('move');
                         zone = 'grid';
                         selectedIndex = i;
                         renderFocus();
                     });
-                    channel.addEventListener('click', () => launchGame(game));
+                    channel.addEventListener('click', () => openSaveSheet(game));
                 } else {
                     channel.className = 'wii-channel channel-empty';
                     channel.innerHTML = `<span class="channel-badge badge-empty"></span><div class="channel-title"></div>`;
@@ -932,7 +1057,7 @@
             if (zone === 'bottom') return document.getElementById(BOTTOM_BUTTONS[bottomIndex]).click();
             if (onControllers()) return;
             const game = allGames[page * CHANNELS_PER_PAGE + selectedIndex];
-            if (game) launchGame(game);
+            if (game) openSaveSheet(game);
         }
 
         function showToast(msg) {
@@ -944,7 +1069,8 @@
 
         async function rescan() {
             await Promise.all([loadGames(), refreshControllers()]);
-            showToast('Refreshed');
+            const synced = await syncAtStart(true);
+            if (!synced || !synced.updated || !synced.updated.length) showToast('Refreshed');
         }
 
         // Unzip any archives dropped in roms/ and refresh the grid
@@ -1001,6 +1127,546 @@
             }
             Sfx.duck(false);
             lastInputTime = Date.now() + 500;
+            watchSyncAfterGame();
+        }
+
+
+        // ================= SAVE SLOTS (bottom sheet) =================
+        // Clicking a game opens a sheet from the bottom: pick one of the game's named saves, or make a new one.
+        // The sheet shows the cloud check, asks about conflicts, and hands the chosen slot to the launcher.
+        const sheet = { open: false, view: 'loading', game: null, slots: [], status: null, index: 0,
+                        kb: null, conflict: null, history: [], histIndex: 0, confirm: null, btn: 0, busy: '' };
+        const AVATARS = [['#4fb0e8', '#1a78b8'], ['#8a63c9', '#5b3a9c'], ['#e0424c', '#b3151f'], ['#3fb8a5', '#1b7a6c'], ['#f2a03d', '#c0701a'], ['#e86aa6', '#b13a77']];
+        const KB_ROWS = [
+            '1234567890'.split('').map(c => ({ type: 'char', ch: c })),
+            'qwertyuiop'.split('').map(c => ({ type: 'char', ch: c })),
+            'asdfghjkl'.split('').map(c => ({ type: 'char', ch: c })),
+            [...'zxcvbnm.-'.split('').map(c => ({ type: 'char', ch: c })), { type: 'delete' }],
+            [{ type: 'shift' }, { type: 'space' }, { type: 'clear' }, { type: 'cancel' }, { type: 'ok' }]
+        ];
+        const KB_MAX = 24;
+        const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+        function timeAgo(iso) {
+            const t = new Date(iso);
+            if (isNaN(t)) return 'Not saved yet';
+            const mins = Math.round((Date.now() - t) / 60000);
+            const hhmm = `${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`;
+            if (mins < 1) return 'Updated just now';
+            if (mins < 60) return `Updated ${mins} min ago`;
+            const days = Math.floor((new Date().setHours(0, 0, 0, 0) - new Date(t).setHours(0, 0, 0, 0)) / 86400000);
+            if (days === 0) return `Updated today, ${hhmm}`;
+            if (days === 1) return `Updated yesterday, ${hhmm}`;
+            if (days < 7) return `Updated ${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][t.getDay()]}, ${hhmm}`;
+            return `Updated ${t.getMonth() + 1}/${t.getDate()}`;
+        }
+
+        let gridShift = 0;
+        // Slides the grid up so the selected game stays above the sheet (and back down when it closes)
+        function setSheetHeight() {
+            const grid = document.getElementById('channel-grid');
+            let shift = 0;
+            if (sheet.open) {
+                const top = window.innerHeight - document.getElementById('sheet').offsetHeight;
+                const tile = document.querySelector('.wii-channel.selected') || document.querySelector('.wii-channel:not(.channel-empty)');
+                if (tile) shift = Math.max(0, (tile.getBoundingClientRect().bottom + gridShift) - (top - 14));
+            }
+            gridShift = shift;
+            grid.style.transform = shift ? `translateY(${-shift}px)` : '';
+        }
+        window.addEventListener('resize', () => { if (sheet.open) setSheetHeight(); });
+
+        function renderSheet() {
+            const body = document.getElementById('sheet-body');
+            const g = sheet.game;
+            const badge = g ? `<span class="channel-badge badge-${escapeHtml(g.console)}">${escapeHtml(g.console)}</span>` : '';
+            const head = title => `<div class="sheet-head"><div class="who"><h1>${title}</h1>${badge}<span class="game">${g ? escapeHtml(g.title) : ''}</span></div>${chipHtml()}</div>`;
+            const busy = `<div class="sheet-busy" id="sheet-busy">${sheet.busy ? `<span class="spinner"></span><span>${escapeHtml(sheet.busy)}</span>` : ''}</div>`;
+
+            if (sheet.view === 'loading') {
+                body.innerHTML = `<div class="sheet-head"><div class="who"><h1>Which save do you want to play with?</h1>${badge}<span class="game">${g ? escapeHtml(g.title) : ''}</span></div></div>
+                    <div class="sheet-busy" style="min-height:150px"><span class="spinner"></span><span>Checking for newer saves…</span></div>`;
+            } else if (sheet.view === 'slots') {
+                const cards = sheet.slots.map((sl, i) => {
+                    const [a, b] = AVATARS[(parseInt(sl.id.slice(0, 4), 16) || 0) % AVATARS.length];
+                    const tag = sl.conflict ? '<span class="slot-tag bad">Needs a choice</span>'
+                        : sl.pending ? '<span class="slot-tag wait">Waiting to upload</span>'
+                        : !sl.inCloud && sheet.status.configured ? '<span class="slot-tag">This computer only</span>' : '';
+                    return `<div class="slot-card ${i === sheet.index ? 'focus' : ''}" data-act="play" data-i="${i}">
+                        <div class="slot-avatar" style="background:linear-gradient(to bottom,${a},${b})">${escapeHtml((sl.name[0] || '?').toUpperCase())}</div>
+                        <div class="slot-name">${escapeHtml(sl.name)}</div>
+                        <div class="slot-meta">${escapeHtml(timeAgo(sl.updatedAt))}<br>on ${escapeHtml(sl.device || 'this computer')}</div>${tag}</div>`;
+                }).join('');
+                const n = sheet.slots.length;
+                body.innerHTML = `${head('Which save do you want to play with?')}
+                    <div class="slot-row">${cards}
+                        <div class="slot-card new ${sheet.index === n ? 'focus' : ''}" data-act="new">
+                            <div class="slot-avatar plus"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div>
+                            <div class="slot-name">New save</div><div class="slot-meta">Start fresh and name it</div></div></div>
+                    ${busy}
+                    <div class="sheet-hints"><span>A &nbsp;Play</span><span>X &nbsp;Rename</span><span>Y &nbsp;Delete</span><span>Start &nbsp;History</span><span>B &nbsp;Close</span></div>`;
+            } else if (sheet.view === 'keyboard') {
+                const kb = sheet.kb;
+                const label = k => k.type === 'char' ? (kb.shift ? k.ch.toUpperCase() : k.ch) : { delete: 'Delete', shift: 'Shift', space: 'space', clear: 'Clear', cancel: 'Cancel', ok: kb.mode === 'rename' ? 'Rename' : 'Create save' }[k.type];
+                const rows = KB_ROWS.map((row, r) => `<div class="kb-row">${row.map((k, c) => {
+                    const cls = ['kb-key', k.type === 'delete' ? 'warn wide' : '', k.type === 'space' ? 'space' : '', ['shift', 'clear', 'cancel'].includes(k.type) ? 'wide' : '',
+                        k.type === 'ok' ? 'primary wide' : '', k.type === 'shift' && kb.shift ? 'on' : '', kb.r === r && kb.c === c ? 'focus' : ''].join(' ');
+                    return `<button type="button" class="${cls}" data-act="key" data-r="${r}" data-c="${c}">${escapeHtml(label(k))}</button>`;
+                }).join('')}</div>`).join('');
+                body.innerHTML = `<div class="sheet-head"><div class="who"><h1>${kb.mode === 'rename' ? 'Rename this save' : 'Name your new save'}</h1>${badge}<span class="game">${g ? escapeHtml(g.title) : ''}</span></div></div>
+                    <div class="kb-field"><div class="text">${escapeHtml(kb.text)}<span class="caret"></span></div><div class="count">${kb.text.length} / ${KB_MAX}</div></div>
+                    <div class="kb-rows">${rows}</div>
+                    <div class="sheet-hints"><span>D-pad: move</span><span>A: type</span><span>B: delete</span><span>Y: shift</span><span>Start: ${kb.mode === 'rename' ? 'rename' : 'create'}</span></div>`;
+            } else if (sheet.view === 'conflict') {
+                const c = sheet.conflict;
+                const when = iso => new Date(iso).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+                body.innerHTML = `<div class="sheet-head"><div class="who"><h1>“${escapeHtml(c.name)}” is different on two computers</h1>${badge}<span class="game">${g ? escapeHtml(g.title) : ''}</span></div></div>
+                    <div class="compare">
+                        <div><b>This computer</b>Last changed here (${escapeHtml(c.local.device)})<br>The cloud copy is newer than the one you last synced</div>
+                        <div class="cloud"><b>Cloud · newer</b>Saved ${escapeHtml(when(c.remote.updatedAt))} on ${escapeHtml(c.remote.device)}<br>${(c.remote.sizeBytes / 1048576).toFixed(1)} MB</div>
+                    </div>
+                    <div class="sheet-buttons">${['Use the cloud save', 'Keep this computer’s', 'Keep both'].map((t, i) =>
+                        `<button type="button" class="btn ${i === 0 ? 'primary' : ''} ${sheet.btn === i ? 'focus' : ''}" data-act="conflict" data-i="${i}">${t}</button>`).join('')}</div>
+                    ${busy}
+                    <div class="sheet-hints"><span>The one you don’t pick stays in history. Nothing is overwritten silently.</span><span>B &nbsp;Back</span></div>`;
+            } else if (sheet.view === 'history') {
+                const rows = sheet.history.length ? sheet.history.map((v, i) => `<div class="hist-row ${i === sheet.histIndex ? 'focus' : ''}" data-act="hist" data-i="${i}">
+                        <span class="when">${escapeHtml(timeAgo(v.date).replace('Updated ', ''))}</span>
+                        <span class="what">${escapeHtml(v.device || '')} · ${v.sizeBytes ? (v.sizeBytes / 1048576).toFixed(1) + ' MB' : ''}</span>
+                        ${i === 0 ? '<span class="slot-tag">Current</span>' : '<span class="restore">Restore</span>'}</div>`).join('')
+                    : '<div class="sheet-busy" style="min-height:90px">No older versions yet</div>';
+                body.innerHTML = `${head('Older versions of “' + escapeHtml(sheet.slots[sheet.index]?.name || '') + '”')}
+                    <div class="hist-list">${rows}</div>${busy}
+                    <div class="sheet-hints"><span>A &nbsp;Restore</span><span>B &nbsp;Back</span></div>`;
+            } else if (sheet.view === 'confirm') {
+                const c = sheet.confirm;
+                body.innerHTML = `<div class="sheet-head"><div class="who"><h1>${escapeHtml(c.title)}</h1></div></div>
+                    <div class="sheet-busy" style="min-height:50px;font-weight:700;color:#4f5860">${escapeHtml(c.text)}</div>
+                    <div class="sheet-buttons">${['Cancel', c.yes].map((t, i) => `<button type="button" class="btn ${sheet.btn === i ? 'focus' : ''}" data-act="confirm" data-i="${i}">${escapeHtml(t)}</button>`).join('')}</div>${busy}`;
+            }
+            setSheetHeight();
+        }
+
+        function chipHtml() {
+            const st = sheet.status;
+            if (!st) return '';
+            const tick = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+            if (st.problem) return `<span class="sheet-chip bad">${escapeHtml(st.problem.message)}</span>`;
+            if (!st.configured) return '<span class="sheet-chip warn">Saved on this computer only</span>';
+            if (!st.online) return '<span class="sheet-chip warn">Offline: showing the saves on this computer</span>';
+            return `<span class="sheet-chip">${tick}<span>Up to date with the cloud</span></span>`;
+        }
+
+        // Shows what the server is doing (checking, downloading) while a request is in flight
+        function watchActivity() {
+            let live = true;
+            (async () => {
+                while (live) {
+                    try {
+                        const { sync } = await (await fetch('/api/status')).json();
+                        if (live && sync && ['checking', 'downloading', 'uploading'].includes(sync.state) && sync.message !== sheet.busy) {
+                            sheet.busy = sync.message;
+                            const el = document.getElementById('sheet-busy');
+                            if (el) el.innerHTML = `<span class="spinner"></span><span>${escapeHtml(sync.message)}</span>`;
+                        }
+                    } catch { /* keep going */ }
+                    await sleep(350);
+                }
+            })();
+            return () => { live = false; };
+        }
+
+        async function saveApi(url, body) {
+            const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+            return { ok: res.ok, status: res.status, body: await res.json() };
+        }
+
+        async function openSaveSheet(game) {
+            if (gameRunning || sheet.open) return;
+            Sfx.play('select');
+            Object.assign(sheet, { open: true, view: 'loading', game, slots: [], status: null, index: 0, busy: '', kb: null, conflict: null, confirm: null });
+            const at = allGames.indexOf(game) - page * CHANNELS_PER_PAGE;      // keep the chosen game highlighted
+            if (at >= 0) { zone = 'grid'; selectedIndex = at; renderFocus(); }
+            document.body.classList.add('sheet-open');
+            document.getElementById('sheet').classList.add('open');
+            document.getElementById('sheet').setAttribute('aria-hidden', 'false');
+            renderSheet();
+            const stop = watchActivity();
+            try {
+                const res = await fetch(`/api/saves?path=${encodeURIComponent(game.path)}`);
+                const data = await res.json();
+                stop();
+                if (!res.ok) throw new Error(data.message || 'Could not load saves');
+                if (!data.supported) { closeSheet(); return launchGame(game); }   // this emulator has no slots: play directly
+                sheet.status = data;
+                sheet.slots = data.slots;
+                sheet.index = 0;
+                sheet.view = 'slots';
+                renderSheet();
+            } catch (err) {
+                stop();
+                closeSheet();
+                Sfx.play('error');
+                showToast(err.message);
+            }
+        }
+
+        function closeSheet(sound) {
+            if (!sheet.open) return;
+            if (sound) Sfx.play('back');
+            sheet.open = false;
+            document.body.classList.remove('sheet-open');
+            document.getElementById('sheet').classList.remove('open');
+            document.getElementById('sheet').setAttribute('aria-hidden', 'true');
+            setSheetHeight();
+            lastInputTime = Date.now() + 400;
+        }
+
+        async function playSlot(slot) {
+            if (sheet.busy) return;
+            sheet.busy = 'Checking for newer saves…';
+            const game = sheet.game;
+            renderSheet();
+            const stop = watchActivity();
+            let r;
+            try { r = await saveApi('/api/launch', { path: game.path, slot: slot.id }); } catch { r = { ok: false, body: { message: 'Could not reach the menu server' } }; }
+            stop();
+            sheet.busy = '';
+            if (r.ok) {
+                closeSheet();
+                gameRunning = true;
+                Sfx.play('launch');
+                Sfx.duck(true);
+                showToast(`Launching ${game.title}...`);
+                pollStatus();
+            } else if (r.body.error === 'conflict') {
+                Sfx.play('error');
+                sheet.conflict = r.body;
+                sheet.view = 'conflict';
+                sheet.btn = 0;
+                renderSheet();
+            } else if (r.body.error === 'not_installed') {
+                closeSheet();
+                Sfx.play('error');
+                showToast(`${r.body.message}. Install it from Settings.`);
+                openSettings();
+            } else {
+                Sfx.play('error');
+                showToast(r.body.message || 'Could not start the game');
+                renderSheet();
+            }
+        }
+
+        async function resolveConflict(choice) {
+            if (sheet.busy) return;
+            const slot = sheet.slots.find(x => x.id === sheet.conflict.slotId);
+            sheet.busy = choice === 'cloud' ? 'Using the cloud save…' : choice === 'local' ? 'Saving this computer’s version to the cloud…' : 'Keeping both…';
+            renderSheet();
+            const r = await saveApi('/api/saves/resolve', { path: sheet.game.path, slot: sheet.conflict.slotId, choice });
+            sheet.busy = '';
+            if (!r.ok) { Sfx.play('error'); showToast(r.body.message || 'Could not resolve that'); return renderSheet(); }
+            await reloadSlots(slot && slot.id);
+            if (slot) playSlot(slot);
+        }
+
+        async function reloadSlots(keepId) {
+            const data = await (await fetch(`/api/saves?path=${encodeURIComponent(sheet.game.path)}`)).json();
+            if (data.slots) { sheet.status = data; sheet.slots = data.slots; }
+            const i = sheet.slots.findIndex(x => x.id === keepId);
+            sheet.index = i >= 0 ? i : 0;
+        }
+
+        function openKeyboard(mode, slot) {
+            sheet.kb = { mode, slot, text: mode === 'rename' ? slot.name : '', shift: mode !== 'rename', r: 1, c: 0 };
+            sheet.view = 'keyboard';
+            Sfx.play('open');
+            renderSheet();
+        }
+
+        function kbType(ch) {
+            const kb = sheet.kb;
+            if (kb.text.length < KB_MAX) kb.text += kb.shift ? ch.toUpperCase() : ch;
+            kb.shift = false;
+        }
+
+        async function kbDone() {
+            const kb = sheet.kb;
+            const name = kb.text.trim();
+            if (!name) { Sfx.play('error'); showToast('Give the save a name'); return; }
+            const game = sheet.game;
+            if (kb.mode === 'rename') {
+                const r = await saveApi('/api/saves/rename', { path: game.path, slot: kb.slot.id, name });
+                if (!r.ok) { Sfx.play('error'); showToast(r.body.message || 'Could not rename'); return; }
+                await reloadSlots(kb.slot.id);
+                sheet.view = 'slots';
+                Sfx.play('select');
+                return renderSheet();
+            }
+            const r = await saveApi('/api/saves/create', { path: game.path, name });
+            if (!r.ok) { Sfx.play('error'); showToast(r.body.message || 'Could not create the save'); return; }
+            Sfx.play('select');
+            await reloadSlots(r.body.id);
+            sheet.view = 'slots';
+            renderSheet();
+            playSlot(sheet.slots[sheet.index]);   // a new save starts playing right away
+        }
+
+        function kbPress(r, c) {
+            const k = KB_ROWS[r][c];
+            const kb = sheet.kb;
+            if (k.type === 'char') kbType(k.ch);
+            else if (k.type === 'space') kbType(' ');
+            else if (k.type === 'delete') kb.text = kb.text.slice(0, -1);
+            else if (k.type === 'clear') kb.text = '';
+            else if (k.type === 'shift') kb.shift = !kb.shift;
+            else if (k.type === 'cancel') { sheet.view = 'slots'; Sfx.play('back'); return renderSheet(); }
+            else if (k.type === 'ok') return kbDone();
+            Sfx.play('move');
+            renderSheet();
+        }
+
+        async function showHistory() {
+            const slot = sheet.slots[sheet.index];
+            if (!slot || !slot.inCloud) { Sfx.play('error'); return showToast('This save has no older versions in the cloud yet'); }
+            sheet.busy = 'Loading versions…';
+            renderSheet();
+            const res = await fetch(`/api/saves/history?path=${encodeURIComponent(sheet.game.path)}&slot=${slot.id}`);
+            const data = await res.json();
+            sheet.busy = '';
+            if (!res.ok) { Sfx.play('error'); showToast(data.message || 'Could not load versions'); return renderSheet(); }
+            sheet.history = data.versions;
+            sheet.histIndex = 0;
+            sheet.view = 'history';
+            renderSheet();
+        }
+
+        async function restoreVersion(v) {
+            const slot = sheet.slots[sheet.index];
+            sheet.busy = 'Restoring…';
+            renderSheet();
+            const r = await saveApi('/api/saves/restore', { path: sheet.game.path, slot: slot.id, sha: v.sha });
+            sheet.busy = '';
+            if (!r.ok) { Sfx.play('error'); showToast(r.body.message || 'Could not restore'); return renderSheet(); }
+            Sfx.play('select');
+            showToast(`Restored “${slot.name}”`);
+            await reloadSlots(slot.id);
+            sheet.view = 'slots';
+            renderSheet();
+        }
+
+        async function confirmDelete(yes) {
+            const slot = sheet.confirm.slot;
+            sheet.view = 'slots';
+            if (!yes) return renderSheet();
+            sheet.busy = 'Deleting…';
+            renderSheet();
+            const r = await saveApi('/api/saves/delete', { path: sheet.game.path, slot: slot.id });
+            sheet.busy = '';
+            if (!r.ok) { Sfx.play('error'); showToast(r.body.message || 'Could not delete'); return renderSheet(); }
+            await reloadSlots(null);
+            renderSheet();
+        }
+
+        // Where the sheet's controls are: the counts used to keep the focus in range
+        function sheetMove(dir) {
+            const v = sheet.view;
+            const before = JSON.stringify([sheet.index, sheet.btn, sheet.histIndex, sheet.kb && [sheet.kb.r, sheet.kb.c]]);
+            if (v === 'slots') {
+                const n = sheet.slots.length;
+                if (dir === 'left') sheet.index = Math.max(0, sheet.index - 1);
+                else if (dir === 'right') sheet.index = Math.min(n, sheet.index + 1);
+            } else if (v === 'keyboard') {
+                const kb = sheet.kb;
+                if (dir === 'left') kb.c = Math.max(0, kb.c - 1);
+                else if (dir === 'right') kb.c = Math.min(KB_ROWS[kb.r].length - 1, kb.c + 1);
+                else {
+                    const from = KB_ROWS[kb.r].length;
+                    kb.r = Math.max(0, Math.min(KB_ROWS.length - 1, kb.r + (dir === 'down' ? 1 : -1)));
+                    kb.c = Math.min(KB_ROWS[kb.r].length - 1, Math.round(kb.c * KB_ROWS[kb.r].length / from));
+                }
+            } else if (v === 'conflict' || v === 'confirm') {
+                const n = v === 'conflict' ? 3 : 2;
+                if (dir === 'left') sheet.btn = Math.max(0, sheet.btn - 1);
+                else if (dir === 'right') sheet.btn = Math.min(n - 1, sheet.btn + 1);
+            } else if (v === 'history') {
+                if (dir === 'up') sheet.histIndex = Math.max(0, sheet.histIndex - 1);
+                else if (dir === 'down') sheet.histIndex = Math.min(sheet.history.length - 1, sheet.histIndex + 1);
+            }
+            if (before !== JSON.stringify([sheet.index, sheet.btn, sheet.histIndex, sheet.kb && [sheet.kb.r, sheet.kb.c]])) { Sfx.play('move'); renderSheet(); }
+        }
+
+        function sheetActivate() {
+            const v = sheet.view;
+            if (v === 'slots') {
+                if (sheet.index === sheet.slots.length) openKeyboard('create');
+                else playSlot(sheet.slots[sheet.index]);
+            } else if (v === 'keyboard') kbPress(sheet.kb.r, sheet.kb.c);
+            else if (v === 'conflict') resolveConflict(['cloud', 'local', 'both'][sheet.btn]);
+            else if (v === 'confirm') confirmDelete(sheet.btn === 1);
+            else if (v === 'history') { const ver = sheet.history[sheet.histIndex]; if (ver && sheet.histIndex > 0) restoreVersion(ver); }
+        }
+
+        function sheetBack() {
+            if (sheet.busy) return;
+            if (sheet.view === 'slots' || sheet.view === 'loading') return closeSheet(true);
+            if (sheet.view === 'keyboard' && sheet.kb.text) { sheet.kb.text = sheet.kb.text.slice(0, -1); Sfx.play('move'); return renderSheet(); }
+            sheet.view = 'slots';
+            Sfx.play('back');
+            renderSheet();
+        }
+
+        // Controller input while the sheet is open. Buttons first, then directions.
+        function sheetInput(st, now) {
+            if (sheet.view === 'loading') { if (st.b) { closeSheet(true); } return; }
+            if (st.a) { sheetActivate(); lastInputTime = now + 400; return; }
+            if (st.b) { sheetBack(); lastInputTime = now + 250; return; }
+            if (st.x && sheet.view === 'slots' && sheet.index < sheet.slots.length) { openKeyboard('rename', sheet.slots[sheet.index]); lastInputTime = now + 400; return; }
+            if (st.y) {
+                if (sheet.view === 'keyboard') { sheet.kb.shift = !sheet.kb.shift; Sfx.play('move'); renderSheet(); }
+                else if (sheet.view === 'slots' && sheet.index < sheet.slots.length) {
+                    const slot = sheet.slots[sheet.index];
+                    Object.assign(sheet, { view: 'confirm', btn: 0, confirm: { slot, title: `Delete “${slot.name}”?`, text: slot.inCloud ? 'This also removes it from the cloud.' : 'This save only exists on this computer.', yes: 'Delete' } });
+                    Sfx.play('open');
+                    renderSheet();
+                }
+                lastInputTime = now + 300;
+                return;
+            }
+            if (st.start) {
+                if (sheet.view === 'keyboard') kbDone(); else if (sheet.view === 'slots') showHistory();
+                lastInputTime = now + 500;
+                return;
+            }
+            const dir = st.down ? 'down' : st.up ? 'up' : st.right ? 'right' : st.left ? 'left' : null;
+            if (dir) { sheetMove(dir); lastInputTime = now; }
+        }
+
+        function sheetKey(e) {
+            if (e.key === 'Escape') {   // Escape always backs out (B on a controller deletes a letter first)
+                if (!sheet.busy) { if (sheet.view === 'slots' || sheet.view === 'loading') closeSheet(true); else { sheet.view = 'slots'; Sfx.play('back'); renderSheet(); } }
+                return e.preventDefault();
+            }
+            if (sheet.view === 'keyboard') {
+                if (e.key === 'Enter') { kbDone(); return e.preventDefault(); }
+                if (e.key === 'Backspace') { sheet.kb.text = sheet.kb.text.slice(0, -1); renderSheet(); return e.preventDefault(); }
+                if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+                    if (sheet.kb.text.length < KB_MAX) sheet.kb.text += e.key;
+                    sheet.kb.shift = false;
+                    renderSheet();
+                    return e.preventDefault();
+                }
+            }
+            const dirs = { ArrowRight: 'right', ArrowLeft: 'left', ArrowDown: 'down', ArrowUp: 'up' };
+            if (dirs[e.key]) { sheetMove(dirs[e.key]); return e.preventDefault(); }
+            if (e.key === 'Enter') { sheetActivate(); return e.preventDefault(); }
+            if (sheet.view === 'slots') {
+                if (e.key.toLowerCase() === 'r' && sheet.index < sheet.slots.length) openKeyboard('rename', sheet.slots[sheet.index]);
+                else if (e.key === 'Delete' && sheet.index < sheet.slots.length) sheetInput({ y: true }, Date.now());
+                else if (e.key.toLowerCase() === 'h') showHistory();
+            }
+        }
+
+        // Mouse: one handler for everything in the sheet
+        document.getElementById('sheet-body').addEventListener('click', e => {
+            const el = e.target.closest('[data-act]');
+            if (!el || sheet.busy) return;
+            const i = Number(el.dataset.i);
+            const act = el.dataset.act;
+            if (act === 'play') { sheet.index = i; playSlot(sheet.slots[i]); }
+            else if (act === 'new') openKeyboard('create');
+            else if (act === 'key') { sheet.kb.r = Number(el.dataset.r); sheet.kb.c = Number(el.dataset.c); kbPress(sheet.kb.r, sheet.kb.c); }
+            else if (act === 'conflict') resolveConflict(['cloud', 'local', 'both'][i]);
+            else if (act === 'confirm') confirmDelete(i === 1);
+            else if (act === 'hist' && i > 0) restoreVersion(sheet.history[i]);
+        });
+        // Clicking the menu above the sheet closes it
+        document.addEventListener('mousedown', e => {
+            if (sheet.open && !sheet.busy && !e.target.closest('#sheet') && !e.target.closest('.toast')) closeSheet(true);
+        });
+
+        // ---- Syncing: when the menu starts, and after a game closes ----
+        async function syncAtStart(quiet) {
+            try {
+                const r = await (await fetch('/api/saves/sync', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })).json();
+                if (r.problem && r.problem.code !== 'OFFLINE') { showToast(r.problem.message); return r; }
+                if (r.conflicts && r.conflicts.length) showToast(`“${r.conflicts[0]}” changed on two computers: choose which to keep when you play it`);
+                else if (r.updated && r.updated.length) showToast(r.updated.length === 1 ? `1 save updated from ${r.updated[0].device}` : `${r.updated.length} saves updated from the cloud`);
+                else if (r.uploaded && r.uploaded.length) showToast(`Saved ${r.uploaded.length} waiting save${r.uploaded.length === 1 ? '' : 's'} to the cloud`);
+                else if (!quiet && r.online) showToast('Saves are up to date');
+                return r;
+            } catch { /* the server will be back; nothing to report */ }
+        }
+
+        // After the game closes the server uploads the slot: show it as it happens
+        async function watchSyncAfterGame() {
+            const closedAt = Date.now() - 1000;
+            let last = '';
+            for (let i = 0; i < 400; i++) {
+                await sleep(i === 0 ? 900 : 600);
+                let sync;
+                try { sync = (await (await fetch('/api/status')).json()).sync; } catch { continue; }
+                if (!sync || sync.at < closedAt) { if (i > 4) return; continue; }
+                if (sync.message && sync.message !== last && sync.state !== 'idle') { last = sync.message; showToast(sync.message); if (['error', 'conflict'].includes(sync.state)) Sfx.play('error'); }
+                if (['saved', 'queued', 'error', 'conflict', 'idle'].includes(sync.state)) return;
+            }
+        }
+
+        // ---- Settings > Cloud ----
+        function renderCloud(c) {
+            document.getElementById('slots-toggle-button').textContent = c.slotsEnabled ? 'On' : 'Off';
+            document.getElementById('cloud-toggle-button').textContent = c.enabled ? 'On' : 'Off';
+            const repo = document.getElementById('cloud-repo');
+            if (document.activeElement !== repo) repo.value = c.repoUrl;
+            const warn = document.getElementById('cloud-warning');
+            if (c.enabled && c.visibility === 'public') {
+                warn.style.display = 'block';
+                warn.textContent = c.encrypted
+                    ? 'This repository is public. Your saves are encrypted before they are uploaded, so only the passphrase opens them, but a private repository is still safer.'
+                    : 'This repository is public: anyone could read saves stored there. Nothing is uploaded until you set an encryption passphrase below, or point to a private repository.';
+            } else warn.style.display = 'none';
+            const bits = [];
+            if (!c.enabled) bits.push('Cloud sync is off: saves stay on this computer.');
+            else if (!c.repoUrl) bits.push('No repository set.');
+            else bits.push(c.lastSync ? `Last synced ${new Date(c.lastSync).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.` : 'Not synced yet.');
+            if (c.lastError && c.enabled) bits.push(c.lastError.code === 'OFFLINE' ? 'Offline right now.' : c.lastError.message);
+            if (c.pending) bits.push(`${c.pending} save${c.pending === 1 ? '' : 's'} waiting to upload.`);
+            document.getElementById('cloud-status').textContent = bits.join(' ');
+            document.getElementById('cloud-devices').textContent = c.devices.length
+                ? `Computers: ${c.devices.map(d => `${d.name} (${timeAgo(d.lastSeen).replace('Updated ', '')})`).join(', ')}. This one is ${c.device}.`
+                : `This computer is ${c.device}.`;
+        }
+
+        async function refreshCloud() {
+            try { renderCloud(await (await fetch('/api/cloud')).json()); } catch { /* shown next time */ }
+        }
+
+        async function toggleCloud(key) {
+            const cur = await (await fetch('/api/cloud')).json();
+            const r = await saveApi('/api/cloud', { [key]: !cur[key] });
+            Sfx.play('toggle');
+            renderCloud(r.body);
+        }
+
+        async function saveCloudRepo() {
+            const r = await saveApi('/api/cloud', { repoUrl: document.getElementById('cloud-repo').value });
+            renderCloud(r.body);
+            showToast('Repository saved');
+            syncAtStart(true);
+        }
+
+        async function saveCloudPassphrase() {
+            const input = document.getElementById('cloud-pass');
+            const r = await saveApi('/api/cloud', { passphrase: input.value });
+            input.value = '';
+            renderCloud(r.body);
+            showToast(r.body.encrypted ? 'Passphrase saved: saves are encrypted' : 'Passphrase removed');
+            syncAtStart(true);
+        }
+
+        async function syncNow() {
+            showToast('Checking the cloud…');
+            await syncAtStart(false);
+            refreshCloud();
         }
 
         // ================= SETTINGS =================
@@ -1037,6 +1703,7 @@
             emulatorNames = Object.fromEntries(data.emulators.map(e => [e.id, e.name]));
             renderAutoButton(data.autoControllers);
             renderSound(await Sfx.load());
+            refreshCloud();
 
             const list = document.getElementById('emulator-list');
             list.innerHTML = '';
@@ -1262,7 +1929,7 @@
             else if (pads.some(gp => gp.buttons.length >= 8)) pads = pads.filter(gp => gp.buttons.length >= 8);
 
             const st = { count: pads.length, up: false, down: false, left: false, right: false,
-                         a: false, b: false, x: false, y: false, lb: false, rb: false, ids: [], pressed: [] };
+                         a: false, b: false, x: false, y: false, lb: false, rb: false, start: false, ids: [], pressed: [] };
             if (!pads.length) return st;
 
             const tracked = pads.map(gp => ({ gp, s: trackPad(gp, now) }));
@@ -1285,6 +1952,7 @@
             st.a = btn(0);  st.b = btn(1);
             st.x = btn(2);  st.y = btn(3);
             st.lb = btn(4); st.rb = btn(5);
+            st.start = btn(9);
             st.ids = pads.map(p => `${p.id} [${p.mapping || 'non-standard'}]`);
             gp.buttons.forEach((b, i) => { if (b.pressed) st.pressed.push(i); });
             return st;
@@ -1323,7 +1991,9 @@
 
             if (st.pressed.length) Sfx.unlock();
             if (st.count > 0 && !gameRunning) {
-                if (settingsOpen) {
+                if (sheet.open) {
+                    if (now - lastInputTime > 180) sheetInput(st, now);
+                } else if (settingsOpen) {
                     if (now - lastInputTime > 180) {
                         const dir = st.down ? 'down' : st.up ? 'up' : st.right ? 'right' : st.left ? 'left' : null;
                         if (st.a) { pressFocused(); lastInputTime = now + 300; }
@@ -1346,6 +2016,7 @@
 
         // Keyboard works too (handy without a controller, or to check that the menu itself is fine)
         window.addEventListener('keydown', e => {
+            if (sheet.open && !settingsOpen) return sheetKey(e);
             if (e.key === 'Escape' && settingsOpen) return closeSettings();
             if (settingsOpen || gameRunning || e.target.tagName === 'INPUT') return;
             const dirs = { ArrowRight: 'right', ArrowLeft: 'left', ArrowDown: 'down', ArrowUp: 'up' };
@@ -1361,7 +2032,7 @@
 
         // Start Loop & Load
         Sfx.load().then(() => { Sfx.play('boot'); Sfx.startMusic(); }).catch(() => {});
-        loadGames();
+        loadGames().then(() => syncAtStart(true));
         refreshControllers();
         requestAnimationFrame(pollGamepad);
     </script>

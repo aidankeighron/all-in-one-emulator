@@ -18,7 +18,7 @@ function load() {
 
 function save(cfg) {
     fs.mkdirSync(path.dirname(configFile), { recursive: true });
-    fs.writeFileSync(configFile, JSON.stringify(cfg, null, 2));
+    fs.writeFileSync(configFile, JSON.stringify(cfg, null, 2), { mode: 0o600 });   // may hold the saves passphrase
 }
 
 // From a source checkout the ROMs live in <repo>/roms (the original layout);
@@ -67,7 +67,40 @@ function setSound(next) {
     save(cfg);
 }
 
+// The repository the menu was cloned from, if it is running from a git checkout
+let projectRemote;
+function defaultRepoUrl() {
+    if (projectRemote === undefined) {
+        try {
+            projectRemote = require('child_process').execFileSync('git', ['-C', path.resolve(__dirname, '..', '..'), 'remote', 'get-url', 'origin'],
+                { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 3000 }).trim();
+        } catch { projectRemote = ''; }
+    }
+    return projectRemote;
+}
+
+// Save slots and cloud saves. Saves go to the "saves" branch of repoUrl (this project's own repository by default).
+function getCloud() {
+    const cfg = load();
+    return {
+        slotsEnabled: cfg.slotsEnabled !== false,
+        enabled: cfg.cloudEnabled !== false,
+        repoUrl: cfg.cloudRepoUrl || defaultRepoUrl(),
+        passphrase: cfg.cloudPassphrase || '',
+        deviceName: cfg.deviceName || ''
+    };
+}
+
+function setCloud(next) {
+    const cfg = load();
+    if (typeof next.slotsEnabled === 'boolean') cfg.slotsEnabled = next.slotsEnabled;
+    if (typeof next.enabled === 'boolean') cfg.cloudEnabled = next.enabled;
+    if (typeof next.repoUrl === 'string') cfg.cloudRepoUrl = next.repoUrl.trim();
+    if (typeof next.passphrase === 'string') cfg.cloudPassphrase = next.passphrase;
+    save(cfg);
+}
+
 const artworkDir = path.join(path.dirname(configFile), 'artwork');
 const soundsDir = process.env.SOUNDS_DIR || path.join(path.dirname(configFile), 'sounds');
 
-module.exports = { getRomsDir, setRomsDir, getAutoControllers, setAutoControllers, getSound, setSound, configFile, artworkDir, soundsDir };
+module.exports = { getRomsDir, setRomsDir, getAutoControllers, setAutoControllers, getSound, setSound, getCloud, setCloud, configFile, artworkDir, soundsDir };
