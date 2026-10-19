@@ -1,7 +1,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const { exec, execFile } = require('child_process');
+const { execFile } = require('child_process');
 
 const PORT = 3000;
 const ROMS_DIR = path.resolve(__dirname, '../roms');
@@ -79,10 +79,17 @@ const server = http.createServer((req, res) => {
     if (req.url.startsWith('/api/launch')) {
         const urlParams = new URLSearchParams(req.url.split('?')[1]);
         const consoleType = urlParams.get('console');
-        const romPath = urlParams.get('path');
+        const romPath = urlParams.get('path') || '';
 
-        console.log(`[LAUNCH] Running: ../run-${consoleType}.sh "${romPath}"`);
-        exec(`../run-dolphin.sh "${romPath}"`, (err) => {
+        // Only launch files that actually exist under roms/ (path is the in-container /roms/... path)
+        const hostPath = path.resolve(ROMS_DIR, path.relative('/roms', path.posix.normalize(romPath)));
+        if (!romPath.startsWith('/roms/') || !hostPath.startsWith(ROMS_DIR + path.sep) || !fs.existsSync(hostPath)) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            return res.end(JSON.stringify({ status: 'error', message: 'Invalid ROM path' }));
+        }
+
+        console.log(`[LAUNCH] ${consoleType}: ${romPath}`);
+        execFile(path.resolve(__dirname, '../run-dolphin.sh'), [romPath], (err) => {
             if (err) console.error(`[EXEC ERROR] ${err.message}`);
         });
 
@@ -91,7 +98,18 @@ const server = http.createServer((req, res) => {
     }
 
     // Serve Static UI Files
-    let filePath = path.join(__dirname, req.url === '/' ? 'index.html' : req.url);
+    let urlPath;
+    try {
+        urlPath = decodeURIComponent(req.url.split('?')[0]);
+    } catch {
+        res.writeHead(400);
+        return res.end('Bad Request');
+    }
+    let filePath = path.join(__dirname, urlPath === '/' ? 'index.html' : urlPath);
+    if (!filePath.startsWith(__dirname + path.sep)) {
+        res.writeHead(403);
+        return res.end('Forbidden');
+    }
     const ext = path.extname(filePath);
     const contentTypes = {
         '.html': 'text/html',
