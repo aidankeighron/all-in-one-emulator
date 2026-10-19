@@ -170,6 +170,7 @@
 
         .badge-wii { background: linear-gradient(to bottom, #5cc6fa, #2c9fe0); }
         .badge-gamecube { background: linear-gradient(to bottom, #8a63c9, #5b3a9c); }
+        .badge-switch { background: linear-gradient(to bottom, #f0525c, #d0222e); }
         .badge-ps1 { background: linear-gradient(to bottom, #8d98a5, #5d6874); }
         .badge-ps2 { background: linear-gradient(to bottom, #4f6fd8, #2a3f9c); }
         .badge-ps3 { background: linear-gradient(to bottom, #3a3f47, #15181c); }
@@ -399,7 +400,7 @@
 
     <div class="top-bar">
         <div class="system-title">Wii Menu</div>
-        <div class="controller-status" id="controller-status">Xbox Pad: Press any button to activate</div>
+        <div class="controller-status" id="controller-status">No controller detected: press a button on it</div>
     </div>
 
     <div class="grid-container">
@@ -443,6 +444,9 @@
             </div>
             <div id="emulator-list"></div>
 
+            <h3>Controller</h3>
+            <div class="desc" id="pad-debug" style="font-size:13px; color:#8a9199; word-break:break-word"></div>
+
             <div class="row" style="justify-content:flex-end; margin-top:18px">
                 <button class="btn" onclick="closeSettings()">Close (B)</button>
             </div>
@@ -456,7 +460,6 @@
         let allGames = [];
         let currentPage = 0;
         let selectedIndex = 0; // Relative to current page (0-11)
-        let activeGamepadIndex = null;
         let lastInputTime = 0;
         let romsDir = '';
         let gameRunning = false;
@@ -724,108 +727,108 @@
             }
         }
 
-        // ================= GAMEPAD ENGINE =================
-        window.addEventListener("gamepadconnected", (e) => {
-            activeGamepadIndex = e.gamepad.index;
-            document.getElementById('controller-status').innerText = `Connected: ${e.gamepad.id.split('(')[0]}`;
-            document.getElementById('controller-status').classList.add('connected');
-        });
+        // ================= INPUT (gamepad + keyboard) =================
+        // Merge every connected controller. Linux can report extra "gamepads" (keyboards, mice,
+        // remotes) that sit at a stuck axis value, so prefer standard-mapped pads when there are any.
+        function readPads() {
+            let pads = (navigator.getGamepads ? [...navigator.getGamepads()] : []).filter(Boolean);
+            const standard = pads.filter(gp => gp.mapping === 'standard');
+            if (standard.length) pads = standard;
+            else if (pads.some(gp => gp.buttons.length >= 8)) pads = pads.filter(gp => gp.buttons.length >= 8);
 
-        window.addEventListener("gamepaddisconnected", () => {
-            activeGamepadIndex = null;
-            document.getElementById('controller-status').innerText = "Xbox Pad: Disconnected";
-            document.getElementById('controller-status').classList.remove('connected');
-        });
+            const st = { count: pads.length, up: false, down: false, left: false, right: false,
+                         a: false, b: false, x: false, y: false, lb: false, rb: false, ids: [], pressed: [] };
+            for (const gp of pads) {
+                const btn = i => !!gp.buttons[i]?.pressed;
+                const ax = i => gp.axes[i] || 0;
+                // Non-standard Xbox layouts report the d-pad as a hat on axes 6/7
+                const hatX = gp.mapping === 'standard' ? 0 : ax(6);
+                const hatY = gp.mapping === 'standard' ? 0 : ax(7);
+                st.left  = st.left  || btn(14) || ax(0) < -0.5 || hatX < -0.5;
+                st.right = st.right || btn(15) || ax(0) > 0.5  || hatX > 0.5;
+                st.up    = st.up    || btn(12) || ax(1) < -0.5 || hatY < -0.5;
+                st.down  = st.down  || btn(13) || ax(1) > 0.5  || hatY > 0.5;
+                st.a = st.a || btn(0);  st.b = st.b || btn(1);
+                st.x = st.x || btn(2);  st.y = st.y || btn(3);
+                st.lb = st.lb || btn(4); st.rb = st.rb || btn(5);
+                st.ids.push(`${gp.id} [${gp.mapping || 'non-standard'}]`);
+                gp.buttons.forEach((b, i) => { if (b.pressed) st.pressed.push(i); });
+            }
+            return st;
+        }
+
+        function navigate(dir) {
+            const startIdx = currentPage * CHANNELS_PER_PAGE;
+            const pageGamesCount = Math.min(CHANNELS_PER_PAGE, allGames.length - startIdx);
+            if (dir === 'right') {
+                if (selectedIndex + 1 < pageGamesCount) { selectedIndex++; updateSelectionVisuals(); }
+                else nextPage();
+            } else if (dir === 'left') {
+                if (selectedIndex > 0) { selectedIndex--; updateSelectionVisuals(); }
+                else if (currentPage > 0) { prevPage(); selectedIndex = CHANNELS_PER_PAGE - 1; updateSelectionVisuals(); }
+            } else if (dir === 'down') {
+                if (selectedIndex + 4 < pageGamesCount) { selectedIndex += 4; updateSelectionVisuals(); }
+            } else if (dir === 'up') {
+                if (selectedIndex - 4 >= 0) { selectedIndex -= 4; updateSelectionVisuals(); }
+            }
+        }
+
+        function launchSelected() {
+            const game = allGames[currentPage * CHANNELS_PER_PAGE + selectedIndex];
+            if (game) launchGame(game);
+        }
+
+        let lastStatusUpdate = 0;
+        function updatePadStatus(st, now) {
+            if (now - lastStatusUpdate < 400) return;
+            lastStatusUpdate = now;
+            const chip = document.getElementById('controller-status');
+            if (st.count > 0) {
+                chip.innerText = `Controller: ${st.ids[0].split('(')[0].trim()}`;
+                chip.classList.add('connected');
+            } else {
+                chip.innerText = 'No controller detected: press a button on it';
+                chip.classList.remove('connected');
+            }
+            if (settingsOpen) {
+                document.getElementById('pad-debug').innerText = st.count === 0
+                    ? 'None detected. Connect the controller, then press a button on it with this window focused.'
+                    : `${st.ids.join(' | ')}   Pressed: ${st.pressed.length ? st.pressed.join(', ') : '(none)'}`;
+            }
+        }
 
         function pollGamepad() {
-            const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
-            let gp = null;
-
-            // Search dynamically for first active gamepad
-            for (let i = 0; i < gamepads.length; i++) {
-                if (gamepads[i]) {
-                    gp = gamepads[i];
-                    break;
-                }
-            }
-
+            const st = readPads();
             const now = Date.now();
-            if (gp && settingsOpen && gp.buttons[1]?.pressed && now - lastInputTime > 300) {
-                closeSettings(); // B closes settings
-            } else if (gp && !gameRunning && !settingsOpen && now - lastInputTime > 180) { // 180ms debounce for responsive navigation
-                const leftStickX = gp.axes[0] || 0;
-                const leftStickY = gp.axes[1] || 0;
-                const dpadUp = gp.buttons[12]?.pressed;
-                const dpadDown = gp.buttons[13]?.pressed;
-                const dpadLeft = gp.buttons[14]?.pressed;
-                const dpadRight = gp.buttons[15]?.pressed;
-                const buttonA = gp.buttons[0]?.pressed;
-                const buttonY = gp.buttons[3]?.pressed;
-                const buttonX = gp.buttons[2]?.pressed;
-                const bumperL = gp.buttons[4]?.pressed;
-                const bumperR = gp.buttons[5]?.pressed;
+            updatePadStatus(st, now);
 
-                const startIdx = currentPage * CHANNELS_PER_PAGE;
-                const pageGamesCount = Math.min(CHANNELS_PER_PAGE, allGames.length - startIdx);
-
-                // Grid Navigation (4 Columns x 3 Rows)
-                if (dpadRight || leftStickX > 0.5) {
-                    if (selectedIndex + 1 < pageGamesCount) {
-                        selectedIndex++;
-                        updateSelectionVisuals();
-                        lastInputTime = now;
-                    } else if ((currentPage + 1) * CHANNELS_PER_PAGE < allGames.length) {
-                        nextPage();
-                        lastInputTime = now;
-                    }
-                } else if (dpadLeft || leftStickX < -0.5) {
-                    if (selectedIndex > 0) {
-                        selectedIndex--;
-                        updateSelectionVisuals();
-                        lastInputTime = now;
-                    } else if (currentPage > 0) {
-                        prevPage();
-                        selectedIndex = CHANNELS_PER_PAGE - 1;
-                        lastInputTime = now;
-                    }
-                } else if (dpadDown || leftStickY > 0.5) {
-                    if (selectedIndex + 4 < pageGamesCount) {
-                        selectedIndex += 4;
-                        updateSelectionVisuals();
-                        lastInputTime = now;
-                    }
-                } else if (dpadUp || leftStickY < -0.5) {
-                    if (selectedIndex - 4 >= 0) {
-                        selectedIndex -= 4;
-                        updateSelectionVisuals();
-                        lastInputTime = now;
-                    }
-                }
-
-                // Bumpers for Page Flipping
-                if (bumperR) { nextPage(); lastInputTime = now; }
-                if (bumperL) { prevPage(); lastInputTime = now; }
-
-                // Settings (X Button)
-                if (buttonX) { openSettings(); lastInputTime = now + 500; }
-
-                // Import ROM zips (Y Button)
-                if (buttonY) { importRoms(); lastInputTime = now + 500; }
-
-                // Launch (A Button)
-                if (buttonA) {
-                    const targetGame = allGames[startIdx + selectedIndex];
-                    if (targetGame) {
-                        launchGame(targetGame);
-                        lastInputTime = now + 500; // longer debounce on launch
-                    }
+            if (st.count > 0) {
+                if (settingsOpen) {
+                    if (st.b && now - lastInputTime > 300) closeSettings(); // B closes settings
+                } else if (!gameRunning && now - lastInputTime > 180) { // debounce
+                    const dir = st.right ? 'right' : st.left ? 'left' : st.down ? 'down' : st.up ? 'up' : null;
+                    if (dir) { navigate(dir); lastInputTime = now; }
+                    else if (st.rb) { nextPage(); lastInputTime = now; }
+                    else if (st.lb) { prevPage(); lastInputTime = now; }
+                    else if (st.x) { openSettings(); lastInputTime = now + 500; }
+                    else if (st.y) { importRoms(); lastInputTime = now + 500; }
+                    else if (st.a) { launchSelected(); lastInputTime = now + 500; }
                 }
             }
-
             requestAnimationFrame(pollGamepad);
         }
 
-        window.addEventListener('keydown', e => { if (e.key === 'Escape' && settingsOpen) closeSettings(); });
+        // Keyboard works too (handy without a controller, or to check that the menu itself is fine)
+        window.addEventListener('keydown', e => {
+            if (e.key === 'Escape' && settingsOpen) return closeSettings();
+            if (settingsOpen || gameRunning || e.target.tagName === 'INPUT') return;
+            const dirs = { ArrowRight: 'right', ArrowLeft: 'left', ArrowDown: 'down', ArrowUp: 'up' };
+            if (dirs[e.key]) { navigate(dirs[e.key]); e.preventDefault(); }
+            else if (e.key === 'Enter') launchSelected();
+            else if (e.key === 'PageDown') nextPage();
+            else if (e.key === 'PageUp') prevPage();
+            else if (e.key.toLowerCase() === 's') openSettings();
+        });
 
         // Start Loop & Load
         loadGames();
