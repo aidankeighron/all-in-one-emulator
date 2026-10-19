@@ -170,7 +170,10 @@
 
         .badge-wii { background: linear-gradient(to bottom, #5cc6fa, #2c9fe0); }
         .badge-gamecube { background: linear-gradient(to bottom, #8a63c9, #5b3a9c); }
-        .badge-switch { background: linear-gradient(to bottom, #f0525c, #d0222e); }
+        .badge-ps1 { background: linear-gradient(to bottom, #8d98a5, #5d6874); }
+        .badge-ps2 { background: linear-gradient(to bottom, #4f6fd8, #2a3f9c); }
+        .badge-ps3 { background: linear-gradient(to bottom, #3a3f47, #15181c); }
+        .badge-psp { background: linear-gradient(to bottom, #36b9a8, #1b8577); }
         .badge-empty { background: transparent; }
 
         .channel-title {
@@ -246,6 +249,114 @@
             pointer-events: none;
         }
 
+        .channel-note {
+            position: relative;
+            align-self: flex-end;
+            font-size: 11px;
+            font-weight: 700;
+            color: #c0762a;
+        }
+
+        .channel-uninstalled .channel-title { opacity: 0.6; }
+
+        .empty-hint {
+            grid-column: 1 / -1;
+            grid-row: 1 / -1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 0 40px;
+            color: #7b848c;
+            font-size: 17px;
+            line-height: 1.6;
+            z-index: 1;
+        }
+
+        .empty-hint code {
+            background: rgba(255, 255, 255, 0.8);
+            border: 1px solid var(--wii-edge);
+            border-radius: 6px;
+            padding: 1px 6px;
+        }
+
+        .overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(227, 234, 240, 0.9);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+        }
+
+        .overlay.open { display: flex; }
+
+        .panel {
+            width: min(720px, 92vw);
+            max-height: 86vh;
+            overflow-y: auto;
+            background: linear-gradient(to bottom, #ffffff 0%, #f3f6f8 100%);
+            border: 2px solid var(--wii-edge);
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(80, 100, 120, 0.3);
+            padding: 24px 28px;
+            color: #4a5258;
+        }
+
+        .panel h2 { margin: 0 0 14px; font-size: 20px; color: #6b747c; letter-spacing: 1px; }
+        .panel h3 { margin: 22px 0 8px; font-size: 14px; color: #8a9199; text-transform: uppercase; letter-spacing: 1.5px; }
+        .panel .row { display: flex; gap: 10px; align-items: center; }
+        .panel input[type=text] {
+            flex: 1;
+            font: inherit;
+            padding: 8px 12px;
+            border: 2px solid var(--wii-edge);
+            border-radius: 10px;
+            cursor: text;
+            user-select: text;
+        }
+
+        .btn {
+            font: inherit;
+            font-weight: 700;
+            padding: 8px 18px;
+            border-radius: 18px;
+            border: 2px solid #c9d1d8;
+            background: linear-gradient(to bottom, #ffffff, #e6ebef);
+            color: #6b747c;
+            cursor: pointer;
+        }
+
+        .btn:hover { border-color: var(--wii-blue); color: var(--wii-blue); }
+        .btn:disabled { opacity: 0.5; pointer-events: none; }
+        .btn.primary { background: linear-gradient(to bottom, #5cc6fa, #2c9fe0); border-color: #2c9fe0; color: #fff; }
+
+        .emu-row {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 10px 0;
+            border-top: 1px solid #e3e8ec;
+        }
+
+        .emu-row .info { flex: 1; }
+        .emu-row .name { font-weight: 700; }
+        .emu-row .desc { font-size: 13px; color: #8a9199; }
+        .emu-row .progress { font-size: 12px; color: var(--wii-blue); margin-top: 2px; word-break: break-all; }
+        .emu-row .state { font-size: 12px; font-weight: 700; color: #2c9fe0; }
+
+        .notice {
+            background: #fff7e6;
+            border: 2px solid #f0c777;
+            border-radius: 10px;
+            padding: 10px 14px;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+
+        .notice code { background: #fff; padding: 1px 6px; border-radius: 6px; user-select: text; }
+
         .toast {
             position: fixed;
             bottom: 110px;
@@ -310,7 +421,32 @@
             <div class="time-display" id="clock">12:00</div>
             <div class="date-display" id="date">Mon 10/19</div>
         </div>
-        <div class="round-button" title="Message Board">&#9993;</div>
+        <div class="round-button" onclick="openSettings()" title="Settings (X)">&#9881;</div>
+    </div>
+
+    <div class="overlay" id="settings-overlay" onclick="if (event.target === this) closeSettings()">
+        <div class="panel">
+            <h2>Settings</h2>
+
+            <h3>ROMs folder</h3>
+            <div class="row">
+                <input type="text" id="roms-dir" spellcheck="false">
+                <button class="btn" id="browse-button" onclick="browseRomsDir()">Browse</button>
+                <button class="btn primary" onclick="saveRomsDir()">Save</button>
+            </div>
+            <div class="emu-row" style="border:none"><div class="desc">Put games (or .zip files) in subfolders named after the system: <span id="folder-list"></span></div></div>
+
+            <h3>Emulators</h3>
+            <div id="flatpak-warning" class="notice" style="display:none">
+                Emulators are installed with Flatpak, which isn't installed yet. Run
+                <code>sudo apt install flatpak</code> in a terminal, then reopen this menu.
+            </div>
+            <div id="emulator-list"></div>
+
+            <div class="row" style="justify-content:flex-end; margin-top:18px">
+                <button class="btn" onclick="closeSettings()">Close (B)</button>
+            </div>
+        </div>
     </div>
 
     <div class="toast" id="toast"></div>
@@ -322,6 +458,9 @@
         let selectedIndex = 0; // Relative to current page (0-11)
         let activeGamepadIndex = null;
         let lastInputTime = 0;
+        let romsDir = '';
+        let gameRunning = false;
+        let settingsOpen = false;
 
         // Clock Update
         function updateClock() {
@@ -343,7 +482,10 @@
         async function loadGames() {
             try {
                 const res = await fetch('/api/games');
-                allGames = await res.json();
+                const data = await res.json();
+                allGames = data.games;
+                romsDir = data.romsDir;
+                if (currentPage * CHANNELS_PER_PAGE >= allGames.length) currentPage = 0;
                 renderPage();
             } catch (err) {
                 console.error("Failed to load games:", err);
@@ -361,17 +503,26 @@
             const startIdx = currentPage * CHANNELS_PER_PAGE;
             const pageGames = allGames.slice(startIdx, startIdx + CHANNELS_PER_PAGE);
 
+            if (allGames.length === 0) {
+                const hint = document.createElement('div');
+                hint.className = 'empty-hint';
+                hint.innerHTML = `<div>No games found in <code>${escapeHtml(romsDir)}</code><br>
+                    Put games or .zip files in folders like <code>wii</code>, <code>gamecube</code>, <code>ps2</code>,
+                    then press <b>Zip</b>.<br>Install emulators from the &#9881; settings.</div>`;
+                grid.appendChild(hint);
+            }
+
             for (let i = 0; i < CHANNELS_PER_PAGE; i++) {
                 const game = pageGames[i];
                 const channel = document.createElement('div');
                 
                 if (game) {
                     const badgeClass = `badge-${game.console}`;
-                    channel.className = `wii-channel ${i === selectedIndex ? 'selected' : ''}`;
+                    channel.className = `wii-channel ${i === selectedIndex ? 'selected' : ''} ${game.installed ? '' : 'channel-uninstalled'}`;
                     channel.innerHTML = `
-                        <span class="channel-badge ${badgeClass}">${game.console}</span>
+                        <span class="channel-badge ${badgeClass}">${escapeHtml(game.console)}</span>
                         <div class="channel-title">${escapeHtml(game.title)}</div>
-                        <div></div>
+                        <div class="channel-note">${game.installed ? '' : 'Emulator not installed'}</div>
                     `;
 
                     // Mouse Events
@@ -434,11 +585,11 @@
             btn.classList.add('busy');
             showToast('Importing ROMs...');
             try {
-                const res = await fetch('/api/process-roms');
-                const { ok, output } = await res.json();
+                const res = await fetch('/api/process-roms', { method: 'POST' });
+                const { ok, added, lines } = await res.json();
                 await loadGames();
-                const added = (output.match(/\[ROMS\] Added/g) || []).length;
-                showToast(ok ? `Import complete: ${added} game(s) added` : 'Import finished with problems (see server log)');
+                const problem = (lines || []).find(l => /FAILED|Could not tell/.test(l));
+                showToast(ok ? `Import complete: ${added || 0} game(s) added` : (problem || 'Import finished with problems'));
             } catch (err) {
                 showToast('Import failed');
             }
@@ -446,8 +597,131 @@
         }
 
         async function launchGame(game) {
-            console.log(`Launching ${game.title}...`);
-            await fetch(`/api/launch?console=${game.console}&path=${encodeURIComponent(game.fullPath)}`);
+            if (gameRunning) return;
+            const res = await fetch('/api/launch', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ path: game.path })
+            });
+            const body = await res.json();
+            if (res.ok) {
+                gameRunning = true;
+                showToast(`Launching ${game.title}...`);
+                pollStatus();
+            } else if (body.error === 'not_installed') {
+                showToast(`${body.message}. Install it from Settings.`);
+                openSettings();
+            } else {
+                showToast(body.message || 'Could not launch game');
+            }
+        }
+
+        // While a game runs, ignore controller input here and watch for it to exit
+        async function pollStatus() {
+            while (gameRunning) {
+                await new Promise(r => setTimeout(r, 1500));
+                try {
+                    const status = await (await fetch('/api/status')).json();
+                    if (status.error) showToast(status.error);
+                    if (!status.running) gameRunning = false;
+                } catch { /* server hiccup: keep waiting */ }
+            }
+            lastInputTime = Date.now() + 500;
+        }
+
+        // ================= SETTINGS =================
+        async function openSettings() {
+            settingsOpen = true;
+            document.getElementById('settings-overlay').classList.add('open');
+            await refreshSettings();
+        }
+
+        function closeSettings() {
+            settingsOpen = false;
+            document.getElementById('settings-overlay').classList.remove('open');
+            lastInputTime = Date.now() + 300;
+            loadGames();
+        }
+
+        async function refreshSettings() {
+            const data = await (await fetch('/api/settings')).json();
+            romsDir = data.romsDir;
+            const input = document.getElementById('roms-dir');
+            if (document.activeElement !== input) input.value = data.romsDir;
+            document.getElementById('flatpak-warning').style.display = data.flatpak ? 'none' : 'block';
+            const folders = [...new Set(data.emulators.flatMap(e => e.folders))];
+            document.getElementById('folder-list').innerHTML = folders.map(f => `<code>${escapeHtml(f)}</code>`).join(' ');
+
+            const list = document.getElementById('emulator-list');
+            list.innerHTML = '';
+            for (const emu of data.emulators) {
+                const row = document.createElement('div');
+                row.className = 'emu-row';
+                row.innerHTML = `
+                    <div class="info">
+                        <div class="name">${escapeHtml(emu.name)} <span class="state">${emu.installed ? 'Installed' : ''}</span></div>
+                        <div class="desc">${escapeHtml(emu.description)} &middot; folders: ${emu.folders.map(escapeHtml).join(', ')}</div>
+                        <div class="progress" id="progress-${emu.id}"></div>
+                    </div>
+                    <button class="btn ${emu.installed ? '' : 'primary'}" id="btn-${emu.id}" ${data.flatpak ? '' : 'disabled'}>
+                        ${emu.installed ? 'Remove' : 'Install'}
+                    </button>`;
+                row.querySelector('button').addEventListener('click', () => runEmulatorJob(emu, emu.installed ? 'uninstall' : 'install'));
+                list.appendChild(row);
+            }
+        }
+
+        async function runEmulatorJob(emu, action) {
+            const btn = document.getElementById(`btn-${emu.id}`);
+            const progress = document.getElementById(`progress-${emu.id}`);
+            btn.disabled = true;
+            progress.textContent = action === 'install' ? 'Starting download...' : 'Removing...';
+            const res = await fetch(`/api/emulators/${emu.id}/${action}`, { method: 'POST' });
+            if (!res.ok) {
+                progress.textContent = res.status === 409 ? 'Flatpak is not installed' : 'Failed to start';
+                btn.disabled = false;
+                return;
+            }
+            let job = await res.json();
+            while (job.state === 'running') {
+                await new Promise(r => setTimeout(r, 800));
+                job = await (await fetch(`/api/jobs/${job.id}`)).json();
+                progress.textContent = job.lines[job.lines.length - 1] || '';
+            }
+            if (job.state === 'error') {
+                btn.disabled = false;
+                progress.textContent = `Failed: ${job.lines[job.lines.length - 1] || 'see terminal'}`;
+            } else {
+                await refreshSettings();
+            }
+        }
+
+        async function saveRomsDir() {
+            const dir = document.getElementById('roms-dir').value.trim();
+            const res = await fetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ romsDir: dir })
+            });
+            if (res.ok) {
+                showToast('ROMs folder saved');
+                await refreshSettings();
+                loadGames();
+            } else {
+                showToast((await res.json()).error || 'Could not save folder');
+            }
+        }
+
+        async function browseRomsDir() {
+            if (!window.electronAPI) {
+                showToast('Type the folder path, then press Save');
+                return;
+            }
+            const dir = await window.electronAPI.pickFolder();
+            if (dir) {
+                document.getElementById('roms-dir').value = dir;
+                saveRomsDir();
+            }
         }
 
         // ================= GAMEPAD ENGINE =================
@@ -476,7 +750,9 @@
             }
 
             const now = Date.now();
-            if (gp && now - lastInputTime > 180) { // 180ms debounce for responsive navigation
+            if (gp && settingsOpen && gp.buttons[1]?.pressed && now - lastInputTime > 300) {
+                closeSettings(); // B closes settings
+            } else if (gp && !gameRunning && !settingsOpen && now - lastInputTime > 180) { // 180ms debounce for responsive navigation
                 const leftStickX = gp.axes[0] || 0;
                 const leftStickY = gp.axes[1] || 0;
                 const dpadUp = gp.buttons[12]?.pressed;
@@ -485,6 +761,7 @@
                 const dpadRight = gp.buttons[15]?.pressed;
                 const buttonA = gp.buttons[0]?.pressed;
                 const buttonY = gp.buttons[3]?.pressed;
+                const buttonX = gp.buttons[2]?.pressed;
                 const bumperL = gp.buttons[4]?.pressed;
                 const bumperR = gp.buttons[5]?.pressed;
 
@@ -529,6 +806,9 @@
                 if (bumperR) { nextPage(); lastInputTime = now; }
                 if (bumperL) { prevPage(); lastInputTime = now; }
 
+                // Settings (X Button)
+                if (buttonX) { openSettings(); lastInputTime = now + 500; }
+
                 // Import ROM zips (Y Button)
                 if (buttonY) { importRoms(); lastInputTime = now + 500; }
 
@@ -544,6 +824,8 @@
 
             requestAnimationFrame(pollGamepad);
         }
+
+        window.addEventListener('keydown', e => { if (e.key === 'Escape' && settingsOpen) closeSettings(); });
 
         // Start Loop & Load
         loadGames();

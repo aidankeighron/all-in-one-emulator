@@ -1,0 +1,31 @@
+{
+  "name": "emulator-menu",
+  "version": "1.0.0",
+  "description": "Wii-style menu that launches Dolphin, PCSX2, DuckStation, RPCS3 and PPSSPP",
+  "author": "aidankeighron",
+  "license": "UNLICENSED",
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "electron .",
+    "server": "node ui/server.js",
+    "test": "node --test test/*.test.js",
+    "dist": "electron-builder --linux AppImage"
+  },
+  "dependencies": {
+    "yauzl": "^3.3.0"
+  },
+  "devDependencies": {
+    "electron": "^44.9.0",
+    "electron-builder": "^26.15.3",
+    "yazl": "^3.3.1"
+  },
+  "build": {
+    "appId": "com.aidankeighron.emulatormenu",
+    "productName": "Emulator Menu",
+    "files": ["electron/**", "ui/**", "emulators.json", "package.json"],
+    "linux": {
+      "target": "AppImage",
+      "category": "Game"
+    }
+  }
+}
