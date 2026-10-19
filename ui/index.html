@@ -214,6 +214,34 @@
             transform: scale(1.08);
         }
 
+        .left-buttons {
+            display: flex;
+            gap: 14px;
+        }
+
+        .round-button.busy {
+            opacity: 0.5;
+            pointer-events: none;
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 96px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(60, 60, 60, 0.92);
+            color: #fff;
+            padding: 10px 22px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            opacity: 0;
+            transition: opacity 0.2s;
+            pointer-events: none;
+        }
+
+        .toast.show { opacity: 1; }
+
         .center-time {
             text-align: center;
         }
@@ -250,13 +278,18 @@
     </div>
 
     <div class="bottom-bar">
-        <div class="round-button" onclick="location.reload()" title="Refresh ROMs">Wii</div>
+        <div class="left-buttons">
+            <div class="round-button" onclick="location.reload()" title="Refresh ROMs">Wii</div>
+            <div class="round-button" id="import-button" onclick="importRoms()" title="Import ROM zips (Y)">Zip</div>
+        </div>
         <div class="center-time">
             <div class="time-display" id="clock">12:00</div>
             <div class="date-display" id="date">Mon 10/19</div>
         </div>
         <div class="round-button" title="Message Board">&#9993;</div>
     </div>
+
+    <div class="toast" id="toast"></div>
 
     <script>
         const CHANNELS_PER_PAGE = 12;
@@ -359,6 +392,31 @@
             }
         }
 
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            toast.innerText = msg;
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+
+        // Unzip any archives dropped in roms/ and refresh the grid
+        async function importRoms() {
+            const btn = document.getElementById('import-button');
+            if (btn.classList.contains('busy')) return;
+            btn.classList.add('busy');
+            showToast('Importing ROMs...');
+            try {
+                const res = await fetch('/api/process-roms');
+                const { ok, output } = await res.json();
+                await loadGames();
+                const added = (output.match(/\[ROMS\] Added/g) || []).length;
+                showToast(ok ? `Import complete: ${added} game(s) added` : 'Import finished with problems (see server log)');
+            } catch (err) {
+                showToast('Import failed');
+            }
+            btn.classList.remove('busy');
+        }
+
         async function launchGame(game) {
             console.log(`Launching ${game.title}...`);
             await fetch(`/api/launch?console=${game.console}&path=${encodeURIComponent(game.fullPath)}`);
@@ -398,6 +456,7 @@
                 const dpadLeft = gp.buttons[14]?.pressed;
                 const dpadRight = gp.buttons[15]?.pressed;
                 const buttonA = gp.buttons[0]?.pressed;
+                const buttonY = gp.buttons[3]?.pressed;
                 const bumperL = gp.buttons[4]?.pressed;
                 const bumperR = gp.buttons[5]?.pressed;
 
@@ -441,6 +500,9 @@
                 // Bumpers for Page Flipping
                 if (bumperR) { nextPage(); lastInputTime = now; }
                 if (bumperL) { prevPage(); lastInputTime = now; }
+
+                // Import ROM zips (Y Button)
+                if (buttonY) { importRoms(); lastInputTime = now + 500; }
 
                 // Launch (A Button)
                 if (buttonA) {

@@ -1,7 +1,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const { exec } = require('child_process');
+const { exec, execFile } = require('child_process');
 
 const PORT = 3000;
 const ROMS_DIR = path.resolve(__dirname, '../roms');
@@ -12,7 +12,7 @@ function getGames() {
     if (!fs.existsSync(ROMS_DIR)) return games;
 
     const consoles = fs.readdirSync(ROMS_DIR, { withFileTypes: true })
-        .filter(dirent => dirent.isDirectory())
+        .filter(dirent => dirent.isDirectory() && !dirent.name.startsWith('.'))
         .map(dirent => dirent.name);
 
     consoles.forEach(consoleName => {
@@ -21,7 +21,7 @@ function getGames() {
 
         files.forEach(file => {
             // Ignore hidden files and metadata text files
-            if (file.startsWith('.') || file.endsWith('.txt')) return;
+            if (file.startsWith('.') || file.endsWith('.txt') || file.toLowerCase().endsWith('.zip')) return;
 
             const ext = path.extname(file);
             const rawTitle = path.basename(file, ext);
@@ -44,11 +44,35 @@ function getGames() {
     return games;
 }
 
+// Unzip and file any new ROM archives via process-roms.sh (one run at a time)
+let importing = null;
+function processRoms() {
+    if (!importing) {
+        importing = new Promise(resolve => {
+            execFile(path.resolve(__dirname, '../process-roms.sh'), (err, stdout, stderr) => {
+                importing = null;
+                const output = (stdout + stderr).trim();
+                console.log(output);
+                resolve({ ok: !err, output });
+            });
+        });
+    }
+    return importing;
+}
+
 const server = http.createServer((req, res) => {
     // API: Dynamic game list
     if (req.url === '/api/games') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify(getGames()));
+    }
+
+    // API: Unzip new ROM archives
+    if (req.url === '/api/process-roms') {
+        return processRoms().then(result => {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(result));
+        });
     }
 
     // API: Launch Game Container
@@ -88,5 +112,6 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(PORT, () => {
+    processRoms();
     console.log(`Wii System Menu running at: http://localhost:${PORT}`);
 });
