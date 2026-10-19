@@ -43,6 +43,11 @@ function grantAccess(id, dir) {
     return run(['override', '--user', `--filesystem=${dir}:ro`, id]);
 }
 
+// Forcefully stops every running instance of this app
+function kill(id) {
+    return run(['kill', id]);
+}
+
 // Starts the emulator; resolves once it has exited
 function launch(id, args, onExit) {
     const child = spawn('flatpak', ['run', id, ...args], { stdio: ['ignore', 'ignore', 'pipe'] });
@@ -53,4 +58,4 @@ function launch(id, args, onExit) {
     return child;
 }
 
-module.exports = { available, isInstalled, install, uninstall, grantAccess, launch };
+module.exports = { available, isInstalled, install, uninstall, grantAccess, launch, kill };
