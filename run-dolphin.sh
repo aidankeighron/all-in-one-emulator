@@ -23,6 +23,10 @@ for g in video render input audio; do
   [ -n "$gid" ] && GROUPS_ARGS+=(--group-add "$gid")
 done
 
+# Let this user's processes (the container runs as the same UID) talk to the X server.
+# Doing it here means it works every launch, without relying on ~/.profile having run.
+xhost +SI:localuser:"$(id -un)" >/dev/null 2>&1 || echo "[run-dolphin] warning: xhost failed (DISPLAY=$DISPLAY)" >&2
+
 docker run --rm \
   --name dolphin_instance \
   --ipc=host \
