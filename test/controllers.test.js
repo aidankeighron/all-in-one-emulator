@@ -14,7 +14,7 @@ const PROC = [
     dev('Nintendo Wii Remote Accelerometer', { bus: '0005', vendor: '057e', product: '0306', handlers: 'event8 js3' }),
     dev('Nintendo Wii Remote IR', { bus: '0005', vendor: '057e', product: '0306', handlers: 'event9 js4' }),
     dev('Logitech USB Optical Mouse', { vendor: '046d', product: 'c077', handlers: 'mouse0 event4' }),
-    dev('Sony Interactive Entertainment Wireless Controller', { bus: '0005', vendor: '054c', product: '0ce6', handlers: 'event10 js5' })
+    dev('8BitDo Pro 2', { bus: '0005', vendor: '2dc8', product: '6003', handlers: 'event10 js5' })
 ].join('\n');
 
 test('parseProc reads names, ids and handlers', () => {
@@ -32,13 +32,12 @@ test('classify recognises each family', () => {
     assert.strictEqual(controllers.classify({ name: 'Joy-Con (L)', vendor: '057e', product: '2006' }), 'switch');
     assert.strictEqual(controllers.classify({ name: 'Nintendo Wii Remote', vendor: '057e', product: '0306' }), 'wiimote');
     assert.strictEqual(controllers.classify({ name: 'Nintendo GameCube Controller Adapter', vendor: '057e', product: '0337' }), 'gamecube');
-    assert.strictEqual(controllers.classify({ name: 'Wireless Controller', vendor: '054c' }), 'playstation');
     assert.strictEqual(controllers.classify({ name: 'Some Pad', vendor: '1234' }), 'generic');
 });
 
 test('build keeps real controllers, drops keyboards, mice and Wii Remote sub-devices', () => {
     const list = controllers.build(controllers.parseProc(PROC));
-    assert.deepStrictEqual(list.map(c => c.kind), ['xbox', 'switch', 'wiimote', 'playstation']);
+    assert.deepStrictEqual(list.map(c => c.kind), ['xbox', 'switch', 'wiimote', 'generic']);
     assert.deepStrictEqual(list.map(c => c.player), [1, 2, 3, 4]);
     assert.strictEqual(list[1].connection, 'Bluetooth');
     assert.strictEqual(list[0].connection, 'USB');

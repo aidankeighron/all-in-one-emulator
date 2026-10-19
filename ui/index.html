@@ -206,10 +206,6 @@
         .badge-wii { background: linear-gradient(to bottom, #5cc6fa, #2c9fe0); }
         .badge-gamecube { background: linear-gradient(to bottom, #8a63c9, #5b3a9c); }
         .badge-switch { background: linear-gradient(to bottom, #f0525c, #d0222e); }
-        .badge-ps1 { background: linear-gradient(to bottom, #8d98a5, #5d6874); }
-        .badge-ps2 { background: linear-gradient(to bottom, #4f6fd8, #2a3f9c); }
-        .badge-ps3 { background: linear-gradient(to bottom, #3a3f47, #15181c); }
-        .badge-psp { background: linear-gradient(to bottom, #36b9a8, #1b8577); }
         .badge-empty { background: transparent; }
 
         .channel-title {
@@ -695,7 +691,7 @@
                 const hint = document.createElement('div');
                 hint.className = 'empty-hint';
                 hint.innerHTML = `<div>No games found in <code>${escapeHtml(romsDir)}</code><br>
-                    Put games or .zip files in folders like <code>wii</code>, <code>gamecube</code>, <code>ps2</code>,
+                    Put games or .zip files in folders like <code>wii</code>, <code>gamecube</code>, <code>switch</code>,
                     then press the import button.<br>Install emulators from the settings.</div>`;
                 grid.appendChild(hint);
             }
@@ -753,12 +749,6 @@
                     ${dot(384, 250, 30, '#58c06a')}${dot(336, 282, 13, '#e0453a')}
                     <rect x="404" y="215" width="34" height="14" rx="7" fill="#d9d2f2" transform="rotate(25 421 222)"/>
                     <rect x="338" y="214" width="34" height="14" rx="7" fill="#d9d2f2" transform="rotate(-25 355 221)"/>`);
-            }
-            if (kind === 'playstation') {
-                return wrap(`<path d="${BODY}" fill="#d6dde4" stroke="#aab4be" stroke-width="6"/>
-                    ${dpadCross(165, 240, '#8d98a5')}
-                    ${dot(215, 296, 22, '#5b6671')}${dot(297, 296, 22, '#5b6671')}
-                    ${dot(392, 212, 12, '#3aa6e8')}${dot(352, 250, 12, '#e86aa6')}${dot(432, 250, 12, '#e0453a')}${dot(392, 288, 12, '#6cbf3e')}`);
             }
             if (kind === 'switch') {
                 return wrap(`<path d="${BODY}" fill="#5f666d" stroke="#3f454b" stroke-width="6"/>

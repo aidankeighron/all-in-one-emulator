@@ -85,50 +85,13 @@ test('Dolphin: second identical pad uses the next name index', () => {
     assert.strictEqual(gc.get('GCPad2', 'Device'), 'SDL/1/Xbox 360 Controller');
 });
 
-test('PCSX2 and DuckStation: asks for a first run instead of inventing a settings file', () => {
-    const home = tmpHome();
-    assert.strictEqual(inputconfig.apply('pcsx2', [pad()], { home }).status, 'needs-first-run');
-    assert.strictEqual(inputconfig.apply('duckstation', [pad()], { home }).status, 'needs-first-run');
-});
-
-test('PCSX2: writes SDL bindings into the existing settings and keeps the rest', () => {
-    const home = tmpHome();
-    const file = path.join(home, '.var/app/net.pcsx2.PCSX2/config/PCSX2/inis/PCSX2.ini');
-    fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(file, '[UI]\nTheme = dark\n\n[Pad1]\nUp = Keyboard/Up\n');
-    const result = inputconfig.apply('pcsx2', [pad({ sdlIndex: 2 })], { home });
-    assert.strictEqual(result.status, 'configured');
-    const ini = Ini.read(file);
-    assert.strictEqual(ini.get('UI', 'Theme'), 'dark');
-    assert.strictEqual(ini.get('Pad1', 'Type'), 'DualShock2');
-    assert.strictEqual(ini.get('Pad1', 'Cross'), 'SDL-2/A');
-    assert.strictEqual(ini.get('Pad1', 'L2'), 'SDL-2/+LeftTrigger');
-    assert.strictEqual(ini.get('Pad1', 'LUp'), 'SDL-2/-LeftY');
-    assert.strictEqual(ini.get('InputSources', 'SDL'), 'true');
-    assert.ok(fs.existsSync(`${file}.emulator-menu.bak`));
-});
-
-test('DuckStation: finds settings under data/ when that is where they are', () => {
-    const home = tmpHome();
-    const file = path.join(home, '.var/app/org.duckstation.DuckStation/data/duckstation/settings.ini');
-    fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(file, '[Main]\nSettingsVersion = 3\n');
-    const result = inputconfig.apply('duckstation', [pad(), pad({ id: 'js1', sdlIndex: 1 })], { home });
-    assert.strictEqual(result.status, 'configured');
-    const ini = Ini.read(file);
-    assert.strictEqual(ini.get('Main', 'SettingsVersion'), '3');
-    assert.strictEqual(ini.get('Pad1', 'Type'), 'AnalogController');
-    assert.strictEqual(ini.get('Pad2', 'Cross'), 'SDL-1/A');
-});
-
-test('PPSSPP needs nothing; RPCS3 and Ryujinx are reported as manual', () => {
-    assert.strictEqual(inputconfig.apply('ppsspp', [pad()]).status, 'automatic');
-    assert.strictEqual(inputconfig.apply('rpcs3', [pad()]).status, 'unsupported');
+test('Ryujinx is reported as manual', () => {
+    assert.strictEqual(inputconfig.apply('ryujinx', [pad()]).status, 'unsupported');
 });
 
 test('assignments say where each controller plays', () => {
     const list = [pad(), wiimote(), adapter];
     const roles = inputconfig.assignments(list);
-    assert.deepStrictEqual(roles.js0, ['GameCube port 1', 'Wii Remote 1', 'PS1/PS2 pad 1']);
+    assert.deepStrictEqual(roles.js0, ['GameCube port 1', 'Wii Remote 1']);
     assert.deepStrictEqual(roles.js1, ['Wii Remote 2']);
 });

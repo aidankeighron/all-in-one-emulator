@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const { createDetector, comboFor } = require('../ui/lib/hotkey');
+const { createDetector } = require('../ui/lib/hotkey');
 
 function ev(number, value, init = false) {
     const b = Buffer.alloc(8);
@@ -53,11 +53,4 @@ test('ignores axis events and counts initial button state', () => {
     assert.ok(!t.armed);
     d.feed(Buffer.concat([ev(6, 1, true), ev(7, 1, true)]));
     assert.ok(t.armed);
-});
-
-test('picks the combo by controller family', () => {
-    assert.deepStrictEqual(comboFor('Microsoft X-Box One pad'), [6, 7]);
-    assert.deepStrictEqual(comboFor('Xbox Wireless Controller'), [6, 7]);
-    assert.deepStrictEqual(comboFor('Sony Interactive Entertainment DualSense Wireless Controller'), [8, 9]);
-    assert.deepStrictEqual(comboFor(''), [6, 7]);
 });

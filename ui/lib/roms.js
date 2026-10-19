@@ -7,7 +7,6 @@ const yauzl = require('yauzl');
 
 const fsp = fs.promises;
 const MIN_AGE_MS = 60 * 1000;          // zips modified more recently may still be copying
-const COMPANION_EXTS = new Set(['bin']); // .cue sheets need their .bin files alongside
 const MAX_DEPTH = 3;
 
 function extOf(name) {
@@ -54,14 +53,8 @@ function scanGames(romsDir, manifest) {
             let stat;
             try { stat = fs.statSync(path.join(dir, entry)); } catch { continue; }
 
-            let title;
-            if (stat.isDirectory()) {
-                if (!emu.directoryMarker || !fs.existsSync(path.join(dir, entry, emu.directoryMarker))) continue;
-                title = entry;
-            } else {
-                if (!emu.extensions.includes(extOf(entry))) continue;
-                title = path.basename(entry, path.extname(entry));
-            }
+            if (stat.isDirectory() || !emu.extensions.includes(extOf(entry))) continue;
+            const title = path.basename(entry, path.extname(entry));
 
             const rel = `${d.name}/${entry}`;
             games.push({
@@ -114,19 +107,6 @@ function findSevenZip() {
         }
     }
     return null;
-}
-
-function listZip(zipPath) {
-    return new Promise((resolve, reject) => {
-        yauzl.open(zipPath, { lazyEntries: true, autoClose: true }, (err, zf) => {
-            if (err) return reject(err);
-            const names = [];
-            zf.on('error', reject);
-            zf.on('end', () => resolve(names));
-            zf.on('entry', e => { names.push(e.fileName); zf.readEntry(); });
-            zf.readEntry();
-        });
-    });
 }
 
 // Extracts entries with the wanted extensions (flattened) into tmpDir; returns [{file, name}]
@@ -215,7 +195,7 @@ async function placeFile(src, name, folder, romsDir, log) {
 }
 
 // Unzips every .zip under romsDir and files the games into romsDir/<folder>/.
-// A zip already inside a known folder (roms/ps1/x.zip) stays in that folder.
+// A zip already inside a known folder (roms/switch/x.zip) stays in that folder.
 async function processRoms(romsDir, manifest, { keepZips = !!process.env.KEEP_ZIPS } = {}) {
     const lines = [];
     const log = msg => { lines.push(msg); console.log(`[ROMS] ${msg}`); };
@@ -255,32 +235,25 @@ async function processRoms(romsDir, manifest, { keepZips = !!process.env.KEEP_ZI
             let items;
             if (why) {
                 await extractWithSevenZip(sevenZip, zip, tmp);
-                items = (await walkFiles(tmp)).filter(i => gameExts.has(extOf(i.name)) || COMPANION_EXTS.has(extOf(i.name)));
+                items = (await walkFiles(tmp)).filter(i => gameExts.has(extOf(i.name)));
             } else {
-                const names = await listZip(zip);
-                const wanted = new Set(gameExts);
-                if (names.some(n => extOf(n) === 'cue')) COMPANION_EXTS.forEach(x => wanted.add(x));
-                items = await extractZip(zip, tmp, wanted);
+                items = await extractZip(zip, tmp, gameExts);
             }
 
-            const primary = items.filter(i => !COMPANION_EXTS.has(extOf(i.name)) || gameExts.has(extOf(i.name)));
-            if (primary.length === 0) {
+            if (items.length === 0) {
                 log(`No game files in ${rel}; leaving it alone`);
                 failed++;
                 continue;
             }
 
-            let ok = true, firstFolder;
+            let ok = true;
             for (const item of items) {
-                const ext = extOf(item.name);
-                const companion = COMPANION_EXTS.has(ext) && !gameExts.has(ext);
-                const folder = companion ? firstFolder : (forced || await detectFolder(item.file, ext, manifest));
+                const folder = forced || await detectFolder(item.file, extOf(item.name), manifest);
                 if (!folder) {
-                    log(`Could not tell which system ${item.name} is for; skipping it. Put the zip inside roms/<system>/ (e.g. roms/ps2/) to choose.`);
+                    log(`Could not tell which system ${item.name} is for; skipping it. Put the zip inside roms/<system>/ (e.g. roms/switch/) to choose.`);
                     ok = false;
                     continue;
                 }
-                firstFolder = firstFolder || folder;
                 try {
                     if (await placeFile(item.file, item.name, folder, romsDir, log)) added++;
                 } catch (err) {

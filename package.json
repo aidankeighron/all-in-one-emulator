@@ -1,7 +1,7 @@
 {
   "name": "emulator-menu",
   "version": "1.0.0",
-  "description": "Wii-style menu that launches Dolphin, PCSX2, DuckStation, RPCS3 and PPSSPP",
+  "description": "Wii-style menu that launches Dolphin (Wii/GameCube) and Ryujinx (Switch)",
   "author": "aidankeighron",
   "license": "UNLICENSED",
   "main": "electron/main.js",

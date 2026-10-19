@@ -12,12 +12,11 @@ const KIND_LABELS = {
     switch: 'Switch Controller',
     gamecube: 'GameCube Controller',
     wiimote: 'Wii Remote',
-    playstation: 'PlayStation Controller',
     generic: 'Game Controller'
 };
 
 // Kinds that look like a normal gamepad to SDL, so the emulators can all map them the same way
-const PAD_KINDS = new Set(['xbox', 'switch', 'playstation', 'generic']);
+const PAD_KINDS = new Set(['xbox', 'switch', 'generic']);
 
 // Input devices that sit next to a gamepad but are not one (the Wii Remote exposes several)
 const NOT_A_PAD = /keyboard|mouse|touchpad|trackpad|consumer control|system control|power button|sleep button|video bus|lid switch|hdmi|speaker|headphone|headset|webcam|camera|\bir\b|accelerometer|motion ?plus|motion sensors|gyro|imu|nunchuk|classic controller|balance board|touchscreen|pen\b|stylus/i;
@@ -52,7 +51,6 @@ function classify({ name = '', vendor = '', product = '' }) {
     if (/gamecube|gc\/n64|gc adapter/i.test(name)) return 'gamecube';
     if (vendor === NINTENDO || /nintendo|switch|joy-?con|pro controller/i.test(name)) return 'switch';
     if (vendor === '045e' || /xbox|x-box|xinput/i.test(name)) return 'xbox';
-    if (vendor === '054c' || /dualshock|dualsense|playstation|wireless controller/i.test(name)) return 'playstation';
     return 'generic';
 }
 

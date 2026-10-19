@@ -125,7 +125,7 @@ async function launchGame(relPath, onGameState) {
     return { status: 200, body: { status: 'launched', emulator: emu.id } };
 }
 
-// Back+Start (Share+Options on PlayStation pads) held for 1.5s: quit the running game
+// Back+Start held for 1.5s: quit the running game
 function stopCurrent() {
     if (!current || !current.child) return;
     const { flatpak: id } = current;

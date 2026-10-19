@@ -46,18 +46,16 @@ test('loose zips are sorted by disc type', async () => {
     assert.deepStrictEqual(fs.readdirSync(dir).filter(n => n.startsWith('.')), [], 'no temp dirs left');
 });
 
-test('a zip inside a system folder stays in that folder; cue sheets keep their bin', async () => {
+test('a zip inside a system folder stays in that folder', async () => {
     const dir = await setup();
-    fs.mkdirSync(path.join(dir, 'ps1'));
-    await makeZip(path.join(dir, 'ps1', 'g.zip'), { 'Crash.cue': Buffer.from('FILE'), 'Crash.bin': Buffer.alloc(16) });
-    old(path.join(dir, 'ps1', 'g.zip'));
+    fs.mkdirSync(path.join(dir, 'wii'));
+    await makeZip(path.join(dir, 'wii', 'g.zip'), { 'Mystery.iso': Buffer.alloc(0x100) });
+    old(path.join(dir, 'wii', 'g.zip'));
 
     const result = await roms.processRoms(dir, manifest);
     assert.ok(result.ok, result.lines.join('\n'));
-    assert.ok(fs.existsSync(path.join(dir, 'ps1', 'Crash.cue')));
-    assert.ok(fs.existsSync(path.join(dir, 'ps1', 'Crash.bin')));
-    const games = roms.scanGames(dir, manifest);
-    assert.deepStrictEqual(games.map(g => [g.title, g.emulator]), [['Crash', 'duckstation']]);
+    assert.ok(fs.existsSync(path.join(dir, 'wii', 'Mystery.iso')));
+    assert.deepStrictEqual(roms.scanGames(dir, manifest).map(g => [g.title, g.emulator]), [['Mystery', 'dolphin']]);
 });
 
 test('bad, recent and ambiguous zips are left alone with a clear message', async () => {
@@ -90,17 +88,16 @@ test('switch zips are sorted by extension and scanned for Ryujinx', async () => 
 
 test('scanGames maps folders to emulators and ignores other files', async () => {
     const dir = await setup();
-    for (const [folder, file] of [['wii', 'Super_Mario.iso'], ['gamecube', 'Melee.rvz'], ['psp', 'GTA.cso'], ['wii', 'notes.txt'], ['other', 'x.iso']]) {
+    for (const [folder, file] of [['wii', 'Super_Mario.iso'], ['gamecube', 'Melee.rvz'], ['switch', 'Zelda.nsp'], ['wii', 'notes.txt'], ['other', 'x.iso']]) {
         fs.mkdirSync(path.join(dir, folder), { recursive: true });
         fs.writeFileSync(path.join(dir, folder, file), '');
     }
-    fs.mkdirSync(path.join(dir, 'ps3', 'Demon', 'PS3_GAME'), { recursive: true });
-    fs.mkdirSync(path.join(dir, 'ps3', 'NotAGame'));
+    fs.mkdirSync(path.join(dir, 'wii', 'SomeFolder'));
 
     const games = roms.scanGames(dir, manifest);
     assert.deepStrictEqual(
         games.map(g => `${g.console}:${g.title}:${g.emulator}`).sort(),
-        ['gamecube:Melee:dolphin', 'ps3:Demon:rpcs3', 'psp:GTA:ppsspp', 'wii:Super Mario:dolphin']
+        ['gamecube:Melee:dolphin', 'switch:Zelda:ryujinx', 'wii:Super Mario:dolphin']
     );
 });
 

@@ -9,15 +9,8 @@ const EVENT_SIZE = 8;               // struct js_event { u32 time; s16 value; u8
 const JS_EVENT_BUTTON = 0x01;
 const JS_EVENT_INIT = 0x80;
 
-// Button numbers of the Back+Start / Share+Options pair, by controller family
-const XBOX_COMBO = [6, 7];
-const PLAYSTATION_COMBO = [8, 9];
-
-function comboFor(deviceName) {
-    return /dualshock|dualsense|playstation|sony|wireless controller/i.test(deviceName) && !/xbox|x-box/i.test(deviceName)
-        ? PLAYSTATION_COMBO
-        : XBOX_COMBO;
-}
+// Button numbers of the Back+Start pair
+const COMBO = [6, 7];
 
 // Tracks which buttons are down and calls onTrigger once the combo has been held for holdMs
 function createDetector({ buttons, holdMs = HOLD_MS, onTrigger, setTimer = setTimeout, clearTimer = clearTimeout }) {
@@ -53,14 +46,6 @@ function createDetector({ buttons, holdMs = HOLD_MS, onTrigger, setTimer = setTi
     };
 }
 
-function deviceName(js) {
-    try {
-        return fs.readFileSync(`/sys/class/input/${js}/device/name`, 'utf8').trim();
-    } catch {
-        return '';
-    }
-}
-
 // Starts watching every joystick device. Returns a function that stops watching.
 function start(onCombo, { holdMs = HOLD_MS } = {}) {
     let names;
@@ -79,7 +64,7 @@ function start(onCombo, { holdMs = HOLD_MS } = {}) {
             console.warn(`[HOTKEY] cannot read ${js}: ${err.code}`);
             continue;
         }
-        const detector = createDetector({ buttons: comboFor(deviceName(js)), holdMs, onTrigger: onCombo });
+        const detector = createDetector({ buttons: COMBO, holdMs, onTrigger: onCombo });
         const buf = Buffer.alloc(EVENT_SIZE * 64);
         const timer = setInterval(() => {
             for (;;) {
@@ -98,4 +83,4 @@ function start(onCombo, { holdMs = HOLD_MS } = {}) {
     return () => watchers.forEach(stop => stop());
 }
 
-module.exports = { start, createDetector, comboFor };
+module.exports = { start, createDetector };

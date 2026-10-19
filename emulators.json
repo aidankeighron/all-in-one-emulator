@@ -5,55 +5,44 @@
       "name": "Dolphin",
       "description": "Nintendo Wii and GameCube",
       "flatpak": "org.DolphinEmu.dolphin-emu",
-      "folders": ["wii", "gamecube"],
-      "extensions": ["iso", "rvz", "wbfs", "gcm", "ciso", "gcz", "wia", "wad"],
-      "args": ["-b", "-e", "{rom}"]
-    },
-    {
-      "id": "pcsx2",
-      "name": "PCSX2",
-      "description": "Sony PlayStation 2 (needs a PS2 BIOS)",
-      "flatpak": "net.pcsx2.PCSX2",
-      "folders": ["ps2"],
-      "extensions": ["iso", "chd", "cso"],
-      "args": ["-batch", "--", "{rom}"]
-    },
-    {
-      "id": "duckstation",
-      "name": "DuckStation",
-      "description": "Sony PlayStation 1 (needs a PS1 BIOS)",
-      "flatpak": "org.duckstation.DuckStation",
-      "folders": ["ps1"],
-      "extensions": ["cue", "chd", "pbp", "m3u", "iso"],
-      "args": ["-batch", "--", "{rom}"]
-    },
-    {
-      "id": "rpcs3",
-      "name": "RPCS3",
-      "description": "Sony PlayStation 3 (needs PS3 firmware, strong PC)",
-      "flatpak": "net.rpcs3.RPCS3",
-      "folders": ["ps3"],
-      "extensions": ["iso"],
-      "directoryMarker": "PS3_GAME",
-      "args": ["--no-gui", "{rom}"]
-    },
-    {
-      "id": "ppsspp",
-      "name": "PPSSPP",
-      "description": "Sony PlayStation Portable",
-      "flatpak": "org.ppsspp.PPSSPP",
-      "folders": ["psp"],
-      "extensions": ["iso", "cso", "pbp"],
-      "args": ["{rom}"]
+      "folders": [
+        "wii",
+        "gamecube"
+      ],
+      "extensions": [
+        "iso",
+        "rvz",
+        "wbfs",
+        "gcm",
+        "ciso",
+        "gcz",
+        "wia",
+        "wad"
+      ],
+      "args": [
+        "-b",
+        "-e",
+        "{rom}"
+      ]
     },
     {
       "id": "ryujinx",
       "name": "Ryujinx (Ryubing)",
       "description": "Nintendo Switch, community-maintained Ryujinx (needs prod.keys and firmware)",
       "flatpak": "io.github.ryubing.Ryujinx",
-      "folders": ["switch"],
-      "extensions": ["nsp", "xci", "nca", "nro", "nso"],
-      "args": ["{rom}"]
+      "folders": [
+        "switch"
+      ],
+      "extensions": [
+        "nsp",
+        "xci",
+        "nca",
+        "nro",
+        "nso"
+      ],
+      "args": [
+        "{rom}"
+      ]
     }
   ]
 }
