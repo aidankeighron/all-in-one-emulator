@@ -49,7 +49,7 @@ Go to Graphics -> Check Start in Fullscreen.
 
 Go to Options -> Hotkey Settings -> Map Exit to a button combo on your controller (like Select + Start).
 
-Close Dolphin. Your settings are now permanently saved to ~/all-in-one-emulator/profiles/profile_1/config.
+Close Dolphin. Your settings are now permanently saved to ~/all-in-one-emulator/profiles/profile_1/home/.config/dolphin-emu.
 
 # Run
 
