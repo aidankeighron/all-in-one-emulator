@@ -136,9 +136,20 @@ function ryujinxId(c, all) {
     return `${Math.max(0, same.indexOf(c))}-${text}`;
 }
 
-function writeRyujinx(controllers, { home, platform, players, profiles }) {
-    if (platform === 'win32') return { status: 'skipped', message: 'On Windows, set up Switch controllers in Ryujinx itself' };
-    const file = path.join(flatpakDirs(home, 'io.github.ryubing.Ryujinx').config, 'Ryujinx', 'Config.json');
+// Windows gives the menu no SDL id to work from (the browser knows a pad's name and, for some, its vendor and product,
+// but not the version SDL puts in the id). So a pad is matched to an entry Ryujinx already has for it: by the vendor
+// and product inside the id, else by name. The first time a pad is used it is set up once in Ryujinx itself.
+function knownEntry(c, old) {
+    const parts = e => { const m = /^\d+-[0-9a-f]{8}-([0-9a-f]{4})-[0-9a-f]{4}-([0-9a-f]{4})-/i.exec(e.id || ''); return m ? { vendor: m[1].toLowerCase(), product: m[2].toLowerCase() } : {}; };
+    const swap = h => (h && h.length === 4 ? h.slice(2) + h.slice(0, 2) : h);   // the id prints the product's two bytes swapped
+    const byIds = c.vendor && c.product ? old.find(e => { const p = parts(e); return p.vendor === c.vendor && p.product === swap(c.product); }) : null;
+    return byIds || old.find(e => String(e.name || '').replace(/\s*\(\d+\)$/, '').toLowerCase() === c.name.toLowerCase());
+}
+
+function writeRyujinx(controllers, { home, platform, env, exePath, players, profiles }) {
+    const win = platform === 'win32';
+    const root = adapters.create({ platform, home, env, exePath }).get('ryujinx').dataRoot();
+    const file = path.join(root, 'Config.json');
     if (!fs.existsSync(file)) return { status: 'skipped', message: 'Open Ryujinx once from Settings first' };
     const slots = slotsFor(controllers, { players }, profiles).filter(s => s.mode === 'pad');
     if (!slots.length) return { status: 'skipped', message: 'No supported controller connected' };
@@ -147,24 +158,35 @@ function writeRyujinx(controllers, { home, platform, players, profiles }) {
     const config = JSON.parse(original);
     const old = Array.isArray(config.input_config) ? config.input_config : [];
     const pads = controllers.filter(c => c.js !== null && c.js !== undefined);
-    const made = slots.map(s => {
+    const made = [], unknown = [];
+    for (const s of slots) {
         const index = `Player${s.index + 1}`;
+        let id, template;
+        if (win) {
+            const known = knownEntry(s.controller, old);
+            if (!known) { unknown.push(s.controller.name); continue; }
+            id = known.id; template = known;
+        } else {
+            id = ryujinxId(s.controller, pads);
+            template = old.find(e => e.player_index === index) || old.find(e => e.backend === 'GamepadSDL2') || RYUJINX_PAD;
+        }
         // Keep the person's own button layout for this player when there is one
-        const mine = old.find(e => e.player_index === index) || old.find(e => e.backend === 'GamepadSDL2') || RYUJINX_PAD;
-        const id = ryujinxId(s.controller, pads);
-        return { ...JSON.parse(JSON.stringify(mine)), backend: 'GamepadSDL2', id, name: `${s.controller.name} (${id.split('-')[0]})`, player_index: index };
-    });
+        const mine = old.find(e => e.player_index === index && e.id === id) || template;
+        made.push({ ...JSON.parse(JSON.stringify(mine)), backend: 'GamepadSDL2', id, name: win ? mine.name : `${s.controller.name} (${id.split('-')[0]})`, player_index: index });
+    }
+    if (!made.length) return { status: 'skipped', message: `Set ${unknown[0]} up once in Ryujinx (Settings → Open → Input); the menu then keeps it on the right player` };
     const taken = new Set(made.map(e => e.player_index));
     const ids = new Set(made.map(e => e.id));
     const next = [...made, ...old.filter(e => !taken.has(e.player_index) && !ids.has(e.id))]
         .sort((a, b) => a.player_index.localeCompare(b.player_index));
     config.input_config = next;
     const text = JSON.stringify(config, null, 2);
-    if (text === original.replace(/\r\n/g, '\n').trimEnd()) return { status: 'configured', changed: false, message: made.map(e => `${e.player_index}: ${e.name}`).join(', ') };
+    const note = made.map(e => `${e.player_index}: ${e.name}`).join(', ') + (unknown.length ? ` (${unknown.join(', ')} needs a one-time setup in Ryujinx)` : '');
+    if (text === original.replace(/\r\n/g, '\n').trimEnd()) return { status: 'configured', changed: false, message: note };
     if (!fs.existsSync(file + '.emulator-menu.bak')) fs.copyFileSync(file, file + '.emulator-menu.bak');
     fs.writeFileSync(`${file}.tmp-${process.pid}`, text);
     fs.renameSync(`${file}.tmp-${process.pid}`, file);
-    return { status: 'configured', changed: true, message: made.map(e => `${e.player_index}: ${e.name}`).join(', ') };
+    return { status: 'configured', changed: true, message: note };
 }
 
 const writers = { dolphin: writeDolphin, ryujinx: writeRyujinx };

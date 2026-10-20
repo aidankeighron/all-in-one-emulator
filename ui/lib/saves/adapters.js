@@ -81,6 +81,7 @@ function ryujinx(ctx) {
     return {
         id: 'ryujinx',
         perSlot,
+        dataRoot: realRoot,
         slotRoot: slotId => path.join(slotsBase(), slotId),
         args: slotRoot => ['-r', slotRoot],
         // The saves the emulator already had before slots existed: [{rel, abs}] for each save folder that has files in it

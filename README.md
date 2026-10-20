@@ -167,14 +167,19 @@ firmware, keys and caches, except the folders holding game saves. The emulator i
 cover GameCube memory cards and Wii game saves; Ryujinx slots cover the Switch save folders. Open each emulator
 once from Settings before using slots (Ryujinx needs its folders to exist).
 
-**Where saves go.** To the `saves` branch of this project's repository (the one the menu was cloned from), as
-plain files. There are no settings for it. The menu uses your normal `git` login, so `git push` must already work
-from this computer. History only grows; very old versions can be removed by squashing that branch.
+**Where saves go.** To the `saves` branch of a separate private repository,
+`https://github.com/aidankeighron/all-in-one-emulator-saves` (set `cloudRepoUrl` in `config.json` to use another),
+as plain files. History only grows; very old versions can be removed by squashing that branch.
+
+**Setting it up on a computer.** The repository is private, so the menu needs a token to read and write it. Put a
+fine-grained GitHub token (this repository only, Contents: Read and write) in a file named `cloud-token.txt` beside
+`package.json` (or beside the program). The file is ignored by git, so a zipped copy that includes it works as is.
+On your own computer, `gh auth login` or your normal git sign-in works instead. Anyone holding the token can read and
+change the saves in that repository and nothing else.
 
 **Privacy.** A save upload contains only the slot's save folders: never games, keys, firmware or emulator
-settings. If the repository is public, anyone can read what is pushed to it: game progress, the save names you
-type, this computer's name, and timestamps. Commits carry a generic author, not your identity. Cloning the
-project also downloads its `saves` branch unless you clone with `--single-branch`.
+settings. It also holds the save names you type, this computer's name, and timestamps. Commits carry a generic
+author, not your identity.
 
 ## Game library: share games between your computers
 
@@ -207,7 +212,7 @@ Settings -> Sound & controls.
 | Emulator | What is set up |
 |---|---|
 | Dolphin | GameCube ports 1-4 and Wii Remotes 1-4. A gamepad becomes both a GameCube controller and an emulated Wii Remote with Nunchuk (right stick points, left stick is the Nunchuk stick). A connected Wii Remote is set to *Real Wiimote*. With an official GameCube adapter, ports without a gamepad use the adapter. |
-| Ryujinx | Linux: each player's controller is written into Ryujinx's `Config.json` (`input_config`) by its SDL id, keeping your own button layout for that player. Open Ryujinx once first. Windows: set up once with **Open** in Settings. |
+| Ryujinx | Linux: each player's controller is written into Ryujinx's `Config.json` (`input_config`) by its SDL id, keeping your own button layout for that player. Open Ryujinx once first. Windows: a controller is matched to the entry Ryujinx already has for it (set each controller up once with **Open** in Settings; after that the menu keeps it on the right player). |
 
 Players are numbered in the order the system registered the controllers. Existing settings in the files
 are kept; only the controller entries are replaced, and the first time a file is changed the original is

@@ -84,31 +84,13 @@ function setSound(next) {
     save(cfg);
 }
 
-// The repository the menu was cloned from, if it is running from a git checkout
-let projectRemote;
-function defaultRepoUrl() {
-    if (projectRemote === undefined) {
-        try {
-            projectRemote = require('child_process').execFileSync('git', ['-C', path.resolve(__dirname, '..', '..'), 'remote', 'get-url', 'origin'],
-                { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 3000 }).trim();
-        } catch { projectRemote = ''; }
-    }
-    return projectRemote;
-}
-
-// Cloud saves go to the "saves" branch of this project's own repository: the remote the menu was cloned from,
-// or the repository named in package.json when running as a packaged app. (cloudRepoUrl in config.json overrides it.)
-function packageRepoUrl() {
-    try {
-        const repo = require('../../package.json').repository;
-        const url = typeof repo === 'string' ? repo : repo && repo.url;
-        return url ? String(url).replace(/^git\+/, '') : '';
-    } catch { return ''; }
-}
+// Cloud saves go to the "saves" branch of their own private repository, so the token that can write to it can touch
+// nothing else. (cloudRepoUrl in config.json overrides it.)
+const SAVES_REPO_URL = 'https://github.com/aidankeighron/all-in-one-emulator-saves.git';
 
 function getCloud() {
     const cfg = load();
-    const repoUrl = cfg.cloudRepoUrl || defaultRepoUrl() || packageRepoUrl();
+    const repoUrl = cfg.cloudRepoUrl || SAVES_REPO_URL;
     return { enabled: !!repoUrl, repoUrl, deviceName: cfg.deviceName || '' };
 }
 

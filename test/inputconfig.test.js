@@ -124,3 +124,20 @@ test('Ryujinx: the controller id matches the one Ryujinx writes itself, and the 
     assert.strictEqual(written.input_config[0].right_joycon.button_a, 'A');
     assert.ok(fs.existsSync(path.join(dir, 'Config.json.emulator-menu.bak')));
 });
+
+test('Ryujinx on Windows: a pad Ryujinx already knows is put on the right player', () => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'ryuw-'));
+    const dir = path.join(home, 'AppData', 'Roaming', 'Ryujinx');
+    fs.mkdirSync(dir, { recursive: true });
+    const entry = { id: '0-00000003-24c6-0000-2a59-000001010000', name: 'Generic X-Box pad (0)', backend: 'GamepadSDL2', player_index: 'Player3', controller_type: 'ProController', right_joycon: { button_a: 'B' } };
+    fs.writeFileSync(path.join(dir, 'Config.json'), JSON.stringify({ input_config: [entry] }));
+    const known = { id: 'pad0', name: 'Generic X-Box pad', kind: 'generic', pad: true, vendor: '24c6', product: '592a', nameIndex: 0, js: null };
+    const env = { APPDATA: path.join(home, 'AppData', 'Roaming') };
+    const r = inputconfig.apply('ryujinx', [known], { home, platform: 'win32', env });
+    assert.strictEqual(r.status, 'configured');
+    const out = JSON.parse(fs.readFileSync(path.join(dir, 'Config.json'), 'utf8')).input_config;
+    assert.strictEqual(out[0].player_index, 'Player1');
+    assert.strictEqual(out[0].right_joycon.button_a, 'B', 'the person’s layout is kept');
+    const stranger = { ...known, name: 'Other pad', vendor: '1234', product: '5678' };
+    assert.strictEqual(inputconfig.apply('ryujinx', [stranger], { home, platform: 'win32', env }).status, 'skipped');
+});
