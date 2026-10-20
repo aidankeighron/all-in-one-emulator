@@ -26,7 +26,7 @@ The menu runs on Windows too. The differences from Linux:
 - **Controllers:** the menu sees what the window sees, so press a button on a controller with the menu focused.
   Xbox controllers are set up through XInput and others through SDL. Dolphin handles a real Wii Remote or an
   official GameCube adapter itself (the adapter needs its driver set up in Dolphin first).
-- **Back + Start to quit a game is Linux only.** On Windows use the emulator's own Stop or Exit.
+- **The Back + Start pause menu is Linux only.** On Windows use the emulator's own Stop or Exit.
 - **Game library:** a Windows computer can browse and download games from the Linux host the same way. Hosting from
   Windows also works, but Windows Firewall will ask to allow it.
 - Build a Windows app on a Windows machine with `npm run dist:win` (a single portable `.exe` in `dist/`). Building it
@@ -76,10 +76,15 @@ Nothing else to install: the AppImage already contains the menu and its runtime.
 
 4. Click a game (or press **A**) to play. Closing the emulator brings you back to the menu.
 
-   **Back to the menu from inside a game:** hold **Back + Start** for about 1.5 seconds. This works in every emulator, no mapping needed, but it ends
-   the game like closing the emulator, so save first. The menu reads the controller through
-   `/dev/input/js*`; if that isn't readable on your system, the combo does nothing, and you can still
+   **Pause menu:** hold **Back + Start** for about 1.5 seconds. The game is frozen (its processes are stopped, so
+   sound and input stand still) and the menu comes to the front with **Resume**, **Change controllers** (the Players
+   screen), **Connect a controller**, **Restart game** and **Quit to menu**. Holding the buttons again, or **B**,
+   resumes. Emulators read their controller settings only when a game starts, so after changing controllers the
+   screen suggests **Restart game**: it ends the game (the save is uploaded as usual) and starts it again on the
+   same save. **Quit to menu** ends the game like closing the emulator, so save first. The menu reads the controller
+   through `/dev/input/js*`; if that isn't readable on your system, the combo does nothing, and you can still
    quit with each emulator's own Stop/Exit (Dolphin's Stop, for example, also returns to the menu).
+   If the game cannot be frozen, the screen says it keeps running behind the menu.
    Set `EMU_NO_HOTKEY=1` to turn the combo off. The Wii's own **Home -> Wii Menu** can't be hooked:
    Dolphin runs it as the Wii's real software, so it opens the emulated Wii System Menu, not this one.
 
@@ -292,6 +297,10 @@ firmware install) need BIOS, key or firmware files that cannot be redistributed.
 Add an entry to `emulators.json`: its Flathub ID, the folders it handles, file extensions and
 launch arguments (`{rom}` is replaced with the game's path). The menu picks it up on the next start.
 If an install fails, check the Flatpak ID there against [flathub.org](https://flathub.org).
+
+# Ideas for later
+
+- [Online mode](docs/online-mode.md): outline only, nothing built.
 
 # Development
 

@@ -8,6 +8,7 @@ const platformLib = require('./lib/platform');
 const { createRunner } = require('./lib/runner');
 const roms = require('./lib/roms');
 const hotkey = require('./lib/hotkey');
+const procs = require('./lib/procs');
 const controllers = require('./lib/controllers');
 const inputconfig = require('./lib/inputconfig');
 const artwork = require('./lib/artwork');
@@ -46,7 +47,9 @@ const contentTypes = {
 // ---------- State ----------
 
 let importing = null;   // in-flight ROM import
-let current = null;     // running game {emulator, path}
+let current = null;     // running game {emulator, path, slotId, paused, frozenPids}
+let restarting = false; // the game is being stopped so it can start again (new controllers)
+let pauseHook = () => {};   // told when the pause menu should come up or go away (the app window raises itself)
 let lastError = null;   // last failed launch, shown once in the UI
 const jobs = new Map(); // emulator install/uninstall jobs
 let nextJob = 1;
@@ -233,27 +236,79 @@ async function startGame(relPath, slotId, onGameState) {
     }
     console.log(`[LAUNCH] ${emu.name}: ${abs}${slot ? ` (slot ${slot.id})` : ''}`);
 
-    current = { emulator: emu.id, path: relPath, emu };
+    current = { emulator: emu.id, path: relPath, emu, slotId: slot ? slot.id : null, paused: false, frozenPids: [] };
     lastError = null;
     const started = Date.now();
-    const stopWatching = process.env.EMU_NO_HOTKEY ? () => {} : hotkey.start(stopCurrent);
+    const stopWatching = process.env.EMU_NO_HOTKEY ? () => {} : hotkey.start(togglePause);
     current.child = runner.launch(emu, args, (code, stderr) => {
         stopWatching();
+        const wasPaused = !!(current && current.paused);
         current = null;
         if (code !== 0 && Date.now() - started < 10000) {
             lastError = `${emu.name} exited with an error: ${(stderr || '').trim().split('\n').pop()}`;
             console.error(`[LAUNCH] ${lastError}`);
         }
+        const again = restartTarget;
+        restartTarget = null;
+        if (wasPaused) pauseHook(false);
         if (onGameState) onGameState(false);
-        if (slot) saves.finish(slot.game, slot.id).catch(err => console.error(`[SAVES] ${err.message}`));   // upload what was played
+        const saved = slot ? saves.finish(slot.game, slot.id).catch(err => console.error(`[SAVES] ${err.message}`)) : Promise.resolve();   // upload what was played
+        if (again) {
+            // Start the same game again, on the same save, now that the save is safe
+            saved.then(() => launchGame(again.path, again.slotId, onGameState)).then(r => {
+                if (r.status !== 200) lastError = r.body.message || 'Could not start the game again';
+            }).finally(() => { restarting = false; });
+        }
     });
     if (onGameState) onGameState(true);
     return { status: 200, body: { status: 'launched', emulator: emu.id } };
 }
 
-// Back+Start held for 1.5s: quit the running game
+// ---------- Pause menu ----------
+// Back+Start held for 1.5s: freeze the game and bring up the menu's pause screen (resume, change controllers,
+// restart, quit). Holding it again, or choosing Resume, continues the game.
+let restartTarget = null;
+
+async function pauseGame() {
+    if (!current || !current.child || !current.path || current.paused) return;
+    current.paused = true;
+    console.log(`[PAUSE] ${current.emulator}`);
+    try {
+        current.frozenPids = await procs.pidsFor(current.child, current.emu.flatpak, undefined);
+        if (!procs.signal(current.frozenPids, 'SIGSTOP')) current.frozenPids = [];
+    } catch (err) { console.error(`[PAUSE] could not freeze the game: ${err.message}`); current.frozenPids = []; }
+    pauseHook(true);
+}
+
+function thaw() {
+    if (!current) return;
+    if (current.frozenPids && current.frozenPids.length) procs.signal(current.frozenPids, 'SIGCONT');
+    current.frozenPids = [];
+}
+
+function resumeGame() {
+    if (!current || !current.paused) return;
+    thaw();
+    current.paused = false;
+    console.log('[PAUSE] resume');
+    pauseHook(false);
+}
+
+function togglePause() { return current && current.paused ? resumeGame() : pauseGame(); }
+
+// Stops the game and starts it again on the same save (the way new controller settings take effect)
+function restartCurrent() {
+    if (!current || !current.path) return false;
+    restartTarget = { path: current.path, slotId: current.slotId };
+    restarting = true;
+    stopCurrent();
+    return true;
+}
+
+// Quits the running game
 function stopCurrent() {
     if (!current || !current.child) return;
+    thaw();   // a stopped process would not hear the request to end
     const { emu, child } = current;
     console.log(`[HOTKEY] Stopping ${emu.id}`);
     child.kill('SIGTERM');
@@ -646,7 +701,13 @@ function createServer(onGameState) {
                 if (route === 'GET /api/status') {
                     const error = lastError;
                     lastError = null;
-                    return sendJson(res, 200, { running: !!current, game: current && { emulator: current.emulator, path: current.path }, error, sync: saves.activity() });
+                    return sendJson(res, 200, { running: !!current || restarting, game: current && { emulator: current.emulator, path: current.path }, paused: !!(current && current.paused), frozen: !!(current && current.frozenPids && current.frozenPids.length), error, sync: saves.activity() });
+                }
+                if (route === 'POST /api/game/resume') { resumeGame(); return sendJson(res, 200, { ok: true }); }
+                if (route === 'POST /api/game/quit') { restartTarget = null; restarting = false; stopCurrent(); return sendJson(res, 200, { ok: true }); }
+                if (route === 'POST /api/game/restart') {
+                    if (!restartCurrent()) return sendJson(res, 409, { error: 'nothing_running', message: 'No game is running' });
+                    return sendJson(res, 200, { ok: true });
                 }
                 if (route === 'POST /api/process-roms') {
                     return sendJson(res, 200, await processRoms());
@@ -685,7 +746,8 @@ function createServer(onGameState) {
 }
 
 // Starts the server on localhost only. port 0 picks a free port.
-function start({ port = 3000, onGameState } = {}) {
+function start({ port = 3000, onGameState, onPause } = {}) {
+    if (onPause) pauseHook = onPause;
     return new Promise((resolve, reject) => {
         const server = createServer(onGameState);
         server.on('error', reject);

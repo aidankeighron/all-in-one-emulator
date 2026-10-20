@@ -22,8 +22,23 @@ function onGameState(running) {
     }
 }
 
+// The pause menu (Back + Start held in a game): bring the menu in front of the frozen game, and back out of the way
+function onPause(paused) {
+    if (!win) return;
+    if (paused) {
+        win.setAlwaysOnTop(true);
+        if (win.isMinimized()) win.restore();
+        win.show();
+        win.focus();
+    } else {
+        win.setAlwaysOnTop(false);
+        hiddenForGame = true;     // restored again when the game ends
+        win.minimize();
+    }
+}
+
 async function createWindow() {
-    const { port } = await server.start({ port: 0, onGameState });
+    const { port } = await server.start({ port: 0, onGameState, onPause });
 
     win = new BrowserWindow({
         width: 1280,
