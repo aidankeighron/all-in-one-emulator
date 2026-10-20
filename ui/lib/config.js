@@ -141,6 +141,12 @@ function getEmulatorPaths() {
     return load().emulatorPaths || {};
 }
 
+// Windows: a zip address to install an emulator from, when the built-in sources don't work (emulatorUrls in config.json)
+function getEmulatorUrls() {
+    const urls = load().emulatorUrls;
+    return urls && typeof urls === 'object' ? urls : {};
+}
+
 function setEmulatorPath(id, file) {
     const cfg = load();
     cfg.emulatorPaths = { ...cfg.emulatorPaths };
@@ -156,4 +162,4 @@ const mappingsDir = path.join(path.dirname(configFile), 'mappings');
 const artworkDir = path.join(path.dirname(configFile), 'artwork');
 const soundsDir = process.env.SOUNDS_DIR || path.join(path.dirname(configFile), 'sounds');
 
-module.exports = { getRomsDir, setRomsDir, getAutoControllers, setAutoControllers, getWiiRemotes, setWiiRemotes, getPlayers, setPlayers, getSound, setSound, getCloud, getCloudToken, getLibrary, setLibrary, libraryCacheFile, getEmulatorPaths, setEmulatorPath, emulatorsDir, configFile, mappingsDir, artworkDir, soundsDir };
+module.exports = { getRomsDir, setRomsDir, getAutoControllers, setAutoControllers, getWiiRemotes, setWiiRemotes, getPlayers, setPlayers, getSound, setSound, getCloud, getCloudToken, getLibrary, setLibrary, libraryCacheFile, getEmulatorPaths, getEmulatorUrls, setEmulatorPath, emulatorsDir, configFile, mappingsDir, artworkDir, soundsDir };

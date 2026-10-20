@@ -67,7 +67,11 @@
           "%USERPROFILE%/scoop/apps/ryujinx/current",
           "C:/Ryujinx"
         ],
-        "download": "https://ryujinx.app/download"
+        "download": "https://ryujinx.app/download",
+        "release": [
+          { "api": "https://git.ryujinx.app/api/v1/repos/ryubing/ryujinx/releases/latest", "asset": "win.*x64.*\\.zip$" },
+          { "query": "https://update.ryujinx.app/download/query?os=win&arch=x64&rc=stable" }
+        ]
       }
     }
   ]

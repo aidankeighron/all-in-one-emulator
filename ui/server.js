@@ -24,7 +24,7 @@ const emulatorsById = new Map(manifest.emulators.map(e => [e.id, e]));
 const emulatorsByFolder = roms.folderMap(manifest);
 
 // Linux starts emulators from Flatpak; Windows starts the program it finds (or you point it at)
-const runner = createRunner({ getPaths: config.getEmulatorPaths, emulatorsDir: config.emulatorsDir });
+const runner = createRunner({ getPaths: config.getEmulatorPaths, getUrls: config.getEmulatorUrls, emulatorsDir: config.emulatorsDir });
 const platformCtx = {
     platform: runner.platform,
     home: os.homedir(),
@@ -168,7 +168,9 @@ async function emulatorStates() {
         folders: e.folders,
         installed: available && await runner.isInstalled(e),
         path: runner.exePath(e),                         // Windows: where its program was found
-        download: (e.windows && e.windows.download) || null
+        download: (e.windows && e.windows.download) || null,
+        installable: runner.canInstall(e),               // Windows: the menu can download and unpack it
+        menuInstalled: runner.menuInstalled(e)
     })));
     // "flatpak" is true when emulators can be installed or found at all (always on Windows)
     return { flatpak: available, platform: runner.platform, manual: runner.manual, emulatorsDir: config.emulatorsDir, emulators: list };
@@ -610,7 +612,7 @@ function createServer(onGameState) {
                 if (req.method === 'POST' && m) {
                     const emu = emulatorsById.get(m[1]);
                     if (!emu) return sendJson(res, 404, { error: 'unknown emulator' });
-                    if (runner.manual) return sendJson(res, 409, { error: 'manual', message: 'On Windows, put the emulator in the emulators folder, or use Locate' });
+                    if (runner.manual && !runner.canInstall(emu)) return sendJson(res, 409, { error: 'manual', message: 'On Windows, put the emulator in the emulators folder, or use Locate' });
                     if (!await runner.available()) return sendJson(res, 409, { error: 'flatpak_missing' });
                     return sendJson(res, 200, startJob(emu, m[2]));
                 }

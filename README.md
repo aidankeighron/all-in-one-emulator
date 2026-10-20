@@ -7,10 +7,19 @@ no Docker and no per-emulator setup. Drop games (or `.zip`, `.rar` or `.7z` file
 
 The menu runs on Windows too. The differences from Linux:
 
-- **Emulators are not installed by the menu.** Download them yourself (Settings -> Games has a **Download** button
-  for each) and either unzip each one into its own folder inside the emulators folder (the **Open folder** button
-  there opens it), or press **Locate** and choose the emulator's program (`Dolphin.exe`, `Ryujinx.exe`). The menu also
-  looks in the usual places such as `C:\Dolphin-x64`.
+- **Emulators:** press **Install** next to Ryujinx in Settings -> Games. The menu finds the newest Windows release,
+  downloads the zip and unpacks it into the emulators folder (`%APPDATA%\all-in-one-emulator\emulators\ryujinx`),
+  where it is found automatically; **Remove** deletes that copy again. Sources are listed in `emulators.json`
+  (`windows.release`) and tried in order, because a project's download server can be down: Ryujinx's releases API
+  on its own Forgejo (`git.ryujinx.app`), then its update server. If both fail, the progress line says why for
+  each. Then either download the zip yourself and unzip it into its own folder inside the emulators folder (**Open
+  folder** opens it), press **Locate** and choose the program (`Dolphin.exe`, `Ryujinx.exe`), or put a direct zip
+  address in `config.json` and press **Install** again:
+  `{ "emulatorUrls": { "ryujinx": "https://example.com/ryujinx-win_x64.zip" } }`.
+  Dolphin has no release feed the menu can read, so it keeps a **Download** button to its website, then
+  unzip it or use **Locate**. The menu also looks in the usual places such as `C:\Dolphin-x64`. The source addresses
+  could not be checked from the build environment, so if **Install** says it could not reach them, use the manual
+  routes above and tell me what the project's real download address is.
 - **Save slots and cloud saves work the same.** They use the emulator's data in `%APPDATA%` (or the folder beside a
   portable copy). Open each emulator once first so it creates its folders. Cloud saves need
   [Git for Windows](https://git-scm.com/download/win), signed in so that `git push` works.

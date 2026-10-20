@@ -2654,7 +2654,7 @@
             const note = document.getElementById('windows-note');
             note.style.display = data.manual ? 'block' : 'none';
             if (data.manual) {
-                note.innerHTML = `Unzip each emulator into its own folder inside <code>${escapeHtml(data.emulatorsDir)}</code> and it is found automatically, or press <b>Locate</b> to choose its program. <button class="btn" id="open-emulators-folder" style="margin-left:6px">Open folder</button>`;
+                note.innerHTML = `Unzip each emulator into its own folder inside <code>${escapeHtml(data.emulatorsDir)}</code> and it is found automatically, or press <b>Locate</b> to choose its program. <b>Install</b> downloads and unpacks it for you. <button class="btn" id="open-emulators-folder" style="margin-left:6px">Open folder</button>`;
                 document.getElementById('open-emulators-folder').addEventListener('click', () => openFolder(data.emulatorsDir));
             }
 
@@ -2670,11 +2670,15 @@
                             <div class="progress" id="progress-${emu.id}" style="word-break:break-all">${emu.installed ? escapeHtml(emu.path || '') : 'Not found yet'}</div>
                         </div>
                         ${emu.installed ? `<button class="btn" id="open-${emu.id}" title="Open ${escapeHtml(emu.name)} to set up controllers, BIOS and other settings">Open</button>` : ''}
-                        ${!emu.installed && emu.download ? `<button class="btn primary" id="dl-${emu.id}">Download</button>` : ''}
+                        ${!emu.installed && emu.installable ? `<button class="btn primary" id="btn-${emu.id}">Install</button>` : ''}
+                        ${emu.menuInstalled ? `<button class="btn" id="btn-${emu.id}" title="Delete the copy the menu installed">Remove</button>` : ''}
+                        ${!emu.installed && emu.download ? `<button class="btn ${emu.installable ? '' : 'primary'}" id="dl-${emu.id}">${emu.installable ? 'Website' : 'Download'}</button>` : ''}
                         <button class="btn ${emu.installed ? '' : ''}" id="loc-${emu.id}">Locate</button>`;
                     row.querySelector(`#loc-${emu.id}`).addEventListener('click', () => locateEmulator(emu));
                     const dlBtn = row.querySelector(`#dl-${emu.id}`);
                     if (dlBtn) dlBtn.addEventListener('click', () => openLink(emu.download));
+                    const jobBtn = row.querySelector(`#btn-${emu.id}`);
+                    if (jobBtn) jobBtn.addEventListener('click', () => runEmulatorJob(emu, emu.menuInstalled ? 'uninstall' : 'install'));
                     const openBtn = row.querySelector(`#open-${emu.id}`);
                     if (openBtn) openBtn.addEventListener('click', () => openEmulator(emu));
                     list.appendChild(row);
@@ -2788,6 +2792,8 @@
             if (el.tagName === 'INPUT') el.focus(); else el.click();
         }
 
+        const data_manual_hint = () => (document.getElementById('windows-note').style.display === 'block' ? 'The menu cannot install this one: use Locate' : 'Flatpak is not installed');
+
         async function runEmulatorJob(emu, action) {
             const btn = document.getElementById(`btn-${emu.id}`);
             const progress = document.getElementById(`progress-${emu.id}`);
@@ -2795,7 +2801,7 @@
             progress.textContent = action === 'install' ? 'Starting download...' : 'Removing...';
             const res = await fetch(`/api/emulators/${emu.id}/${action}`, { method: 'POST' });
             if (!res.ok) {
-                progress.textContent = res.status === 409 ? 'Flatpak is not installed' : 'Failed to start';
+                progress.textContent = res.status === 409 ? (data_manual_hint()) : 'Failed to start';
                 btn.disabled = false;
                 return;
             }
@@ -2807,7 +2813,8 @@
             }
             if (job.state === 'error') {
                 btn.disabled = false;
-                progress.textContent = `Failed: ${job.lines[job.lines.length - 1] || 'see terminal'}`;
+                const last = job.lines[job.lines.length - 1] || 'see terminal';
+                progress.textContent = last.startsWith('Failed') ? last : `Failed: ${last}`;
             } else {
                 await refreshSettings();
             }

@@ -1,11 +1,12 @@
 // Finding, starting and stopping emulators. On Linux they are Flatpaks from Flathub and the menu installs them.
-// On Windows the menu does not install anything: it finds each emulator's program (a path you chose with
-// "Locate", or a folder it knows to look in) and starts that.
+// On Windows the menu finds each emulator's program (a path you chose with "Locate", or a folder it knows to look in)
+// and starts that; emulators with download sources in emulators.json can also be installed from the menu (emulatorinstall.js).
 const fs = require('fs');
 const path = require('path');
 const { spawn, execFile } = require('child_process');
 const flatpak = require('./flatpak');
 const platformLib = require('./platform');
+const emulatorInstall = require('./emulatorinstall');
 
 function isFile(p) {
     try { return fs.statSync(p).isFile(); } catch { return false; }
@@ -26,7 +27,7 @@ function searchDir(dir, exeName, depth = 2) {
     return null;
 }
 
-function createRunner({ platform = platformLib.current(), env = process.env, getPaths = () => ({}), emulatorsDir, flatpakImpl = flatpak, spawnImpl = spawn, execImpl = execFile } = {}) {
+function createRunner({ platform = platformLib.current(), env = process.env, getPaths = () => ({}), getUrls = () => ({}), emulatorsDir, flatpakImpl = flatpak, spawnImpl = spawn, execImpl = execFile } = {}) {
     const win = platform === 'win32';
 
     // The program to start for an emulator on Windows, or null if it can't be found
@@ -44,12 +45,16 @@ function createRunner({ platform = platformLib.current(), env = process.env, get
 
     return {
         platform,
-        manual: win,   // the menu cannot install emulators here
+        manual: win,   // emulators are found, not Flatpaks (some can still be installed by the menu: see canInstall)
+        canInstall: emu => !win || !!(emu && emu.windows && emu.windows.release && emu.windows.release.length) || !!getUrls()[emu && emu.id],
+        menuInstalled: emu => win && !!emulatorsDir && fs.existsSync(path.join(emulatorsDir, emu.id)),
         exePath,
         available: async () => (win ? true : flatpakImpl.available()),
         isInstalled: async emu => (win ? !!exePath(emu) : flatpakImpl.isInstalled(emu.flatpak)),
-        install: (emu, onLine) => flatpakImpl.install(emu.flatpak, onLine),
-        uninstall: (emu, onLine) => flatpakImpl.uninstall(emu.flatpak, onLine),
+        install: (emu, onLine) => (win
+            ? emulatorInstall.install(emu, { emulatorsDir, override: getUrls()[emu.id], onLine, findExe: dir => searchDir(dir, emu.windows.exe, 3) })
+            : flatpakImpl.install(emu.flatpak, onLine)),
+        uninstall: (emu, onLine) => (win ? emulatorInstall.uninstall(emu, { emulatorsDir, onLine }) : flatpakImpl.uninstall(emu.flatpak, onLine)),
         grantAccess: async (emu, dir) => { if (!win) await flatpakImpl.grantAccess(emu.flatpak, dir); },
 
         allowBluetooth: async emu => { if (!win) await flatpakImpl.allowBluetooth(emu.flatpak); },
