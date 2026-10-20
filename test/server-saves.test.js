@@ -16,7 +16,7 @@ process.env.HOME = home;
 process.env.XDG_CONFIG_HOME = cfgHome;
 process.env.ROMS_DIR = roms;
 fs.mkdirSync(path.join(cfgHome, 'all-in-one-emulator'), { recursive: true });
-fs.writeFileSync(path.join(cfgHome, 'all-in-one-emulator', 'config.json'), JSON.stringify({ cloudRepoUrl: remote, cloudPassphrase: 'pw' }));
+fs.writeFileSync(path.join(cfgHome, 'all-in-one-emulator', 'config.json'), JSON.stringify({ cloudRepoUrl: remote }));
 fs.mkdirSync(path.join(home, '.var/app/io.github.ryubing.Ryujinx/config/Ryujinx/system'), { recursive: true });
 fs.mkdirSync(path.join(roms, 'switch'), { recursive: true });
 fs.writeFileSync(path.join(roms, 'switch', 'Super Mario Odyssey.nsp'), 'x');
@@ -34,7 +34,7 @@ async function api(port, method, url, body) {
     return { status: res.status, body: await res.json() };
 }
 
-test('save slot endpoints: list, create, rename, delete, cloud status', async () => {
+test('save slot endpoints: list, create, rename, delete', async () => {
     const { server: srv, port } = await server.start({ port: 0 });
     try {
         const p = encodeURIComponent('switch/Super Mario Odyssey.nsp');
@@ -54,10 +54,6 @@ test('save slot endpoints: list, create, rename, delete, cloud status', async ()
         assert.strictEqual(r.status, 409);
         assert.strictEqual(r.body.error, 'BAD_NAME');
 
-        r = await api(port, 'GET', '/api/cloud');
-        assert.deepStrictEqual([r.body.enabled, r.body.encrypted, r.body.configured], [true, true, true]);
-        assert.ok(!('passphrase' in r.body), 'the passphrase is never sent to the page');
-
         r = await api(port, 'POST', '/api/saves/delete', { path: 'switch/Super Mario Odyssey.nsp', slot: id });
         assert.strictEqual(r.status, 200);
 
@@ -66,11 +62,6 @@ test('save slot endpoints: list, create, rename, delete, cloud status', async ()
         assert.strictEqual(r.body.supported, true);
         r = await api(port, 'GET', `/api/saves?path=${encodeURIComponent('wii/Nope.iso')}`);
         assert.strictEqual(r.body.error, 'UNKNOWN_GAME');
-
-        r = await api(port, 'POST', '/api/cloud', { slotsEnabled: false });
-        assert.strictEqual(r.body.slotsEnabled, false);
-        r = await api(port, 'GET', `/api/saves?path=${p}`);
-        assert.strictEqual(r.body.supported, false, 'turning slots off goes back to plain launching');
     } finally {
         srv.close();
     }

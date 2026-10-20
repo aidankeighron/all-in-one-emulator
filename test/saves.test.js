@@ -8,7 +8,6 @@ const { execFileSync } = require('child_process');
 const { createManager } = require('../ui/lib/saves/manager');
 const adaptersLib = require('../ui/lib/saves/adapters');
 const archive = require('../ui/lib/saves/archive');
-const crypto = require('../ui/lib/saves/crypto');
 
 const tmp = p => fs.mkdtempSync(path.join(os.tmpdir(), `saves-${p}-`));
 const game = { title: 'Super Mario Odyssey', console: 'switch', emulator: 'ryujinx', path: 'switch/Odyssey.nsp' };
@@ -25,9 +24,9 @@ function computer(name, url, cloud = {}) {
     const home = tmp(`home-${name}`);
     fs.mkdirSync(path.join(home, '.var/app/io.github.ryubing.Ryujinx/config/Ryujinx/system'), { recursive: true });
     fs.writeFileSync(path.join(home, '.var/app/io.github.ryubing.Ryujinx/config/Ryujinx/system/prod.keys'), 'keys');
-    const settings = { enabled: true, repoUrl: url, passphrase: '', deviceName: name, ...cloud };
+    const settings = { enabled: true, repoUrl: url, deviceName: name, ...cloud };
     const adapters = adaptersLib.create(home);
-    const manager = createManager({ dir: tmp(`cfg-${name}`), adapters, getCloud: () => settings, visibility: async () => settings.visible || 'private' });
+    const manager = createManager({ dir: tmp(`cfg-${name}`), adapters, getCloud: () => settings });
     const adapter = adapters.get('ryujinx');
     // What the emulator would do while the game runs
     const play = (slotId, files) => {
@@ -177,32 +176,9 @@ test('syncAll downloads newer saves for slots already on this computer', async (
     assert.strictEqual(b.read(slot.id, 'f.bin'), 'two');
 });
 
-test('encrypted: the repository holds no readable names or data, and needs the right passphrase', async () => {
+test('saves are pushed as plain files, and nothing but save data goes up', async () => {
     const remote = remoteRepo();
-    const a = computer('Desk PC', remote, { passphrase: 'correct horse' });
-    const slot = await a.manager.createSlot(game, 'Secret slot name');
-    await playSession(a, slot.id, { 'f.bin': 'TOP-SECRET-PROGRESS' });
-
-    const files = git(remote, 'ls-tree', '-r', '--name-only', 'saves');
-    assert.ok(!/odyssey|switch|secret/i.test(files), `names should be opaque: ${files}`);
-    const everything = git(remote, 'log', '-p', '--all', '--format=%an %ae %s');
-    assert.ok(!everything.includes('TOP-SECRET') && !everything.includes('Secret slot') && !everything.includes('Desk PC'));
-
-    const good = computer('Other', remote, { passphrase: 'correct horse' });
-    assert.strictEqual((await good.manager.listSlots(game)).slots[0].name, 'Secret slot name');
-    await good.manager.prepare(game, slot.id);
-    assert.strictEqual(good.read(slot.id, 'f.bin'), 'TOP-SECRET-PROGRESS');
-
-    const bad = computer('Intruder', remote, { passphrase: 'wrong' });
-    const listed = await bad.manager.listSlots(game);
-    assert.strictEqual(listed.problem.code, 'BAD_PASSPHRASE');
-    const none = computer('Nobody', remote);
-    assert.strictEqual((await none.manager.listSlots(game)).problem.code, 'NEED_PASSPHRASE');
-});
-
-test('a public repository takes plain saves: the owner chose that, and nothing but save data goes up', async () => {
-    const remote = remoteRepo();
-    const a = computer('Desk PC', remote, { visible: 'public' });
+    const a = computer('Desk PC', remote);
     const slot = await a.manager.createSlot(game, 'Main run');
     const r = await playSession(a, slot.id, { 'f.bin': 'moons=12' });
     assert.strictEqual(r.status, 'saved');
@@ -256,11 +232,4 @@ test('local backup is kept before a download replaces a changed save', async () 
     assert.strictEqual(fs.readFileSync(path.join(restored, 'bis/user/save/f.bin'), 'utf8'), 'local-edit');
 });
 
-test('crypto round trip and tamper detection', () => {
-    const keys = crypto.deriveKeys('pw', crypto.newSalt());
-    const box = crypto.encrypt(Buffer.from('hello'), keys.enc);
-    assert.strictEqual(crypto.decrypt(box, keys.enc).toString(), 'hello');
-    box[box.length - 1] ^= 1;
-    assert.throws(() => crypto.decrypt(box, keys.enc), /wrong passphrase/);
-});
 

@@ -25,19 +25,7 @@ class SaveError extends Error {
 const slug = text => String(text).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'game';
 const gameKeyOf = game => `${game.console}/${slug(game.title)}`;
 
-// Is this repository readable by anyone? 'unknown' when it isn't on GitHub or GitHub can't be reached.
-async function repoVisibility(url, fetchImpl = globalThis.fetch) {
-    const m = String(url).match(/github\.com[:/]+([^/]+)\/([^/]+?)(?:\.git)?\/?$/i);
-    if (!m) return 'unknown';
-    try {
-        const res = await fetchImpl(`https://api.github.com/repos/${m[1]}/${m[2]}`, { signal: AbortSignal.timeout(6000), headers: { 'User-Agent': 'emulator-menu' } });
-        return res.status === 200 ? 'public' : res.status === 404 ? 'private' : 'unknown';
-    } catch {
-        return 'unknown';
-    }
-}
-
-function createManager({ dir, adapters, getCloud, deviceName = os.hostname(), visibility = repoVisibility, log = () => {} }) {
+function createManager({ dir, adapters, getCloud, deviceName = os.hostname(), log = () => {} }) {
     const stateFile = path.join(dir, 'state.json');
     const tmpDir = path.join(dir, 'tmp');
     const backupDir = path.join(dir, 'backups');
@@ -59,27 +47,17 @@ function createManager({ dir, adapters, getCloud, deviceName = os.hostname(), vi
     let storeKey = '';
     let lastSync = null;
     let lastError = null;
-    const visibilityCache = new Map();
 
     const device = () => ({ id: state.device.id, name: getCloud().deviceName || deviceName });
 
     function currentStore() {
         const cfg = getCloud();
         if (!cfg.enabled || !cfg.repoUrl) return null;
-        const key = `${cfg.repoUrl}\0${cfg.passphrase || ''}`;
-        if (key !== storeKey) {
-            store = new Store({ dir: path.join(dir, 'repo'), url: cfg.repoUrl, passphrase: cfg.passphrase || '' });
-            storeKey = key;
+        if (cfg.repoUrl !== storeKey) {
+            store = new Store({ dir: path.join(dir, 'repo'), url: cfg.repoUrl });
+            storeKey = cfg.repoUrl;
         }
         return store;
-    }
-
-    async function visibilityOf(url) {
-        const hit = visibilityCache.get(url);
-        if (hit && Date.now() - hit.at < 10 * 60 * 1000) return hit.value;
-        const value = await visibility(url);
-        visibilityCache.set(url, { value, at: Date.now() });
-        return value;
     }
 
     const adapterFor = game => {
@@ -99,7 +77,6 @@ function createManager({ dir, adapters, getCloud, deviceName = os.hostname(), vi
         } catch (err) {
             lastError = { code: err.code, message: err.message };
             if (err.code === 'OFFLINE' || err.code === 'NO_GIT') return null;
-            if (err.code === 'NEED_PASSPHRASE' || err.code === 'BAD_PASSPHRASE') throw new SaveError(err.code, err.message);
             throw err;
         }
     }
@@ -198,7 +175,7 @@ function createManager({ dir, adapters, getCloud, deviceName = os.hostname(), vi
                 const slots = [...ids].map(id => describe(state.slots[id] || { id, name: remote.get(id).name, rev: 0 }, remote.get(id)));
                 slots.sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
                 setActivity('idle');
-                return { slots, online, configured: !!currentStore(), problem, checkedAt: Date.now() };
+                return { slots, online, configured: !!currentStore(), problem, reason: online || !lastError ? null : lastError.message, checkedAt: Date.now() };
             });
         },
 
@@ -385,7 +362,6 @@ function createManager({ dir, adapters, getCloud, deviceName = os.hostname(), vi
                         }
                     } catch (err) {
                         log(`[SAVES] sync ${st.name}: ${err.message}`);
-                        if (err.code === 'UNENCRYPTED_PUBLIC') result.problem = { code: err.code, message: err.message };
                     }
                 }
                 saveState();
@@ -418,38 +394,8 @@ function createManager({ dir, adapters, getCloud, deviceName = os.hostname(), vi
                 await upload(adapter, st, s, remote.rev, hash);
                 return { ok: true };
             });
-        },
-
-        // Cloud status for Settings
-        async status() {
-            const cfg = getCloud();
-            const s = currentStore();
-            const slots = Object.values(state.slots);
-            const devices = new Map();
-            if (s && fs.existsSync(path.join(dir, 'repo', '.git'))) {
-                try {
-                    s.loadFormat();
-                    for (const m of s.listSlots()) {
-                        const seen = devices.get(m.device);
-                        if (!seen || m.updatedAt > seen) devices.set(m.device, m.updatedAt);
-                    }
-                } catch { /* locked or not synced yet */ }
-            }
-            return {
-                enabled: !!cfg.enabled,
-                configured: !!(cfg.enabled && cfg.repoUrl),
-                repoUrl: String(cfg.repoUrl || '').replace(/\/\/[^/@]*@/, '//'),   // never show a token embedded in the URL
-                encrypted: !!cfg.passphrase,
-                visibility: cfg.repoUrl ? await visibilityOf(cfg.repoUrl) : 'unknown',
-                device: device().name,
-                deviceName: cfg.deviceName || '',
-                lastSync,
-                lastError,
-                pending: slots.filter(x => x.pending).length,
-                devices: [...devices].map(([name, lastSeen]) => ({ name, lastSeen })).sort((a, b) => String(b.lastSeen).localeCompare(String(a.lastSeen)))
-            };
         }
     };
 }
 
-module.exports = { createManager, SaveError, gameKeyOf, repoVisibility };
+module.exports = { createManager, SaveError, gameKeyOf };

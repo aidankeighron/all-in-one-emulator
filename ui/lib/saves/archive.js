@@ -39,10 +39,6 @@ async function hashDirs(root, relDirs) {
     return h.digest('hex');
 }
 
-async function sizeOf(root, relDirs) {
-    return (await listFiles(root, relDirs)).reduce((n, f) => n + f.size, 0);
-}
-
 async function zipDirs(root, relDirs, outFile, maxBytes = Infinity) {
     const files = await listFiles(root, relDirs);
     const total = files.reduce((n, f) => n + f.size, 0);
@@ -85,4 +81,4 @@ function clearDirs(root, relDirs) {
     }
 }
 
-module.exports = { hashDirs, sizeOf, zipDirs, unzipTo, clearDirs, listFiles };
+module.exports = { hashDirs, zipDirs, unzipTo, clearDirs, listFiles };

@@ -1,15 +1,17 @@
 // The cloud: saves live on a branch ("saves") of a git repository, in a local clone the menu manages.
 // The working copy always mirrors origin/saves; changes are made on top of the freshest remote state and
-// pushed at once, and a push that loses a race is simply redone. If a passphrase is set, everything in
-// the branch is encrypted and folder names are opaque (see crypto.js).
+// pushed at once, and a push that loses a race is simply redone. Everything is stored as plain files:
+//   saves/<console>__<game>/<slot id>/meta.json   name, rev, who saved it and when
+//   saves/<console>__<game>/<slot id>/data.zip    the slot's save folders
 const fs = require('fs');
 const path = require('path');
 const { execFile } = require('child_process');
-const crypto = require('./crypto');
 
 const BRANCH = 'saves';
 const MAX_ATTEMPTS = 3;
 const MAX_BLOB_BYTES = 90 * 1024 * 1024;   // GitHub rejects files over 100 MB
+const META = 'meta.json';
+const DATA = 'data.zip';
 
 class StoreError extends Error {
     constructor(code, message, extra) { super(message); this.code = code; Object.assign(this, extra); }
@@ -27,13 +29,10 @@ function git(args, { cwd, buffer = false, timeout = 120000 } = {}) {
 }
 
 class Store {
-    // dir: where the local clone lives; url: the remote; passphrase: '' for no encryption
-    constructor({ dir, url, passphrase = '' }) {
+    // dir: where the local clone lives; url: the remote
+    constructor({ dir, url }) {
         this.dir = dir;
         this.url = url;
-        this.passphrase = passphrase;
-        this.keys = null;
-        this.format = null;
     }
 
     p(...parts) { return path.join(this.dir, ...parts); }
@@ -67,89 +66,42 @@ class Store {
             await git(['checkout', '-q', '-f', '-B', BRANCH, `origin/${BRANCH}`], { cwd: this.dir });
             await git(['clean', '-fdq'], { cwd: this.dir });
         }
-        this.hasRemote = hasRemote;
-        this.loadFormat();
         return { hasRemote };
     }
 
-    // ---- encryption format ----
-
-    loadFormat() {
-        let fmt = null;
-        try { fmt = JSON.parse(fs.readFileSync(this.p('format.json'), 'utf8')); } catch { /* new repo or plain */ }
-        this.format = fmt;
-        this.keys = null;
-        if (fmt && fmt.salt) {
-            if (!this.passphrase) throw new StoreError('NEED_PASSPHRASE', 'These saves are encrypted: enter the passphrase in Settings');
-            this.keys = crypto.deriveKeys(this.passphrase, fmt.salt);
-            try {
-                if (crypto.decrypt(Buffer.from(fmt.check, 'base64'), this.keys.enc).toString() !== 'emulator-menu') throw new Error();
-            } catch {
-                throw new StoreError('BAD_PASSPHRASE', 'That passphrase does not match the one these saves were encrypted with');
-            }
-        }
-    }
-
-    // First write into an empty branch: decide plain or encrypted
-    initFormat() {
-        if (this.format) return;
-        if (!this.passphrase) { this.format = { v: 1 }; return; }
-        const salt = crypto.newSalt();
-        this.keys = crypto.deriveKeys(this.passphrase, salt);
-        const check = crypto.encrypt(Buffer.from('emulator-menu'), this.keys.enc).toString('base64');
-        this.format = { v: 1, salt, check };
-    }
-
-    get encrypted() { return !!(this.format && this.format.salt); }
-
     // ---- layout ----
 
-    gameDir(gameKey) {
-        const name = this.keys ? crypto.opaqueName(this.keys.name, gameKey) : gameKey.replace(/\//g, '__');
-        return path.join('saves', name);
-    }
-
-    slotRel(gameKey, slotId) { return path.join(this.gameDir(gameKey), slotId); }
-    fileNames() { return this.keys ? { meta: 'meta.enc', data: 'data.enc' } : { meta: 'meta.json', data: 'data.zip' }; }
-
-    decodeMeta(buf) {
-        try { return JSON.parse((this.keys ? crypto.decrypt(buf, this.keys.enc) : buf).toString('utf8')); } catch { return null; }
-    }
-
-    encodeMeta(meta) {
-        const buf = Buffer.from(JSON.stringify(meta));
-        return this.keys ? crypto.encrypt(buf, this.keys.enc) : buf;
-    }
+    slotRel(gameKey, slotId) { return path.join('saves', gameKey.replace(/\//g, '__'), slotId); }
 
     readMeta(gameKey, slotId) {
-        try { return this.decodeMeta(fs.readFileSync(this.p(this.slotRel(gameKey, slotId), this.fileNames().meta))); } catch { return null; }
+        try { return JSON.parse(fs.readFileSync(this.p(this.slotRel(gameKey, slotId), META), 'utf8')); } catch { return null; }
     }
 
     // Every slot of one game, or of every game when gameKey is omitted
     listSlots(gameKey) {
         const out = [];
-        const gameDirs = gameKey ? [this.gameDir(gameKey)] : (() => {
-            try { return fs.readdirSync(this.p('saves')).map(n => path.join('saves', n)); } catch { return []; }
-        })();
+        let gameDirs;
+        try { gameDirs = gameKey ? [path.dirname(this.slotRel(gameKey, 'x'))] : fs.readdirSync(this.p('saves')).map(n => path.join('saves', n)); } catch { return out; }
         for (const g of gameDirs) {
             let ids = [];
             try { ids = fs.readdirSync(this.p(g)); } catch { continue; }
             for (const id of ids) {
-                const meta = this.decodeMeta(readOrNull(this.p(g, id, this.fileNames().meta)) || Buffer.alloc(0));
+                let meta = null;
+                try { meta = JSON.parse(fs.readFileSync(this.p(g, id, META), 'utf8')); } catch { /* not a slot */ }
                 if (meta && meta.id === id) out.push(meta);
             }
         }
         return out;
     }
 
-    // Writes the decrypted zip of a slot (current version, or an older commit) to destZip
+    // Copies the zip of a slot (current version, or an older commit) to destZip
     async readData(gameKey, slotId, destZip, ref) {
-        const rel = path.join(this.slotRel(gameKey, slotId), this.fileNames().data);
+        const rel = path.join(this.slotRel(gameKey, slotId), DATA);
         const raw = ref
             ? await git(['show', `${ref}:${rel.split(path.sep).join('/')}`], { cwd: this.dir, buffer: true })
             : fs.readFileSync(this.p(rel));
         fs.mkdirSync(path.dirname(destZip), { recursive: true });
-        fs.writeFileSync(destZip, this.keys ? crypto.decrypt(raw, this.keys.enc) : raw);
+        fs.writeFileSync(destZip, raw);
     }
 
     // ---- writing ----
@@ -159,9 +111,7 @@ class Store {
         let lastError;
         for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
             await this.refresh();
-            this.initFormat();
             await change();
-            if (this.format && !fs.existsSync(this.p('format.json'))) fs.writeFileSync(this.p('format.json'), JSON.stringify(this.format));
             await git(['add', '-A'], { cwd: this.dir });
             const dirty = (await git(['status', '--porcelain'], { cwd: this.dir })).trim();
             if (!dirty) return;
@@ -187,9 +137,8 @@ class Store {
             if ((existing ? existing.rev : 0) !== expectRev) throw new StoreError('CONFLICT', 'The cloud save changed on another computer', { remote: existing });
             const rel = this.slotRel(gameKey, meta.id);
             fs.mkdirSync(this.p(rel), { recursive: true });
-            const names = this.fileNames();
-            fs.writeFileSync(this.p(rel, names.data), this.keys ? crypto.encrypt(zip, this.keys.enc) : zip);
-            fs.writeFileSync(this.p(rel, names.meta), this.encodeMeta(meta));
+            fs.writeFileSync(this.p(rel, DATA), zip);
+            fs.writeFileSync(this.p(rel, META), JSON.stringify(meta, null, 2));
         });
     }
 
@@ -198,7 +147,7 @@ class Store {
         await this.commitAndPush(`rename ${meta.id.slice(0, 8)}`, () => {
             const rel = this.slotRel(gameKey, meta.id);
             if (!fs.existsSync(this.p(rel))) return;
-            fs.writeFileSync(this.p(rel, this.fileNames().meta), this.encodeMeta(meta));
+            fs.writeFileSync(this.p(rel, META), JSON.stringify(meta, null, 2));
         });
     }
 
@@ -210,23 +159,19 @@ class Store {
 
     // Older versions of a slot, newest first: [{sha, date, meta}]
     async history(gameKey, slotId, limit = 15) {
-        const metaRel = path.join(this.slotRel(gameKey, slotId), this.fileNames().meta).split(path.sep).join('/');
+        const metaRel = path.join(this.slotRel(gameKey, slotId), META).split(path.sep).join('/');
         let log = '';
         try { log = await git(['log', `-n${limit}`, '--format=%H%x09%cI', '--', metaRel], { cwd: this.dir }); } catch { return []; }
         const out = [];
         for (const line of log.split('\n').filter(Boolean)) {
             const [sha, date] = line.split('\t');
             try {
-                const meta = this.decodeMeta(await git(['show', `${sha}:${metaRel}`], { cwd: this.dir, buffer: true }));
+                const meta = JSON.parse(await git(['show', `${sha}:${metaRel}`], { cwd: this.dir }));
                 if (meta) out.push({ sha, date, meta });
             } catch { /* this commit deleted the slot */ }
         }
         return out;
     }
-}
-
-function readOrNull(file) {
-    try { return fs.readFileSync(file); } catch { return null; }
 }
 
 module.exports = { Store, StoreError, BRANCH };

@@ -41,9 +41,10 @@ let art = null;         // artwork cache for the current ROMs folder
 let gamesById = new Map();
 
 // Save slots and cloud saves (see lib/saves)
+const slotAdapters = saveAdapters.create(os.homedir());
 const saves = createManager({
     dir: path.join(path.dirname(config.configFile), 'saves'),
-    adapters: saveAdapters.create(os.homedir()),
+    adapters: slotAdapters,
     getCloud: config.getCloud,
     log: console.log
 });
@@ -101,7 +102,7 @@ function startDownload(game) {
 
 const downloadSnapshot = () => download && ({ path: download.game.path, title: download.game.title, state: download.state, received: download.received, total: download.total, bytesPerSec: download.bytesPerSec, message: download.message });
 
-let launching = false;   // a game is being prepared (its save downloaded) but has not started yet
+let launching = false;   // a launch is in progress (checking the emulator, downloading the save) but the game has not started yet
 
 function findGame(relPath) {
     return roms.scanGames(config.getRomsDir(), manifest).find(g => g.path === relPath) || null;
@@ -109,7 +110,7 @@ function findGame(relPath) {
 
 // Shows a failed save operation to the menu as {error, message}
 function saveFailure(err) {
-    const known = err instanceof SaveError || ['NO_GIT', 'OFFLINE', 'FIRST_RUN', 'NEED_PASSPHRASE', 'BAD_PASSPHRASE'].includes(err.code);
+    const known = err instanceof SaveError || ['NO_GIT', 'OFFLINE', 'FIRST_RUN'].includes(err.code);
     return { status: known ? 409 : 500, body: { error: err.code || 'failed', message: err.message } };
 }
 
@@ -168,6 +169,15 @@ function startJob(emu, action) {
 
 async function launchGame(relPath, slotId, onGameState) {
     if (current || launching) return { status: 409, body: { error: 'busy', message: 'A game is already running' } };
+    launching = true;   // held for the whole launch, so a second click can't start another one
+    try {
+        return await startGame(relPath, slotId, onGameState);
+    } finally {
+        launching = false;
+    }
+}
+
+async function startGame(relPath, slotId, onGameState) {
 
     const romsDir = config.getRomsDir();
     const abs = path.resolve(romsDir, relPath || '');
@@ -189,18 +199,15 @@ async function launchGame(relPath, slotId, onGameState) {
     // Pick the save slot: make this computer's copy current, then start the emulator on that slot's own data
     let slot = null;
     const game = findGame(relPath);
-    if (slotId && game && config.getCloud().slotsEnabled) {
-        launching = true;
+    if (slotId && game && slotAdapters.has(emu.id)) {
         try {
             const prep = await saves.prepare(game, slotId);
             if (prep.conflict) return { status: 409, body: { error: 'conflict', ...prep.conflict } };
-            args = [...saveAdapters.create(os.homedir()).get(emu.id).args(prep.slotRoot), ...args];
+            args = [...slotAdapters.get(emu.id).args(prep.slotRoot), ...args];
             slot = { game, id: slotId };
         } catch (err) {
             console.error(`[SAVES] ${err.message}`);
             return saveFailure(err);
-        } finally {
-            launching = false;
         }
     }
     console.log(`[LAUNCH] ${emu.name}: ${abs}${slot ? ` (slot ${slot.id})` : ''}`);
@@ -236,7 +243,7 @@ function stopCurrent() {
 async function openEmulator(id, onGameState) {
     const emu = emulatorsById.get(id);
     if (!emu) return { status: 404, body: { error: 'unknown', message: 'Unknown emulator' } };
-    if (current) return { status: 409, body: { error: 'busy', message: 'An emulator is already running' } };
+    if (current || launching) return { status: 409, body: { error: 'busy', message: 'An emulator is already running' } };
     if (!await flatpak.isInstalled(emu.flatpak)) {
         return { status: 409, body: { error: 'not_installed', emulator: emu.id, message: `${emu.name} is not installed` } };
     }
@@ -342,7 +349,7 @@ async function handleLibrary(route, req, res) {
     return false;
 }
 
-// /api/saves/* and /api/cloud. Returns true when it sent a response.
+// /api/saves/*. Returns true when it sent a response.
 async function handleSaves(route, url, req, res) {
     const needGame = body => {
         const game = findGame(url.searchParams.get('path') || body.path);
@@ -350,18 +357,11 @@ async function handleSaves(route, url, req, res) {
         return game;
     };
     try {
-        if (route === 'GET /api/cloud') {
-            return sendJson(res, 200, { ...await saves.status(), slotsEnabled: config.getCloud().slotsEnabled }), true;
-        }
-        if (route === 'POST /api/cloud') {
-            config.setCloud(await readJson(req));
-            return sendJson(res, 200, { ...await saves.status(), slotsEnabled: config.getCloud().slotsEnabled }), true;
-        }
         if (route === 'POST /api/saves/sync') return sendJson(res, 200, await saves.syncAll()), true;
         if (route === 'GET /api/saves') {
             const game = needGame({});
-            const supported = saveAdapters.create(os.homedir()).has(game.emulator);
-            if (!supported || !config.getCloud().slotsEnabled) return sendJson(res, 200, { supported: false, slots: [] }), true;
+            const supported = slotAdapters.has(game.emulator);
+            if (!supported) return sendJson(res, 200, { supported: false, slots: [] }), true;
             return sendJson(res, 200, { supported: true, ...await saves.listSlots(game) }), true;
         }
         const body = req.method === 'POST' ? await readJson(req) : {};
@@ -428,7 +428,7 @@ function createServer(onGameState) {
                     const handled = await handleLibrary(route, req, res);
                     if (handled) return;
                 }
-                if (url.pathname.startsWith('/api/saves') || url.pathname === '/api/cloud') {
+                if (url.pathname.startsWith('/api/saves')) {
                     const handled = await handleSaves(route, url, req, res);
                     if (handled) return;
                 }

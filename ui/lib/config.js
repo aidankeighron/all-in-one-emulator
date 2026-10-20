@@ -18,7 +18,7 @@ function load() {
 
 function save(cfg) {
     fs.mkdirSync(path.dirname(configFile), { recursive: true });
-    fs.writeFileSync(configFile, JSON.stringify(cfg, null, 2), { mode: 0o600 });   // may hold the saves passphrase
+    fs.writeFileSync(configFile, JSON.stringify(cfg, null, 2), { mode: 0o600 });   // holds the library access keys
 }
 
 // From a source checkout the ROMs live in <repo>/roms (the original layout);
@@ -79,26 +79,20 @@ function defaultRepoUrl() {
     return projectRemote;
 }
 
-// Save slots and cloud saves. Saves go to the "saves" branch of repoUrl (this project's own repository by default).
-function getCloud() {
-    const cfg = load();
-    return {
-        slotsEnabled: cfg.slotsEnabled !== false,
-        enabled: cfg.cloudEnabled !== false,
-        repoUrl: cfg.cloudRepoUrl || defaultRepoUrl(),
-        passphrase: cfg.cloudPassphrase || '',
-        deviceName: cfg.deviceName || ''
-    };
+// Cloud saves go to the "saves" branch of this project's own repository: the remote the menu was cloned from,
+// or the repository named in package.json when running as a packaged app. (cloudRepoUrl in config.json overrides it.)
+function packageRepoUrl() {
+    try {
+        const repo = require('../../package.json').repository;
+        const url = typeof repo === 'string' ? repo : repo && repo.url;
+        return url ? String(url).replace(/^git\+/, '') : '';
+    } catch { return ''; }
 }
 
-function setCloud(next) {
+function getCloud() {
     const cfg = load();
-    if (typeof next.slotsEnabled === 'boolean') cfg.slotsEnabled = next.slotsEnabled;
-    if (typeof next.enabled === 'boolean') cfg.cloudEnabled = next.enabled;
-    if (typeof next.repoUrl === 'string') cfg.cloudRepoUrl = next.repoUrl.trim();
-    if (typeof next.passphrase === 'string') cfg.cloudPassphrase = next.passphrase;
-    if (typeof next.deviceName === 'string') cfg.deviceName = next.deviceName.trim().slice(0, 30);
-    save(cfg);
+    const repoUrl = cfg.cloudRepoUrl || defaultRepoUrl() || packageRepoUrl();
+    return { enabled: !!repoUrl, repoUrl, deviceName: cfg.deviceName || '' };
 }
 
 // Sharing this computer's games, and the other computer whose games to show
@@ -127,4 +121,4 @@ const libraryCacheFile = path.join(path.dirname(configFile), 'library-cache.json
 const artworkDir = path.join(path.dirname(configFile), 'artwork');
 const soundsDir = process.env.SOUNDS_DIR || path.join(path.dirname(configFile), 'sounds');
 
-module.exports = { getRomsDir, setRomsDir, getAutoControllers, setAutoControllers, getSound, setSound, getCloud, setCloud, getLibrary, setLibrary, libraryCacheFile, configFile, artworkDir, soundsDir };
+module.exports = { getRomsDir, setRomsDir, getAutoControllers, setAutoControllers, getSound, setSound, getCloud, getLibrary, setLibrary, libraryCacheFile, configFile, artworkDir, soundsDir };

@@ -4,6 +4,7 @@
   "description": "Wii-style menu that launches Dolphin (Wii/GameCube) and Ryujinx (Switch)",
   "author": "aidankeighron",
   "license": "UNLICENSED",
+  "repository": { "type": "git", "url": "https://github.com/aidankeighron/all-in-one-emulator.git" },
   "main": "electron/main.js",
   "scripts": {
     "start": "electron . --no-sandbox",

@@ -81,9 +81,13 @@ a second device can't take over the menu.
 arrow) shows every controller the system can see, which player it is, whether it is USB or Bluetooth,
 and where it will play (GameCube port, Wii Remote slot).
 
-If the controller does nothing in the menu, open Settings: the **Controllers** section lists every pad the
-window can see and which buttons it reads as pressed. If it says none are detected, press a button
-with the window focused (browsers only expose a controller after its first button press).
+If the controller does nothing in the menu, check the Controllers page: it lists what the system can see. If
+it is empty, press a button on the controller with the window focused (browsers only expose a controller
+after its first button press).
+
+**Settings.** Three sections, switched with the tabs or **LB / RB**: **Games** (ROMs folder, emulators),
+**Sound & controls** (menu sound, automatic controller setup) and **Game library** (sharing games between
+computers, with a **How does this work?** walkthrough).
 
 **Artwork.** Each game tile shows a picture when one can be found, and the game's name otherwise:
 
@@ -134,34 +138,27 @@ first, and every upload is a new version you can restore from the **Start** hist
 firmware, keys and caches, except the folders holding game saves. The emulator is started pointed at that root
 (Ryujinx `-r`, Dolphin `-u`), so slots are isolated without locating or parsing any game's save files. Dolphin slots
 cover GameCube memory cards and Wii game saves; Ryujinx slots cover the Switch save folders. Open each emulator
-once from Settings before using slots (Ryujinx needs its folders to exist). Turn slots off in Settings -> Cloud
-saves to launch games directly with the emulator's normal shared saves.
+once from Settings before using slots (Ryujinx needs its folders to exist).
 
-**Where saves go.** To the `saves` branch of a git repository, by default the repository the menu was cloned from
-(change it in Settings -> Cloud saves). The menu uses your normal `git` login, so `git push` must already work
+**Where saves go.** To the `saves` branch of this project's repository (the one the menu was cloned from), as
+plain files. There are no settings for it. The menu uses your normal `git` login, so `git push` must already work
 from this computer. History only grows; very old versions can be removed by squashing that branch.
 
 **Privacy.** A save upload contains only the slot's save folders: never games, keys, firmware or emulator
 settings. If the repository is public, anyone can read what is pushed to it: game progress, the save names you
-type, this computer's name (set a neutral one in Settings), and timestamps. Commits carry a generic author, not
-your identity. If you'd rather not, set a passphrase in Settings and saves are encrypted before upload
-(AES-256-GCM, key from scrypt; folder, save, game and computer names are hidden too) or point the menu at a
-private repository. Use the same passphrase on every computer; it is kept in
-`~/.config/all-in-one-emulator/config.json` (readable only by you), and lost passphrases cannot be recovered.
-Cloning the project also downloads its `saves` branch unless you clone with `--single-branch`.
-
-Not yet verified against real emulators: `-r` / `-u` and the save folder layout are from the emulators' documented
-behaviour and were tested here against simulated folders only.
+type, this computer's name, and timestamps. Commits carry a generic author, not your identity. Cloning the
+project also downloads its `saves` branch unless you clone with `--single-branch`.
 
 ## Game library: share games between your computers
 
 One computer can share its games, and another can browse and download them from inside the menu.
 
-**On the computer that has the games:** Settings -> Game library -> turn on **Share this computer's games**.
+Settings -> **Game library** has a **How does this work?** button that walks through every step. In short:
+
+**On the computer that has the games:** turn on **Share this computer's games**.
 It shows an address (like `192.168.1.20:8765`) and an access key. Nothing is shared without the key.
 
-**On the other computer:** Settings -> Game library -> enter that address and key under **Show games from another
-computer**, then **Save**. The menu downloads the host's game list (generated fresh by the host every time, so it is
+**On the other computer:** enter that address and key under **Get games from another computer**, then **Save**. The menu downloads the host's game list (generated fresh by the host every time, so it is
 always current). Games you already have are normal tiles. Games you don't have show a download icon and the size;
 click one, press **Download**, and it downloads into the right folder in your ROMs folder. You can keep browsing
 while it downloads, cancel it, and start it again later to continue where it stopped. If the host is off, the
@@ -178,7 +175,7 @@ Games are copyrighted: share only copies you made from games you own, between yo
 The menu detects the controllers plugged in (Xbox, Switch Pro/Joy-Con, GameCube via the official
 adapter, Wii Remote, other gamepads) and, right before a game starts, writes them into that
 emulator's settings. Plug a controller in, start a game, and it works. Turn this off with the toggle in
-Settings -> Controllers; **Apply now** does it for every installed emulator without starting a game.
+Settings -> Sound & controls.
 
 | Emulator | What is set up |
 |---|---|

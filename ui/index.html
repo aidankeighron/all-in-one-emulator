@@ -409,6 +409,25 @@
             color: #4a5258;
         }
 
+        .settings-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
+        .settings-head h2 { margin: 0; }
+        .tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+        .tab { font: inherit; font-weight: 800; font-size: 14px; padding: 7px 16px; border-radius: 18px; border: 2px solid var(--wii-edge); background: #fff; color: #6b747c; cursor: pointer; }
+        .tab:hover { border-color: var(--wii-blue); color: var(--wii-blue-deep); }
+        .tab.active { background: linear-gradient(to bottom, #5cc6fa, #2c9fe0); border-color: #2c9fe0; color: #fff; }
+        .tab-pane[hidden] { display: none; }
+        .panel { min-height: 440px; }
+        .settings-foot { justify-content: space-between; margin-top: 22px; }
+        .panel.guide { width: min(640px, 92vw); min-height: 0; }
+        .guide .eyebrow { font-size: 12px; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: var(--wii-blue-deep); }
+        #guide-body { font-size: 15px; line-height: 1.6; display: flex; flex-direction: column; gap: 10px; min-height: 190px; }
+        #guide-body p { margin: 0; }
+        #guide-body code { background: #eef2f6; border: 1px solid var(--wii-edge); border-radius: 6px; padding: 2px 7px; user-select: text; word-break: break-all; }
+        .guide-box { background: #eaf6fd; border: 2px solid #9bd4f2; border-radius: 12px; padding: 10px 14px; font-weight: 700; color: #14507a; line-height: 1.7; }
+        .guide-box.off { background: #fff3dc; border-color: #f0c777; color: #6b3b00; }
+        .guide-dots { display: flex; gap: 8px; justify-content: center; margin-top: 14px; }
+        .guide-dots i { width: 10px; height: 10px; border-radius: 50%; background: #d3dae0; }
+        .guide-dots i.on { background: var(--wii-blue); box-shadow: 0 0 8px var(--wii-blue-glow); }
         .panel h2 { margin: 0 0 14px; font-size: 20px; color: #6b747c; letter-spacing: 1px; }
         .panel h3 { margin: 22px 0 8px; font-size: 14px; color: #8a9199; text-transform: uppercase; letter-spacing: 1.5px; }
         .panel .row { display: flex; gap: 10px; align-items: center; }
@@ -654,103 +673,98 @@
 
     <div class="overlay" id="settings-overlay" onclick="if (event.target === this) closeSettings()">
         <div class="panel">
-            <h2>Settings</h2>
-
-            <h3>ROMs folder</h3>
-            <div class="row">
-                <input type="text" id="roms-dir" spellcheck="false">
-                <button class="btn" id="browse-button" onclick="browseRomsDir()">Browse</button>
-                <button class="btn primary" onclick="saveRomsDir()">Save</button>
-            </div>
-            <div class="emu-row" style="border:none"><div class="desc">Put games (or .zip files) in subfolders named after the system: <span id="folder-list"></span></div></div>
-
-            <h3>Emulators</h3>
-            <div id="flatpak-warning" class="notice" style="display:none">
-                Emulators are installed with Flatpak, which isn't installed yet. Run
-                <code>sudo apt install flatpak</code> in a terminal, then reopen this menu.
-            </div>
-            <div id="emulator-list"></div>
-
-            <h3>Sound</h3>
-            <div class="emu-row" style="border-top:none">
-                <div class="info">
-                    <div class="name">Menu sounds and music</div>
-                    <div class="desc" id="sound-desc"></div>
-                </div>
-                <button class="btn" id="sound-toggle-button" onclick="toggleSound()">On</button>
-                <button class="btn" id="sfx-volume-button" onclick="cycleVolume('sfxVolume')">Effects</button>
-                <button class="btn" id="music-volume-button" onclick="cycleVolume('musicVolume')">Music</button>
-            </div>
-
-            <h3>Game library</h3>
-            <div class="emu-row" style="border-top:none">
-                <div class="info">
-                    <div class="name">Share this computer's games</div>
-                    <div class="desc">Other computers can list and download the games in your ROMs folder, with the access key below. Use your home network or Tailscale; don't expose it to the internet.</div>
-                    <div class="progress" id="share-status"></div>
-                </div>
-                <button class="btn" id="share-toggle-button" onclick="toggleShare()">Off</button>
-            </div>
-            <div id="share-details" style="display:none">
-                <div class="row"><input type="text" id="share-address" readonly title="Enter this on the other computer"><button class="btn" onclick="newShareKey()">New key</button></div>
-                <div class="row" style="margin-top:8px"><input type="text" id="share-key" readonly title="The access key"></div>
-            </div>
-            <div class="emu-row">
-                <div class="info">
-                    <div class="name">Show games from another computer</div>
-                    <div class="desc">Enter its address and access key. Games you don't have yet appear with a download icon.</div>
-                    <div class="progress" id="remote-status"></div>
+            <div class="settings-head">
+                <h2>Settings</h2>
+                <div class="tabs" role="tablist" aria-label="Settings sections">
+                    <button class="tab active" role="tab" data-tab="games" onclick="setTab('games')">Games</button>
+                    <button class="tab" role="tab" data-tab="general" onclick="setTab('general')">Sound &amp; controls</button>
+                    <button class="tab" role="tab" data-tab="library" onclick="setTab('library')">Game library</button>
                 </div>
             </div>
-            <div class="row"><input type="text" id="remote-address" spellcheck="false" placeholder="Server address, for example 192.168.1.20:8765"><button class="btn" onclick="testRemote()">Test</button></div>
-            <div class="row" style="margin-top:8px"><input type="password" id="remote-key" spellcheck="false" placeholder="Access key (leave empty to keep the saved one)"><button class="btn primary" onclick="saveRemote()">Save</button></div>
 
-            <h3>Cloud saves</h3>
-            <div id="cloud-warning" class="notice" style="display:none"></div>
-            <div class="emu-row" style="border-top:none">
-                <div class="info">
-                    <div class="name">Save slots</div>
-                    <div class="desc">Choosing a game lets you pick or create a named save.</div>
+            <div class="tab-pane" data-pane="games">
+                <h3>ROMs folder</h3>
+                <div class="row">
+                    <input type="text" id="roms-dir" spellcheck="false">
+                    <button class="btn" id="browse-button" onclick="browseRomsDir()">Browse</button>
+                    <button class="btn primary" onclick="saveRomsDir()">Save</button>
                 </div>
-                <button class="btn" id="slots-toggle-button" onclick="toggleCloud('slotsEnabled')">On</button>
-            </div>
-            <div class="emu-row">
-                <div class="info">
-                    <div class="name">Sync saves to the cloud</div>
-                    <div class="desc">Saves go to the <code>saves</code> branch of this repository. They are checked when the menu starts and when you pick a game, and uploaded when the game closes.</div>
-                    <div class="progress" id="cloud-status"></div>
-                </div>
-                <button class="btn" id="cloud-toggle-button" onclick="toggleCloud('enabled')">On</button>
-                <button class="btn" id="cloud-sync-button" onclick="syncNow()">Sync now</button>
-            </div>
-            <div class="row" style="margin-top:6px">
-                <input type="text" id="cloud-repo" spellcheck="false" placeholder="Repository (git URL)">
-                <button class="btn primary" id="cloud-repo-save" onclick="saveCloudRepo()">Save</button>
-            </div>
-            <div class="row" style="margin-top:8px">
-                <input type="text" id="cloud-device" spellcheck="false" placeholder="This computer's name, shown on saves (for example Desk PC)">
-                <button class="btn primary" onclick="saveDeviceName()">Save</button>
-            </div>
-            <div class="row" style="margin-top:8px">
-                <input type="password" id="cloud-pass" spellcheck="false" placeholder="Encryption passphrase (same on every computer)">
-                <button class="btn primary" id="cloud-pass-save" onclick="saveCloudPassphrase()">Save</button>
-            </div>
-            <div class="desc" id="cloud-devices" style="font-size:13px; margin-top:8px"></div>
+                <div class="desc" style="margin-top:8px">Put games (or .zip files) in subfolders named after the system: <span id="folder-list"></span></div>
 
-            <h3>Controllers</h3>
-            <div class="emu-row" style="border-top:none">
-                <div class="info">
-                    <div class="name">Set up emulator controllers automatically</div>
-                    <div class="desc">Before each game starts, the controllers plugged in right now are written into that emulator's settings.</div>
-                    <div class="progress" id="setup-status"></div>
+                <h3>Emulators</h3>
+                <div id="flatpak-warning" class="notice" style="display:none">
+                    Emulators are installed with Flatpak, which isn't installed yet. Run
+                    <code>sudo apt install flatpak</code> in a terminal, then reopen this menu.
                 </div>
-                <button class="btn" id="auto-controllers-button" onclick="toggleAutoControllers()">On</button>
-                <button class="btn" id="apply-controllers-button" onclick="applyControllersNow()">Apply now</button>
+                <div id="emulator-list"></div>
             </div>
-            <div class="desc" id="pad-debug" style="font-size:13px; color:#8a9199; word-break:break-word"></div>
 
-            <div class="row" style="justify-content:flex-end; margin-top:18px">
+            <div class="tab-pane" data-pane="general" hidden>
+                <h3>Sound</h3>
+                <div class="emu-row" style="border-top:none">
+                    <div class="info">
+                        <div class="name">Menu sounds and music</div>
+                        <div class="desc" id="sound-desc"></div>
+                    </div>
+                    <button class="btn" id="sound-toggle-button" onclick="toggleSound()">On</button>
+                    <button class="btn" id="sfx-volume-button" onclick="cycleVolume('sfxVolume')">Effects</button>
+                    <button class="btn" id="music-volume-button" onclick="cycleVolume('musicVolume')">Music</button>
+                </div>
+
+                <h3>Controllers</h3>
+                <div class="emu-row" style="border-top:none">
+                    <div class="info">
+                        <div class="name">Set up controllers automatically</div>
+                        <div class="desc">Before each game starts, the controllers plugged in are set up in that emulator.</div>
+                    </div>
+                    <button class="btn" id="auto-controllers-button" onclick="toggleAutoControllers()">On</button>
+                </div>
+            </div>
+
+            <div class="tab-pane" data-pane="library" hidden>
+                <div class="emu-row" style="border-top:none">
+                    <div class="info">
+                        <div class="name">Share your games between computers</div>
+                        <div class="desc">Show the games on one computer in another computer's menu and download them with one click.</div>
+                    </div>
+                    <button class="btn primary" id="guide-button" onclick="openGuide()">How does this work?</button>
+                </div>
+
+                <h3>This computer has the games</h3>
+                <div class="emu-row" style="border-top:none">
+                    <div class="info">
+                        <div class="name">Share this computer's games</div>
+                        <div class="progress" id="share-status"></div>
+                    </div>
+                    <button class="btn" id="share-toggle-button" onclick="toggleShare()">Off</button>
+                </div>
+                <div id="share-details" style="display:none">
+                    <div class="row"><input type="text" id="share-address" readonly title="Enter this on the other computer"><button class="btn" onclick="newShareKey()">New key</button></div>
+                    <div class="row" style="margin-top:8px"><input type="text" id="share-key" readonly title="The access key"></div>
+                </div>
+
+                <h3>Get games from another computer</h3>
+                <div class="row"><input type="text" id="remote-address" spellcheck="false" placeholder="Server address, for example 192.168.1.20:8765"><button class="btn" onclick="testRemote()">Test</button></div>
+                <div class="row" style="margin-top:8px"><input type="password" id="remote-key" spellcheck="false" placeholder="Access key (leave empty to keep the saved one)"><button class="btn primary" onclick="saveRemote()">Save</button></div>
+                <div class="desc" id="remote-status" style="margin-top:8px"></div>
+            </div>
+
+            <div class="row settings-foot">
+                <span class="desc">LB / RB: switch sections</span>
                 <button class="btn" onclick="closeSettings()">Close (B)</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="overlay" id="guide-overlay" style="z-index:55" onclick="if (event.target === this) closeGuide()">
+        <div class="panel guide">
+            <div class="eyebrow" id="guide-label"></div>
+            <h2 id="guide-title" style="margin-top:4px"></h2>
+            <div id="guide-body"></div>
+            <div class="guide-dots" id="guide-dots"></div>
+            <div class="row" style="justify-content:space-between; margin-top:20px">
+                <button class="btn" id="guide-back" onclick="guideStep(-1)">Back (B)</button>
+                <button class="btn primary" id="guide-next" onclick="guideStep(1)">Next (A)</button>
             </div>
         </div>
     </div>
@@ -781,7 +795,6 @@
         let romsDir = '';
         let gameRunning = false;
         let settingsOpen = false;
-        let emulatorNames = {};
 
         // Clock Update
         function updateClock() {
@@ -1321,7 +1334,7 @@
             const tick = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
             if (st.problem) return `<span class="sheet-chip bad">${escapeHtml(st.problem.message)}</span>`;
             if (!st.configured) return '<span class="sheet-chip warn">Saved on this computer only</span>';
-            if (!st.online) return '<span class="sheet-chip warn">Offline: showing the saves on this computer</span>';
+            if (!st.online) return `<span class="sheet-chip warn" title="${escapeHtml(st.reason || '')}">Offline: showing the saves on this computer</span>`;
             return `<span class="sheet-chip">${tick}<span>Up to date with the cloud</span></span>`;
         }
 
@@ -1824,79 +1837,84 @@
             refreshLibrarySettings();
         }
 
-        // ---- Settings > Cloud ----
-        function renderCloud(c) {
-            document.getElementById('slots-toggle-button').textContent = c.slotsEnabled ? 'On' : 'Off';
-            document.getElementById('cloud-toggle-button').textContent = c.enabled ? 'On' : 'Off';
-            const repo = document.getElementById('cloud-repo');
-            if (document.activeElement !== repo) repo.value = c.repoUrl;
-            const dev = document.getElementById('cloud-device');
-            if (document.activeElement !== dev) dev.value = c.deviceName || '';
-            const warn = document.getElementById('cloud-warning');
-            if (c.enabled && c.visibility === 'public') {
-                warn.style.display = 'block';
-                warn.textContent = c.encrypted
-                    ? 'This repository is public, but your saves are encrypted before upload, so only the passphrase opens them.'
-                    : 'This repository is public, so anyone can read the saves stored there (game progress, save names and this computer\u2019s name). Set a passphrase below to encrypt them, or use a private repository.';
-            } else warn.style.display = 'none';
-            const bits = [];
-            if (!c.enabled) bits.push('Cloud sync is off: saves stay on this computer.');
-            else if (!c.repoUrl) bits.push('No repository set.');
-            else bits.push(c.lastSync ? `Last synced ${new Date(c.lastSync).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.` : 'Not synced yet.');
-            if (c.lastError && c.enabled) bits.push(c.lastError.code === 'OFFLINE' ? 'Offline right now.' : c.lastError.message);
-            if (c.pending) bits.push(`${c.pending} save${c.pending === 1 ? '' : 's'} waiting to upload.`);
-            document.getElementById('cloud-status').textContent = bits.join(' ');
-            document.getElementById('cloud-devices').textContent = c.devices.length
-                ? `Computers: ${c.devices.map(d => `${d.name} (${timeAgo(d.lastSeen).replace('Updated ', '')})`).join(', ')}. This one is ${c.device}.`
-                : `This computer is ${c.device}.`;
-        }
-
-        async function refreshCloud() {
-            try { renderCloud(await (await fetch('/api/cloud')).json()); } catch { /* shown next time */ }
-        }
-
-        async function toggleCloud(key) {
-            const cur = await (await fetch('/api/cloud')).json();
-            const r = await saveApi('/api/cloud', { [key]: !cur[key] });
-            Sfx.play('toggle');
-            renderCloud(r.body);
-        }
-
-        async function saveCloudRepo() {
-            const r = await saveApi('/api/cloud', { repoUrl: document.getElementById('cloud-repo').value });
-            renderCloud(r.body);
-            showToast('Repository saved');
-            syncAtStart(true);
-        }
-
-        async function saveDeviceName() {
-            const r = await saveApi('/api/cloud', { deviceName: document.getElementById('cloud-device').value });
-            renderCloud(r.body);
-            showToast('Computer name saved');
-        }
-
-        async function saveCloudPassphrase() {
-            const input = document.getElementById('cloud-pass');
-            const r = await saveApi('/api/cloud', { passphrase: input.value });
-            input.value = '';
-            renderCloud(r.body);
-            showToast(r.body.encrypted ? 'Passphrase saved: saves are encrypted' : 'Passphrase removed');
-            syncAtStart(true);
-        }
-
-        async function syncNow() {
-            showToast('Checking the cloud…');
-            await syncAtStart(false);
-            refreshCloud();
-        }
-
         // ================= SETTINGS =================
         async function openSettings() {
             Sfx.play('open');
             settingsOpen = true;
+            setTab('games', true);
             document.getElementById('settings-overlay').classList.add('open');
             await refreshSettings();
             setPadFocus(firstFocusable());
+        }
+
+        // ---- Settings tabs: Games / Sound & controls / Game library (LB and RB switch) ----
+        const TABS = ['games', 'general', 'library'];
+        let settingsTab = 'games';
+
+        function setTab(name, quiet) {
+            settingsTab = name;
+            document.querySelectorAll('#settings-overlay .tab-pane').forEach(p => { p.hidden = p.dataset.pane !== name; });
+            document.querySelectorAll('#settings-overlay .tab').forEach(t => { t.classList.toggle('active', t.dataset.tab === name); t.setAttribute('aria-selected', String(t.dataset.tab === name)); });
+            if (!quiet) { Sfx.play('page'); setPadFocus(document.querySelector('#settings-overlay .tab.active')); }
+        }
+
+        function cycleTab(delta) {
+            setTab(TABS[(TABS.indexOf(settingsTab) + delta + TABS.length) % TABS.length]);
+        }
+
+        // ---- Walkthrough: how to share games between computers ----
+        const guide = { open: false, step: 0, info: null };
+
+        function guideSteps() {
+            const sh = guide.info && guide.info.sharing;
+            const live = sh && sh.enabled
+                ? `<div class="guide-box">Address: ${sh.addresses.length ? sh.addresses.map(a => `<code>${escapeHtml(a)}</code>`).join(' or ') : `port <code>${sh.port}</code>`}<br>Access key: <code>${escapeHtml(sh.key)}</code></div>`
+                : '<div class="guide-box off">Sharing is off on this computer. Turn it on under Settings, Game library, if this is the computer with the games.</div>';
+            const port = sh ? sh.port : 8765;
+            return [
+                { title: 'Pick the computer that keeps your games', body: `<p>This is the <b>host</b>: the computer whose ROMs folder has the games. On it, open <b>Settings</b>, then <b>Game library</b>, and turn on <b>Share this computer's games</b>. It makes an access key and shows an address.</p>${live}<p>Keep the key private: it is what lets another computer download your games.</p>` },
+                { title: 'Connect the computers', body: `<p><b>Same home network:</b> nothing to do. Use the address from the last step.</p><p><b>Somewhere else:</b> install <b>Tailscale</b> (free) on both computers and sign in to the same account. On the host, run <code>tailscale ip -4</code>. Use that address (it starts with 100.) with <code>:${port}</code> on the end.</p>` },
+                { title: 'Open the port (only if the host has a firewall)', body: `<p>Check with <code>sudo ufw status</code>. If it says active, run one of these on the host:</p><p><b>Home network:</b><br><code>sudo ufw allow from 192.168.0.0/16 to any port ${port} proto tcp</code></p><p><b>Tailscale:</b><br><code>sudo ufw allow in on tailscale0 to any port ${port} proto tcp</code></p><p>Do not forward this port on your router.</p>` },
+                { title: 'Connect the other computer', body: '<p>On the computer that wants the games, open <b>Settings</b>, then <b>Game library</b>. Under <b>Get games from another computer</b>, type the address and the access key, then press <b>Save</b>.</p><p>When it says <b>Connected to</b> followed by the name of the host computer, you are done.</p>' },
+                { title: 'Download games', body: '<p>Games you do not have show a blue <b>download icon</b> and their size. Pick one and press <b>Download</b>.</p><p>You can keep browsing while it downloads. <b>Cancel</b> keeps what has arrived, so starting it again continues from there. When it finishes, the game is ready to play.</p>' }
+            ];
+        }
+
+        function renderGuide() {
+            const steps = guideSteps();
+            const st = steps[guide.step];
+            document.getElementById('guide-label').textContent = `Step ${guide.step + 1} of ${steps.length}`;
+            document.getElementById('guide-title').textContent = st.title;
+            document.getElementById('guide-body').innerHTML = st.body;
+            document.getElementById('guide-dots').innerHTML = steps.map((_, i) => `<i class="${i === guide.step ? 'on' : ''}"></i>`).join('');
+            document.getElementById('guide-back').textContent = guide.step === 0 ? 'Close (B)' : 'Back (B)';
+            document.getElementById('guide-next').textContent = guide.step === steps.length - 1 ? 'Done (A)' : 'Next (A)';
+        }
+
+        async function openGuide() {
+            Sfx.play('open');
+            guide.open = true;
+            guide.step = 0;
+            guide.info = null;
+            document.getElementById('guide-overlay').classList.add('open');
+            renderGuide();
+            try { guide.info = await (await fetch('/api/library/settings')).json(); } catch { /* the steps still read fine */ }
+            if (guide.open) renderGuide();
+        }
+
+        function closeGuide() {
+            guide.open = false;
+            document.getElementById('guide-overlay').classList.remove('open');
+            lastInputTime = Date.now() + 300;
+        }
+
+        function guideStep(delta) {
+            const last = guideSteps().length - 1;
+            if (delta < 0 && guide.step === 0) { Sfx.play('close'); return closeGuide(); }
+            if (delta > 0 && guide.step === last) { Sfx.play('select'); return closeGuide(); }
+            guide.step += delta;
+            Sfx.play('page');
+            renderGuide();
         }
 
         function closeSettings() {
@@ -1921,10 +1939,8 @@
             document.getElementById('flatpak-warning').style.display = data.flatpak ? 'none' : 'block';
             const folders = [...new Set(data.emulators.flatMap(e => e.folders))];
             document.getElementById('folder-list').innerHTML = folders.map(f => `<code>${escapeHtml(f)}</code>`).join(' ');
-            emulatorNames = Object.fromEntries(data.emulators.map(e => [e.id, e.name]));
             renderAutoButton(data.autoControllers);
             renderSound(await Sfx.load());
-            refreshCloud();
             refreshLibrarySettings();
 
             const list = document.getElementById('emulator-list');
@@ -1958,9 +1974,9 @@
             document.getElementById('sfx-volume-button').textContent = `Effects ${percent(st.sfxVolume)}`;
             document.getElementById('music-volume-button').textContent = `Music ${percent(st.musicVolume)}`;
             if (info) {
-                document.getElementById('sound-desc').textContent = info.effects || info.tracks
-                    ? `Using your sounds: ${info.effects} effect(s), ${info.tracks} music track(s). Folder: ${info.dir}`
-                    : `Using the built-in sounds. Put your own files in ${info.dir} (see README.txt there).`;
+                const el = document.getElementById('sound-desc');
+                el.textContent = info.effects || info.tracks ? `Using your own sounds (${info.effects} effects, ${info.tracks} tracks)` : 'Built-in sounds. Put your own files in the sounds folder (see the README).';
+                el.title = info.dir;
             }
         }
 
@@ -1985,10 +2001,6 @@
             Sfx.play(key === 'sfxVolume' ? 'select' : 'toggle');
         }
 
-        function describeSetup(results) {
-            return results.map(r => `${emulatorNames[r.emulator] || r.emulator}: ${r.message || r.status}`).join(' · ');
-        }
-
         async function toggleAutoControllers() {
             const on = document.getElementById('auto-controllers-button').textContent !== 'On';
             await fetch('/api/settings', {
@@ -1999,17 +2011,6 @@
             renderAutoButton(on);
             Sfx.play('toggle');
             showToast(on ? 'Controllers will be set up before each game' : 'Automatic controller setup is off');
-        }
-
-        async function applyControllersNow() {
-            const status = document.getElementById('setup-status');
-            status.textContent = 'Applying...';
-            try {
-                const { setup } = await (await fetch('/api/controllers/apply', { method: 'POST' })).json();
-                status.textContent = setup.length ? describeSetup(setup) : 'No emulators installed yet';
-            } catch {
-                status.textContent = 'Could not apply';
-            }
         }
 
         // ---- Controller focus inside Settings: d-pad / stick moves between buttons, A presses ----
@@ -2199,11 +2200,6 @@
                     chip.classList.add('connected');
                 }
             }
-            if (settingsOpen) {
-                document.getElementById('pad-debug').innerText = st.count === 0
-                    ? 'None detected. Connect the controller, then press a button on it with this window focused.'
-                    : `${st.ids.join(' | ')}   Pressed: ${st.pressed.length ? st.pressed.join(', ') : '(none)'}`;
-            }
         }
 
         function pollGamepad() {
@@ -2213,13 +2209,20 @@
 
             if (st.pressed.length) Sfx.unlock();
             if (st.count > 0 && !gameRunning) {
-                if (sheet.open) {
+                if (guide.open) {
+                    if (now - lastInputTime > 180) {
+                        if (st.a || st.right) { guideStep(1); lastInputTime = now + 250; }
+                        else if (st.b || st.left) { guideStep(-1); lastInputTime = now + 250; }
+                    }
+                } else if (sheet.open) {
                     if (now - lastInputTime > 180) sheetInput(st, now);
                 } else if (settingsOpen) {
                     if (now - lastInputTime > 180) {
                         const dir = st.down ? 'down' : st.up ? 'up' : st.right ? 'right' : st.left ? 'left' : null;
                         if (st.a) { pressFocused(); lastInputTime = now + 300; }
                         else if (st.b) { closeSettings(); } // B closes settings
+                        else if (st.rb) { cycleTab(1); lastInputTime = now + 150; }
+                        else if (st.lb) { cycleTab(-1); lastInputTime = now + 150; }
                         else if (dir) { moveFocus(dir); lastInputTime = now; }
                     }
                 } else if (now - lastInputTime > 180) { // debounce
@@ -2238,8 +2241,15 @@
 
         // Keyboard works too (handy without a controller, or to check that the menu itself is fine)
         window.addEventListener('keydown', e => {
+            if (guide.open) {
+                if (e.key === 'Escape') closeGuide();
+                else if (e.key === 'Enter' || e.key === 'ArrowRight') guideStep(1);
+                else if (e.key === 'ArrowLeft') guideStep(-1);
+                return e.preventDefault();
+            }
             if (sheet.open && !settingsOpen) return sheetKey(e);
             if (e.key === 'Escape' && settingsOpen) return closeSettings();
+            if (settingsOpen && e.target.tagName !== 'INPUT' && (e.key === 'PageDown' || e.key === 'PageUp')) return cycleTab(e.key === 'PageDown' ? 1 : -1);
             if (settingsOpen || gameRunning || e.target.tagName === 'INPUT') return;
             const dirs = { ArrowRight: 'right', ArrowLeft: 'left', ArrowDown: 'down', ArrowUp: 'up' };
             if (dirs[e.key]) { navigate(dirs[e.key]); e.preventDefault(); }
