@@ -23,7 +23,20 @@
         "-b",
         "-e",
         "{rom}"
-      ]
+      ],
+      "windows": {
+        "exe": "Dolphin.exe",
+        "dirs": [
+          "%ProgramFiles%/Dolphin",
+          "%ProgramFiles%/Dolphin Emulator",
+          "%LOCALAPPDATA%/Dolphin",
+          "%USERPROFILE%/Dolphin-x64",
+          "%USERPROFILE%/Dolphin",
+          "%USERPROFILE%/scoop/apps/dolphin/current",
+          "C:/Dolphin-x64"
+        ],
+        "download": "https://dolphin-emu.org/download/"
+      }
     },
     {
       "id": "ryujinx",
@@ -42,7 +55,18 @@
       ],
       "args": [
         "{rom}"
-      ]
+      ],
+      "windows": {
+        "exe": "Ryujinx.exe",
+        "dirs": [
+          "%ProgramFiles%/Ryujinx",
+          "%LOCALAPPDATA%/Ryujinx",
+          "%USERPROFILE%/Ryujinx",
+          "%USERPROFILE%/scoop/apps/ryujinx/current",
+          "C:/Ryujinx"
+        ],
+        "download": "https://ryujinx.app/download"
+      }
     }
   ]
 }

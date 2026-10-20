@@ -4,7 +4,8 @@ const os = require('os');
 const path = require('path');
 
 const config = require('./lib/config');
-const flatpak = require('./lib/flatpak');
+const platformLib = require('./lib/platform');
+const { createRunner } = require('./lib/runner');
 const roms = require('./lib/roms');
 const hotkey = require('./lib/hotkey');
 const controllers = require('./lib/controllers');
@@ -18,6 +19,16 @@ const library = require('./lib/library');
 const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'emulators.json'), 'utf8'));
 const emulatorsById = new Map(manifest.emulators.map(e => [e.id, e]));
 const emulatorsByFolder = roms.folderMap(manifest);
+
+// Linux starts emulators from Flatpak; Windows starts the program it finds (or you point it at)
+const runner = createRunner({ getPaths: config.getEmulatorPaths, emulatorsDir: config.emulatorsDir });
+const platformCtx = {
+    platform: runner.platform,
+    home: os.homedir(),
+    env: process.env,
+    menuDir: path.dirname(config.configFile),
+    exePath: id => runner.exePath(emulatorsById.get(id))
+};
 
 const contentTypes = {
     '.html': 'text/html',
@@ -41,7 +52,7 @@ let art = null;         // artwork cache for the current ROMs folder
 let gamesById = new Map();
 
 // Save slots and cloud saves (see lib/saves)
-const slotAdapters = saveAdapters.create(os.homedir());
+const slotAdapters = saveAdapters.create(platformCtx);
 const saves = createManager({
     dir: path.join(path.dirname(config.configFile), 'saves'),
     adapters: slotAdapters,
@@ -123,9 +134,9 @@ function artworkFor(romsDir) {
 
 // Writes the controller settings of one emulator (or all installed ones) from what is plugged in now
 function setupControllers(emulatorIds) {
-    const connected = controllers.detect();
+    const connected = controllers.detect({ platform: runner.platform });
     const results = emulatorIds.map(id => {
-        const result = inputconfig.apply(id, connected);
+        const result = inputconfig.apply(id, connected, platformCtx);
         console.log(`[PADS] ${id}: ${result.status}${result.message ? ` (${result.message})` : ''}`);
         return result;
     });
@@ -143,16 +154,18 @@ function processRoms() {
 }
 
 async function emulatorStates() {
-    const hasFlatpak = await flatpak.available();
+    const available = await runner.available();
     const list = await Promise.all(manifest.emulators.map(async e => ({
         id: e.id,
         name: e.name,
         description: e.description,
         folders: e.folders,
-        flatpak: e.flatpak,
-        installed: hasFlatpak && await flatpak.isInstalled(e.flatpak)
+        installed: available && await runner.isInstalled(e),
+        path: runner.exePath(e),                         // Windows: where its program was found
+        download: (e.windows && e.windows.download) || null
     })));
-    return { flatpak: hasFlatpak, emulators: list };
+    // "flatpak" is true when emulators can be installed or found at all (always on Windows)
+    return { flatpak: available, platform: runner.platform, manual: runner.manual, emulatorsDir: config.emulatorsDir, emulators: list };
 }
 
 function startJob(emu, action) {
@@ -160,7 +173,7 @@ function startJob(emu, action) {
     const job = { id, emulator: emu.id, action, state: 'running', lines: [] };
     jobs.set(id, job);
     const onLine = line => { job.lines = [...job.lines, line].slice(-15); };
-    (action === 'install' ? flatpak.install(emu.flatpak, onLine) : flatpak.uninstall(emu.flatpak, onLine))
+    (action === 'install' ? runner.install(emu, onLine) : runner.uninstall(emu, onLine))
         .then(code => { job.state = code === 0 ? 'done' : 'error'; });
     return job;
 }
@@ -188,11 +201,11 @@ async function startGame(relPath, slotId, onGameState) {
     const emu = emulatorsByFolder.get(folder);
     if (!emu) return { status: 400, body: { error: 'invalid', message: `No emulator for folder "${folder}"` } };
 
-    if (!await flatpak.isInstalled(emu.flatpak)) {
-        return { status: 409, body: { error: 'not_installed', emulator: emu.id, message: `${emu.name} is not installed` } };
+    if (!await runner.isInstalled(emu)) {
+        return { status: 409, body: { error: 'not_installed', emulator: emu.id, message: `${emu.name} ${runner.manual ? 'was not found. Locate it in Settings' : 'is not installed'}` } };
     }
 
-    await flatpak.grantAccess(emu.flatpak, romsDir);
+    await runner.grantAccess(emu, romsDir);
     if (config.getAutoControllers()) setupControllers([emu.id]);
     let args = emu.args.map(a => a === '{rom}' ? abs : a);
 
@@ -212,11 +225,11 @@ async function startGame(relPath, slotId, onGameState) {
     }
     console.log(`[LAUNCH] ${emu.name}: ${abs}${slot ? ` (slot ${slot.id})` : ''}`);
 
-    current = { emulator: emu.id, path: relPath, flatpak: emu.flatpak };
+    current = { emulator: emu.id, path: relPath, emu };
     lastError = null;
     const started = Date.now();
     const stopWatching = process.env.EMU_NO_HOTKEY ? () => {} : hotkey.start(stopCurrent);
-    current.child = flatpak.launch(emu.flatpak, args, (code, stderr) => {
+    current.child = runner.launch(emu, args, (code, stderr) => {
         stopWatching();
         current = null;
         if (code !== 0 && Date.now() - started < 10000) {
@@ -233,10 +246,10 @@ async function startGame(relPath, slotId, onGameState) {
 // Back+Start held for 1.5s: quit the running game
 function stopCurrent() {
     if (!current || !current.child) return;
-    const { flatpak: id } = current;
-    console.log(`[HOTKEY] Stopping ${id}`);
-    current.child.kill('SIGTERM');
-    setTimeout(() => { if (current && current.flatpak === id) flatpak.kill(id); }, 3000);
+    const { emu, child } = current;
+    console.log(`[HOTKEY] Stopping ${emu.id}`);
+    child.kill('SIGTERM');
+    setTimeout(() => { if (current && current.child === child) runner.forceKill(emu, child); }, 3000);
 }
 
 // Opens the emulator's own window (no game) so the user can set up controllers, BIOS, etc.
@@ -244,16 +257,16 @@ async function openEmulator(id, onGameState) {
     const emu = emulatorsById.get(id);
     if (!emu) return { status: 404, body: { error: 'unknown', message: 'Unknown emulator' } };
     if (current || launching) return { status: 409, body: { error: 'busy', message: 'An emulator is already running' } };
-    if (!await flatpak.isInstalled(emu.flatpak)) {
-        return { status: 409, body: { error: 'not_installed', emulator: emu.id, message: `${emu.name} is not installed` } };
+    if (!await runner.isInstalled(emu)) {
+        return { status: 409, body: { error: 'not_installed', emulator: emu.id, message: `${emu.name} ${runner.manual ? 'was not found. Locate it first' : 'is not installed'}` } };
     }
 
-    await flatpak.grantAccess(emu.flatpak, config.getRomsDir());
+    await runner.grantAccess(emu, config.getRomsDir());
     console.log(`[OPEN] ${emu.name}`);
-    current = { emulator: emu.id, path: null, flatpak: emu.flatpak };
+    current = { emulator: emu.id, path: null, emu };
     lastError = null;
     const started = Date.now();
-    current.child = flatpak.launch(emu.flatpak, emu.guiArgs || [], (code, stderr) => {
+    current.child = runner.launch(emu, emu.guiArgs || [], (code, stderr) => {
         current = null;
         if (code !== 0 && Date.now() - started < 10000) {
             lastError = `${emu.name} exited with an error: ${(stderr || '').trim().split('\n').pop()}`;
@@ -404,6 +417,10 @@ function createServer(onGameState) {
                     games.sort((a, b) => a.title.localeCompare(b.title));
                     return sendJson(res, 200, { games, romsDir, artPending: covers.pending(), server: theirs ? { name: theirs.name, offline: !!remote.error } : null });
                 }
+                if (route === 'POST /api/art/retry') {
+                    const covers = artworkFor(config.getRomsDir());
+                    return sendJson(res, 200, { cleared: covers.retryMisses() });
+                }
                 const a = url.pathname.match(/^\/api\/art\/(\w+)$/);
                 if (req.method === 'GET' && a) {
                     const game = gamesById.get(a[1]);
@@ -432,10 +449,15 @@ function createServer(onGameState) {
                     const handled = await handleSaves(route, url, req, res);
                     if (handled) return;
                 }
+                if (route === 'POST /api/controllers/report') {
+                    controllers.report((await readJson(req)).pads);      // Windows: the window says which gamepads it sees
+                    return sendJson(res, 200, { ok: true });
+                }
                 if (route === 'GET /api/controllers') {
-                    const list = controllers.detect();
+                    const list = controllers.detect({ platform: runner.platform });
                     const roles = inputconfig.assignments(list);
                     return sendJson(res, 200, {
+                        platform: runner.platform,
                         controllers: list.map(c => ({ ...c, roles: roles[c.id] })),
                         autoSetup: config.getAutoControllers(),
                         setup: lastSetup
@@ -467,8 +489,21 @@ function createServer(onGameState) {
                 if (req.method === 'POST' && m) {
                     const emu = emulatorsById.get(m[1]);
                     if (!emu) return sendJson(res, 404, { error: 'unknown emulator' });
-                    if (!await flatpak.available()) return sendJson(res, 409, { error: 'flatpak_missing' });
+                    if (runner.manual) return sendJson(res, 409, { error: 'manual', message: 'On Windows, put the emulator in the emulators folder, or use Locate' });
+                    if (!await runner.available()) return sendJson(res, 409, { error: 'flatpak_missing' });
                     return sendJson(res, 200, startJob(emu, m[2]));
+                }
+                const loc = url.pathname.match(/^\/api\/emulators\/([\w-]+)\/locate$/);
+                if (req.method === 'POST' && loc) {
+                    const emu = emulatorsById.get(loc[1]);
+                    if (!emu) return sendJson(res, 404, { error: 'unknown emulator' });
+                    const body = await readJson(req);
+                    const file = typeof body.path === 'string' ? body.path : '';
+                    if (file && !(path.isAbsolute(file) && fs.existsSync(file) && fs.statSync(file).isFile())) {
+                        return sendJson(res, 400, { error: 'invalid', message: 'That file does not exist' });
+                    }
+                    config.setEmulatorPath(emu.id, file);       // an empty path forgets the choice
+                    return sendJson(res, 200, await emulatorStates());
                 }
                 const o = url.pathname.match(/^\/api\/emulators\/([\w-]+)\/open$/);
                 if (req.method === 'POST' && o) {

@@ -2,11 +2,9 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const configFile = path.join(
-    process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'),
-    'all-in-one-emulator',
-    'config.json'
-);
+const platformLib = require('./platform');
+
+const configFile = path.join(platformLib.configDir(), 'config.json');
 
 function load() {
     try {
@@ -118,7 +116,22 @@ function setLibrary(next) {
 
 const libraryCacheFile = path.join(path.dirname(configFile), 'library-cache.json');
 
+// Windows: where each emulator's program is, when the person chose it with "Locate"
+function getEmulatorPaths() {
+    return load().emulatorPaths || {};
+}
+
+function setEmulatorPath(id, file) {
+    const cfg = load();
+    cfg.emulatorPaths = { ...cfg.emulatorPaths };
+    if (file) cfg.emulatorPaths[id] = file; else delete cfg.emulatorPaths[id];
+    save(cfg);
+}
+
+// Windows: a folder where unpacked emulators are found without any setup
+const emulatorsDir = path.join(path.dirname(configFile), 'emulators');
+
 const artworkDir = path.join(path.dirname(configFile), 'artwork');
 const soundsDir = process.env.SOUNDS_DIR || path.join(path.dirname(configFile), 'sounds');
 
-module.exports = { getRomsDir, setRomsDir, getAutoControllers, setAutoControllers, getSound, setSound, getCloud, getLibrary, setLibrary, libraryCacheFile, configFile, artworkDir, soundsDir };
+module.exports = { getRomsDir, setRomsDir, getAutoControllers, setAutoControllers, getSound, setSound, getCloud, getLibrary, setLibrary, libraryCacheFile, getEmulatorPaths, setEmulatorPath, emulatorsDir, configFile, artworkDir, soundsDir };

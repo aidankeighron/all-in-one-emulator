@@ -696,6 +696,7 @@
                     Emulators are installed with Flatpak, which isn't installed yet. Run
                     <code>sudo apt install flatpak</code> in a terminal, then reopen this menu.
                 </div>
+                <div id="windows-note" class="notice" style="display:none"></div>
                 <div id="emulator-list"></div>
             </div>
 
@@ -1034,9 +1035,21 @@
             }
         }
 
+        // Windows has no way for the server to see controllers, so this window says which it can see
+        let padPlatform = null;
+        async function reportPads() {
+            const pads = (navigator.getGamepads ? [...navigator.getGamepads()] : []).filter(Boolean).map(g => ({ index: g.index, id: g.id, mapping: g.mapping }));
+            await fetch('/api/controllers/report', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pads }) });
+        }
+
         async function refreshControllers() {
             try {
-                const data = await (await fetch('/api/controllers')).json();
+                if (padPlatform === 'win32') await reportPads();
+                let data = await (await fetch('/api/controllers')).json();
+                if (padPlatform === null) {
+                    padPlatform = data.platform;
+                    if (padPlatform === 'win32') { await reportPads(); data = await (await fetch('/api/controllers')).json(); }
+                }
                 const json = JSON.stringify(data.controllers);
                 const changed = json !== padJson;
                 padJson = json;
@@ -1138,6 +1151,7 @@
         }
 
         async function rescan() {
+            try { await fetch('/api/art/retry', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }); } catch { /* optional */ }
             await Promise.all([loadGames(), refreshControllers()]);
             const synced = await syncAtStart(true);
             if (!synced || !synced.updated || !synced.updated.length) showToast('Refreshed');
@@ -1945,9 +1959,35 @@
 
             const list = document.getElementById('emulator-list');
             list.innerHTML = '';
+            const note = document.getElementById('windows-note');
+            note.style.display = data.manual ? 'block' : 'none';
+            if (data.manual) {
+                note.innerHTML = `Unzip each emulator into its own folder inside <code>${escapeHtml(data.emulatorsDir)}</code> and it is found automatically, or press <b>Locate</b> to choose its program. <button class="btn" id="open-emulators-folder" style="margin-left:6px">Open folder</button>`;
+                document.getElementById('open-emulators-folder').addEventListener('click', () => openFolder(data.emulatorsDir));
+            }
+
             for (const emu of data.emulators) {
                 const row = document.createElement('div');
                 row.className = 'emu-row';
+                if (data.manual) {
+                    // Windows: the menu can't install emulators, so it finds them, or you point at them
+                    row.innerHTML = `
+                        <div class="info">
+                            <div class="name">${escapeHtml(emu.name)} <span class="state">${emu.installed ? 'Found' : ''}</span></div>
+                            <div class="desc">${escapeHtml(emu.description)} &middot; folders: ${emu.folders.map(escapeHtml).join(', ')}</div>
+                            <div class="progress" id="progress-${emu.id}" style="word-break:break-all">${emu.installed ? escapeHtml(emu.path || '') : 'Not found yet'}</div>
+                        </div>
+                        ${emu.installed ? `<button class="btn" id="open-${emu.id}" title="Open ${escapeHtml(emu.name)} to set up controllers, BIOS and other settings">Open</button>` : ''}
+                        ${!emu.installed && emu.download ? `<button class="btn primary" id="dl-${emu.id}">Download</button>` : ''}
+                        <button class="btn ${emu.installed ? '' : ''}" id="loc-${emu.id}">Locate</button>`;
+                    row.querySelector(`#loc-${emu.id}`).addEventListener('click', () => locateEmulator(emu));
+                    const dlBtn = row.querySelector(`#dl-${emu.id}`);
+                    if (dlBtn) dlBtn.addEventListener('click', () => openLink(emu.download));
+                    const openBtn = row.querySelector(`#open-${emu.id}`);
+                    if (openBtn) openBtn.addEventListener('click', () => openEmulator(emu));
+                    list.appendChild(row);
+                    continue;
+                }
                 row.innerHTML = `
                     <div class="info">
                         <div class="name">${escapeHtml(emu.name)} <span class="state">${emu.installed ? 'Installed' : ''}</span></div>
@@ -2079,6 +2119,26 @@
             } else {
                 await refreshSettings();
             }
+        }
+
+        // Windows: choose an emulator's program, open its download page, open the folder that is searched
+        async function locateEmulator(emu) {
+            if (!window.electronAPI || !window.electronAPI.pickFile) return showToast('Locate works in the Emulator Menu app. Or unzip the emulator into the emulators folder.');
+            const file = await window.electronAPI.pickFile(emu.name);
+            if (!file) return;
+            const r = await saveApi(`/api/emulators/${emu.id}/locate`, { path: file });
+            showToast(r.ok ? `${emu.name} set` : (r.body.message || 'Could not use that file'));
+            refreshSettings();
+        }
+
+        function openLink(url) {
+            if (window.electronAPI && window.electronAPI.openExternal) window.electronAPI.openExternal(url);
+            else window.open(url, '_blank');
+        }
+
+        function openFolder(dir) {
+            if (window.electronAPI && window.electronAPI.openPath) window.electronAPI.openPath(dir);
+            else showToast(`The emulators folder is ${dir}`);
         }
 
         async function openEmulator(emu) {

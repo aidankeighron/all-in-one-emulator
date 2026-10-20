@@ -29,12 +29,13 @@ function createDefaultFolders(romsDir, manifest) {
 
 // ---------- Game list ----------
 
-// Display name only: the file on disk is never renamed. Drops "(USA)", "(Rev 1)" and similar
-// parenthesised tags, unless that would leave nothing.
+// Display name only: the file on disk is never renamed. Drops tags such as "(USA)", "(Rev 1)", "[0100...][v0]"
+// (Switch dumps carry the title ID and version in brackets), turns "Name - Subtitle" into "Name: Subtitle", and
+// never ends up empty.
 function cleanTitle(name) {
-    const spaced = name.replace(/[-_]/g, ' ');
-    const stripped = spaced.replace(/\([^)]*\)/g, ' ').replace(/\s+/g, ' ').trim();
-    return stripped || spaced.replace(/\s+/g, ' ').trim();
+    const spaced = name.replace(/_/g, ' ').replace(/\s+-\s+/g, ': ').replace(/\s+/g, ' ').trim();
+    const stripped = spaced.replace(/\([^)]*\)|\[[^\]]*\]/g, ' ').replace(/\s+/g, ' ').replace(/\s+:/g, ':').trim();
+    return stripped || spaced;
 }
 
 function scanGames(romsDir, manifest) {
@@ -99,10 +100,14 @@ async function describeNonZip(file) {
 }
 
 function findSevenZip() {
+    const win = process.platform === 'win32';
     const dirs = (process.env.PATH || '').split(path.delimiter);
+    if (win) {
+        for (const base of [process.env.ProgramFiles, process.env['ProgramFiles(x86)']].filter(Boolean)) dirs.push(path.join(base, '7-Zip'));
+    }
     for (const name of ['7z', '7zz', '7za']) {
         for (const dir of dirs) {
-            const p = path.join(dir, name);
+            const p = path.join(dir, win ? `${name}.exe` : name);
             if (fs.existsSync(p)) return p;
         }
     }
@@ -224,7 +229,8 @@ async function processRoms(romsDir, manifest, { keepZips = !!process.env.KEEP_ZI
 
         const why = await describeNonZip(zip);
         if (why && !sevenZip) {
-            log(`FAILED ${rel}: ${why}${why.includes('7z') || why.includes('RAR') ? ' (install p7zip-full to import it)' : ''}`);
+            const needs7z = why.includes('7z') || why.includes('RAR');
+            log(`FAILED ${rel}: ${why}${needs7z ? ` (install ${process.platform === 'win32' ? '7-Zip' : 'p7zip-full'} to import it)` : ''}`);
             failed++;
             continue;
         }

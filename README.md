@@ -3,6 +3,26 @@
 A Wii-style menu that launches your games in Dolphin (Wii/GameCube) and Ryujinx (Switch). Emulators are installed from inside the menu as Flatpaks, so there is
 no Docker and no per-emulator setup. Drop games (or `.zip` files) into your ROMs folder and play.
 
+# Windows
+
+The menu runs on Windows too. The differences from Linux:
+
+- **Emulators are not installed by the menu.** Download them yourself (Settings -> Games has a **Download** button
+  for each) and either unzip each one into its own folder inside the emulators folder (the **Open folder** button
+  there opens it), or press **Locate** and choose the emulator's program (`Dolphin.exe`, `Ryujinx.exe`). The menu also
+  looks in the usual places such as `C:\Dolphin-x64`.
+- **Save slots and cloud saves work the same.** They use the emulator's data in `%APPDATA%` (or the folder beside a
+  portable copy). Open each emulator once first so it creates its folders. Cloud saves need
+  [Git for Windows](https://git-scm.com/download/win), signed in so that `git push` works.
+- **Controllers:** the menu sees what the window sees, so press a button on a controller with the menu focused.
+  Xbox controllers are set up through XInput and others through SDL. Dolphin handles a real Wii Remote or an
+  official GameCube adapter itself (the adapter needs its driver set up in Dolphin first).
+- **Back + Start to quit a game is Linux only.** On Windows use the emulator's own Stop or Exit.
+- **Game library:** a Windows computer can browse and download games from the Linux host the same way. Hosting from
+  Windows also works, but Windows Firewall will ask to allow it.
+- Build a Windows app on a Windows machine with `npm run dist:win` (a single portable `.exe` in `dist/`). Building it
+  on Linux needs Wine.
+
 # Setup (Ubuntu)
 
 Install Flatpak, which the menu uses to install and run the emulators:

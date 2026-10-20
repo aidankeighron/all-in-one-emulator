@@ -113,3 +113,10 @@ test('cleanTitle drops parenthesised tags for display only', async () => {
     assert.strictEqual(game.title, 'Wii Sports');
     assert.strictEqual(game.path, 'wii/Wii Sports (USA) (Rev 1).iso', 'file path is untouched');
 });
+
+test('cleanTitle copes with Switch dump names', async () => {
+    assert.strictEqual(roms.cleanTitle('Super Mario Odyssey [0100000000010000][v0]'), 'Super Mario Odyssey');
+    assert.strictEqual(roms.cleanTitle('The Legend of Zelda - Breath of the Wild [01007EF00011E000][v1.6.0] [BASE]'), 'The Legend of Zelda: Breath of the Wild');
+    assert.strictEqual(roms.cleanTitle('Animal_Crossing_-_New_Horizons[0100]'), 'Animal Crossing: New Horizons');
+    assert.strictEqual(roms.cleanTitle('Spider-Man'), 'Spider-Man', 'a hyphen inside a word stays');
+});

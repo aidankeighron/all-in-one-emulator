@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain, Menu } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, Menu, shell } = require('electron');
 const path = require('path');
 const server = require('../ui/server');
 
@@ -49,6 +49,28 @@ async function createWindow() {
     win.on('closed', () => { win = null; });
     win.loadURL(`http://127.0.0.1:${port}`);
 }
+
+// Windows: choose an emulator's program
+ipcMain.handle('pick-file', async (event, filterName) => {
+    const result = await dialog.showOpenDialog(win, {
+        properties: ['openFile'],
+        filters: [{ name: String(filterName || 'Program'), extensions: ['exe'] }, { name: 'All files', extensions: ['*'] }]
+    });
+    return result.canceled ? null : result.filePaths[0];
+});
+
+// Links in Settings (an emulator's download page) open in the normal browser, https only
+ipcMain.handle('open-external', async (event, url) => {
+    if (typeof url === 'string' && /^https:\/\//i.test(url)) await shell.openExternal(url);
+});
+
+// Opens a folder in the file manager (the emulators folder)
+ipcMain.handle('open-path', async (event, dir) => {
+    if (typeof dir === 'string' && path.isAbsolute(dir)) {
+        require('fs').mkdirSync(dir, { recursive: true });
+        await shell.openPath(dir);
+    }
+});
 
 ipcMain.handle('pick-folder', async () => {
     const result = await dialog.showOpenDialog(win, { properties: ['openDirectory', 'createDirectory'] });

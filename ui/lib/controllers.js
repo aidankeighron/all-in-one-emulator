@@ -134,10 +134,61 @@ function build(procDevices, usbIds = []) {
     return controllers;
 }
 
-function detect({ procFile = '/proc/bus/input/devices', usbRoot } = {}) {
+// ---------- Windows ----------
+// Windows has no /proc to read, so the menu window reports the gamepads it can see (the browser's Gamepad API)
+// and this turns that list into the same controller records. Chrome names them like
+//   "Xbox 360 Controller (XInput STANDARD GAMEPAD)"  or  "Pro Controller (STANDARD GAMEPAD Vendor: 057e Product: 2009)"
+
+// pads: [{index, id, mapping}] as reported by navigator.getGamepads()
+function fromGamepadApi(pads) {
+    const usable = (pads || []).filter(p => p && typeof p.id === 'string')
+        .map(p => {
+            const ids = p.id.match(/Vendor:\s*([0-9a-f]{4})\s+Product:\s*([0-9a-f]{4})/i);
+            const name = p.id.replace(/\s*\((?:[^()]|\([^()]*\))*\)\s*$/, '').trim() || p.id;
+            return { index: p.index, name, vendor: ids ? ids[1].toLowerCase() : '', product: ids ? ids[2].toLowerCase() : '', xinput: /xinput/i.test(p.id), js: null };
+        })
+        .filter(p => !NOT_A_PAD.test(p.name))
+        .sort((a, b) => a.index - b.index);
+
+    const seen = new Map();
+    let xinputs = 0, order = 0;
+    return usable.map((p, i) => {
+        const kind = p.xinput ? 'xbox' : classify(p);
+        const nth = seen.get(p.name) || 0;
+        seen.set(p.name, nth + 1);
+        const isPad = PAD_KINDS.has(kind);
+        return {
+            id: `pad${p.index}`,
+            name: p.name,
+            kind,
+            label: KIND_LABELS[kind],
+            connection: 'Connected',
+            vendor: p.vendor,
+            product: p.product,
+            js: null,
+            sdlIndex: isPad ? order++ : null,
+            nameIndex: nth,
+            xinputIndex: p.xinput ? xinputs++ : null,     // Dolphin reaches Xbox pads through XInput on Windows
+            pad: isPad,
+            player: i + 1
+        };
+    });
+}
+
+// The list last reported by the window. It is only trusted for a short while: if the window stops reporting
+// (closed, or minimised while a game runs) the controllers are treated as unknown rather than stale.
+let reported = { at: 0, pads: [] };
+const REPORT_TTL_MS = 60 * 1000;
+
+function report(pads, now = Date.now()) {
+    reported = { at: now, pads: Array.isArray(pads) ? pads.slice(0, 16) : [] };
+}
+
+function detect({ platform = process.platform, procFile = '/proc/bus/input/devices', usbRoot, now = Date.now() } = {}) {
+    if (platform === 'win32') return now - reported.at < REPORT_TTL_MS ? fromGamepadApi(reported.pads) : [];
     let text = '';
-    try { text = fs.readFileSync(procFile, 'utf8'); } catch { /* not Linux, or no input subsystem */ }
+    try { text = fs.readFileSync(procFile, 'utf8'); } catch { /* no input subsystem */ }
     return build(parseProc(text), readUsbIds(usbRoot));
 }
 
-module.exports = { parseProc, classify, build, detect, hasGcAdapter, KIND_LABELS, PAD_KINDS };
+module.exports = { parseProc, classify, build, detect, hasGcAdapter, fromGamepadApi, report, KIND_LABELS, PAD_KINDS };

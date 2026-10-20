@@ -1,16 +1,20 @@
 {
   "name": "emulator-menu",
   "version": "1.0.0",
-  "description": "Wii-style menu that launches Dolphin (Wii/GameCube) and Ryujinx (Switch)",
+  "description": "Wii-style menu that launches Dolphin (Wii/GameCube) and Ryujinx (Switch) on Linux and Windows",
   "author": "aidankeighron",
   "license": "UNLICENSED",
-  "repository": { "type": "git", "url": "https://github.com/aidankeighron/all-in-one-emulator.git" },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aidankeighron/all-in-one-emulator.git"
+  },
   "main": "electron/main.js",
   "scripts": {
     "start": "electron . --no-sandbox",
     "server": "node ui/server.js",
     "test": "node --test test/*.test.js",
-    "dist": "electron-builder --linux AppImage"
+    "dist": "electron-builder --linux AppImage",
+    "dist:win": "electron-builder --win portable"
   },
   "dependencies": {
     "yauzl": "^3.3.0",
@@ -34,6 +38,10 @@
       "category": "Game",
       "icon": "ui/assets/icon.png"
     },
-    "afterPack": "scripts/after-pack.js"
+    "afterPack": "scripts/after-pack.js",
+    "win": {
+      "target": "portable",
+      "icon": "ui/assets/icon.png"
+    }
   }
 }
