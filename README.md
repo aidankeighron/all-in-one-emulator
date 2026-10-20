@@ -208,6 +208,25 @@ are kept; only the controller entries are replaced, and the first time a file is
 copied next to it as `<file>.emulator-menu.bak`. Nothing is written when no suitable controller is
 connected, so keyboard setups are left alone.
 
+## Players and mappings
+
+On the Controllers page, **Players and mappings** sets up everything for Dolphin from inside the menu.
+
+- **Players:** four players, each with a **controller** (automatic, a particular connected controller, a real
+  Wii Remote, or not playing), a **Wii mapping** and a **GameCube mapping**. Choices are remembered by controller
+  name, so a pad keeps its player when you unplug it and plug it in again. Changes are written to Dolphin
+  immediately (**Sync now** repeats it) and again every time a game starts, so: quit a game, change who has which
+  controller here, start another game, and it is picked up.
+- **Mappings:** each mapping is a small JSON file in `~/.config/all-in-one-emulator/mappings/` (`%APPDATA%` on
+  Windows). **Edit mappings** lists the built-in ones (Wii Remote + Nunchuk, Wii Remote only, sideways, wheel,
+  gyro pointer for Switch pads, Classic Controller, two GameCube layouts). Built-ins are read-only: press
+  **Duplicate to edit**, then change any control with its dropdown, set the extension (Nunchuk, Classic
+  Controller, nothing) and whether the remote is held sideways, and **Save**. Players pick mappings from their own
+  dropdowns, so an Xbox pad can use one mapping with a Nunchuk and another without.
+- With a gamepad: up/down/left/right move, **A** steps a dropdown forward, **X** steps it back, **B** closes.
+- The control and input names were checked against Dolphin's source code. Not verified on a real Dolphin install.
+- Not covered: Ryujinx (see above), and a mapping cannot yet be shared between computers.
+
 ## Connecting Wii Remotes and Switch controllers
 
 Everything is done from the menu: on the Controllers page (LB from the first page, or click the controller

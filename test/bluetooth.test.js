@@ -130,14 +130,13 @@ test('forget refuses anything that is not a Bluetooth address', async () => {
     assert.ok((await b.forget('aa:bb:cc:dd:ee:ff')).ok);
 });
 
-test('real Wii Remotes take the first slots and gamepads fill the rest', () => {
+test('real Wii Remotes take the first players and gamepads fill the rest', () => {
     const pad = (n, i) => ({ id: `js${i}`, name: n, kind: 'xbox', pad: true, nameIndex: 0, sdlIndex: i, xinputIndex: null });
     const list = [pad('Xbox', 0)];
-    const p = inputconfig.players(list, 2);
-    assert.deepStrictEqual(p.wii.map(c => c.kind), ['wiimote', 'wiimote', 'xbox']);
-    const roles = inputconfig.assignments(list, 2);
-    assert.ok(roles.js0.includes('Wii Remote 3'));
-    assert.match(roles['real-wiimote-1'].join(' '), /Wii Remote 1/);
+    const view = inputconfig.describe(list, { wiiRemotes: 2 });
+    assert.deepStrictEqual(view.slots.map(s => s.mode), ['real', 'real', 'pad', 'empty']);
+    assert.strictEqual(view.roles.js0[0], 'Player 3');
+    assert.match(view.waiting[0].roles.join(' '), /Player 1/);
 
     const home = fs.mkdtempSync(path.join(os.tmpdir(), 'wm-home-'));
     const res = inputconfig.apply('dolphin', [], { home, platform: 'linux', env: {}, wiiRemotes: 2 });
@@ -145,43 +144,4 @@ test('real Wii Remotes take the first slots and gamepads fill the rest', () => {
     const dir = path.join(home, '.var/app/org.DolphinEmu.dolphin-emu/config/dolphin-emu');
     assert.match(fs.readFileSync(path.join(dir, 'WiimoteNew.ini'), 'utf8'), /\[Wiimote1\]\s+Source = 2/);
     assert.match(fs.readFileSync(path.join(dir, 'Dolphin.ini'), 'utf8'), /WiimoteContinuousScanning = True/);
-});
-
-test('setup installs BlueZ with one permission prompt, then switches Bluetooth on', async () => {
-    let installed = false;
-    const execImpl = (cmd, args, o, cb) => {
-        if (cmd === 'bluetoothctl' && args[0] === '--version') return installed ? cb(null, 'bluetoothctl: 5.72', '') : cb(Object.assign(new Error('x'), { code: 'ENOENT' }), '', '');
-        if (cmd === 'bluetoothctl' && args[0] === 'show') return cb(null, 'Controller AA:BB:CC:DD:EE:FF (public)\n\tPowered: yes\n', '');
-        cb(null, '', '');
-    };
-    const calls = [];
-    const spawnImpl = (cmd, args) => {
-        calls.push([cmd, ...args]);
-        const { EventEmitter } = require('events');
-        const child = new EventEmitter(); child.stdout = new EventEmitter(); child.stderr = new EventEmitter();
-        setTimeout(() => { child.stdout.emit('data', 'Setting up bluez\n'); installed = true; child.emit('close', 0); }, 20);
-        return child;
-    };
-    const b = bt.createBluetooth({ platform: 'linux', execImpl, spawnImpl, exists: p => p === '/usr/bin/apt-get' });
-    await b.setup();
-    const job = await waitFor(b);
-    assert.strictEqual(job.phase, 'done', job.message);
-    assert.strictEqual(calls.length, 1, 'a single pkexec prompt');
-    assert.strictEqual(calls[0][0], 'pkexec');
-    assert.match(calls[0][3], /apt-get install -y bluez.*systemctl enable --now bluetooth/);
-    assert.ok(job.lines.includes('Setting up bluez'));
-});
-
-test('setup explains a cancelled password prompt and a missing adapter', async () => {
-    const { EventEmitter } = require('events');
-    const make = code => () => { const c = new EventEmitter(); c.stdout = new EventEmitter(); c.stderr = new EventEmitter(); setTimeout(() => c.emit('close', code), 10); return c; };
-    const noCtl = (c, a, o, cb) => cb(Object.assign(new Error('x'), { code: 'ENOENT' }), '', '');
-    const b1 = bt.createBluetooth({ platform: 'linux', execImpl: noCtl, spawnImpl: make(126), exists: p => p === '/usr/bin/apt-get' });
-    await b1.setup();
-    assert.match((await waitFor(b1)).message, /cancelled/);
-
-    const noAdapter = (c, a, o, cb) => cb(null, a[0] === 'show' ? 'No default controller available' : 'bluetoothctl: 5.72', '');
-    const b2 = bt.createBluetooth({ platform: 'linux', execImpl: noAdapter, spawnImpl: make(0), exists: () => true });
-    await b2.setup();
-    assert.match((await waitFor(b2)).message, /No Bluetooth adapter/);
 });

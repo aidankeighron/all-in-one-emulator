@@ -16,6 +16,8 @@ const { createManager, SaveError } = require('./lib/saves/manager');
 const saveAdapters = require('./lib/saves/adapters');
 const library = require('./lib/library');
 const bluetoothLib = require('./lib/bluetooth');
+const mappingsLib = require('./lib/mappings');
+const playersLib = require('./lib/players');
 
 const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'emulators.json'), 'utf8'));
 const emulatorsById = new Map(manifest.emulators.map(e => [e.id, e]));
@@ -133,11 +135,13 @@ function artworkFor(romsDir) {
     return art;
 }
 
+const mappings = mappingsLib.createStore(config.mappingsDir);
+
 // Writes the controller settings of one emulator (or all installed ones) from what is plugged in now
 function setupControllers(emulatorIds) {
     const connected = controllers.detect({ platform: runner.platform });
     const results = emulatorIds.map(id => {
-        const result = inputconfig.apply(id, connected, { ...platformCtx, wiiRemotes: config.getWiiRemotes() });
+        const result = inputconfig.apply(id, connected, { ...platformCtx, wiiRemotes: config.getWiiRemotes(), players: config.getPlayers(), profiles: mappings });
         console.log(`[PADS] ${id}: ${result.status}${result.message ? ` (${result.message})` : ''}`);
         return result;
     });
@@ -330,6 +334,80 @@ async function handleBluetooth(route, req, res) {
     return false;
 }
 
+// What the Players screen shows
+function playersView() {
+    const list = controllers.detect({ platform: runner.platform });
+    const settings = { players: config.getPlayers(), wiiRemotes: config.getWiiRemotes() };
+    const view = inputconfig.describe(list, settings, mappings);
+    return {
+        platform: runner.platform,
+        players: settings.players,
+        wiiRemotes: settings.wiiRemotes,
+        controllers: list.filter(c => !c.adapter && (c.pad || c.kind === 'wiimote')).map(c => ({ key: playersLib.padKey(c), name: c.name, label: c.label, connection: c.connection, kind: c.kind })),
+        slots: view.slots.map(s => ({ index: s.index, mode: s.mode, controller: s.controller ? s.controller.name : null, missing: s.missing, wii: s.wii.name, gc: s.gc.name })),
+        adapter: list.some(c => c.adapter),
+        profiles: mappings.list().map(p => ({ id: p.id, name: p.name, target: p.target, builtin: p.builtin, description: p.description })),
+        synced: lastSetup.find(r => r.emulator === 'dolphin') || null
+    };
+}
+
+// Writes the saved players and mappings into every installed emulator now
+async function syncNow() {
+    const states = await emulatorStates();
+    const ids = states.emulators.filter(e => e.installed).map(e => e.id);
+    return setupControllers(ids);
+}
+
+// /api/players and /api/mappings. Returns true when it sent a response.
+async function handlePlayers(route, req, res) {
+    try {
+        if (route === 'GET /api/players') return sendJson(res, 200, playersView()), true;
+        if (route === 'POST /api/players') {
+            const body = await readJson(req);
+            if (!Array.isArray(body.players)) return sendJson(res, 400, { error: 'bad_players', message: 'Send the four players' }), true;
+            config.setPlayers(body.players);
+            await syncNow();
+            return sendJson(res, 200, playersView()), true;
+        }
+        if (route === 'POST /api/players/sync') {
+            await syncNow();
+            return sendJson(res, 200, playersView()), true;
+        }
+        if (route === 'POST /api/players/add-real') {
+            // "Use this Wii Remote": the first player who is not already using a gamepad or remote gets it
+            const list = config.getPlayers();
+            const free = list.findIndex(p => p.device === 'auto' || p.device === 'none');
+            if (free < 0) return sendJson(res, 409, { error: 'full', message: 'All four players already have a controller chosen. Change one on the Players screen.' }), true;
+            list[free] = { ...list[free], device: 'real' };
+            config.setPlayers(list);
+            await syncNow();
+            return sendJson(res, 200, { player: free + 1 }), true;
+        }
+        if (route === 'GET /api/mappings') {
+            return sendJson(res, 200, { profiles: mappings.list(), controls: mappingsLib.CONTROLS, settings: mappingsLib.SETTINGS, sources: mappingsLib.SOURCES, extensions: mappingsLib.EXTENSIONS, folder: config.mappingsDir }), true;
+        }
+        if (route === 'POST /api/mappings') {
+            const saved = mappings.save(await readJson(req));
+            await syncNow();
+            return sendJson(res, 200, { profile: saved }), true;
+        }
+        if (route === 'POST /api/mappings/duplicate') {
+            const body = await readJson(req);
+            return sendJson(res, 200, { profile: mappings.duplicate(body.id, typeof body.name === 'string' ? body.name : undefined) }), true;
+        }
+        if (route === 'POST /api/mappings/delete') {
+            mappings.remove((await readJson(req)).id);
+            await syncNow();
+            return sendJson(res, 200, { ok: true }), true;
+        }
+    } catch (err) {
+        const known = err instanceof mappingsLib.MappingError;
+        if (!known) console.error(`[PADS] ${route}: ${err.message}`);
+        return sendJson(res, known ? 400 : 500, { error: err.code || 'failed', message: err.message }), true;
+    }
+    return false;
+}
+
 // Only this machine's own pages may use the API (blocks DNS rebinding and cross-site requests)
 function allowed(req) {
     if (!/^(localhost|127\.0\.0\.1)(:\d+)?$/.test(req.headers.host || '')) return false;
@@ -491,17 +569,18 @@ function createServer(onGameState) {
                 }
                 if (route === 'GET /api/controllers') {
                     const list = controllers.detect({ platform: runner.platform });
-                    const wiiRemotes = config.getWiiRemotes();
-                    const roles = inputconfig.assignments(list, wiiRemotes);
-                    // Real Wii Remotes the person set up but that are not connected yet: Dolphin connects them itself
-                    const waiting = inputconfig.players(list, wiiRemotes).wii.filter(c => c.virtual)
-                        .map(c => ({ id: c.id, name: 'Wii Remote', kind: 'wiimote', label: 'Wii Remote', connection: 'Bluetooth', virtual: true, pad: false, player: list.length + 1, roles: roles[c.id] }));
+                    const view = inputconfig.describe(list, { players: config.getPlayers(), wiiRemotes: config.getWiiRemotes() }, mappings);
+                    // Real Wii Remotes a player is set to use but that are not connected yet: Dolphin connects them itself
+                    const waiting = view.waiting.map(w => ({ id: w.id, name: 'Wii Remote', kind: 'wiimote', label: 'Wii Remote', connection: 'Bluetooth', virtual: true, pad: false, player: w.player, roles: w.roles }));
                     return sendJson(res, 200, {
                         platform: runner.platform,
-                        controllers: [...list.map(c => ({ ...c, roles: roles[c.id] })), ...waiting],
+                        controllers: [...list.map(c => ({ ...c, key: playersLib.padKey(c), roles: view.roles[c.id] })), ...waiting],
                         autoSetup: config.getAutoControllers(),
                         setup: lastSetup
                     });
+                }
+                if (url.pathname.startsWith('/api/players') || url.pathname.startsWith('/api/mappings')) {
+                    if (await handlePlayers(route, req, res)) return;
                 }
                 if (route === 'POST /api/controllers/apply') {
                     const states = await emulatorStates();

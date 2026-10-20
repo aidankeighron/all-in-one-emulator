@@ -29,7 +29,7 @@ test('real Wii Remotes set in the menu show on the controllers page and in Dolph
         const remotes = r.body.controllers.filter(c => c.kind === 'wiimote');
         assert.strictEqual(remotes.length, 2);
         assert.ok(remotes.every(c => c.virtual));
-        assert.match(remotes[0].roles.join(' '), /Wii Remote 1/);
+        assert.match(remotes[0].roles.join(' '), /Player 1/);
 
         const ini = fs.readFileSync(path.join(process.env.HOME, '.var/app/org.DolphinEmu.dolphin-emu/config/dolphin-emu/WiimoteNew.ini'), 'utf8');
         assert.match(ini, /\[Wiimote2\]\s+Source = 2/);

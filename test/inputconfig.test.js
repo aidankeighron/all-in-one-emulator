@@ -51,7 +51,7 @@ test('Dolphin: gamepad becomes GameCube port 1 and an emulated Wii Remote with N
     assert.strictEqual(gc.get('GCPad1', 'Device'), 'SDL/0/Xbox 360 Controller');
     assert.strictEqual(gc.get('GCPad1', 'Buttons/A'), '`Button A`');
     assert.strictEqual(gc.get('GCPad1', 'Buttons/Start'), 'Start');
-    assert.strictEqual(gc.get('GCPad1', 'Main Stick/Up'), '`Left Y-`');
+    assert.strictEqual(gc.get('GCPad1', 'Main Stick/Up'), '`Left Y+`', 'SDL reports pushing a stick up as Y+');
 
     const wm = Ini.read(path.join(dir, 'WiimoteNew.ini'));
     assert.strictEqual(wm.get('Wiimote1', 'Source'), '1');
@@ -89,9 +89,16 @@ test('Ryujinx is reported as manual', () => {
     assert.strictEqual(inputconfig.apply('ryujinx', [pad()]).status, 'unsupported');
 });
 
-test('assignments say where each controller plays', () => {
-    const list = [pad(), wiimote(), adapter];
-    const roles = inputconfig.assignments(list);
-    assert.deepStrictEqual(roles.js0, ['GameCube port 1', 'Wii Remote 1']);
-    assert.deepStrictEqual(roles.js1, ['Wii Remote 2']);
+test('describe says where each controller plays', () => {
+    const view = inputconfig.describe([pad(), wiimote(), adapter], {});
+    assert.deepStrictEqual(view.roles.js0, ['Player 1', 'Wii: Wii Remote + Nunchuk', 'GameCube: GameCube controller']);
+    assert.deepStrictEqual(view.roles.js1, ['Player 2', 'Wii Remote (real)']);
+    assert.deepStrictEqual(view.waiting, []);
+});
+
+test('a real Wii Remote that is set up but not connected is listed as waiting', () => {
+    const view = inputconfig.describe([pad()], { wiiRemotes: 1 });
+    assert.strictEqual(view.waiting.length, 1);
+    assert.match(view.waiting[0].roles.join(' '), /Player 1.*press 1 \+ 2/);
+    assert.deepStrictEqual(view.roles.js0.slice(0, 1), ['Player 2'], 'the gamepad moves to the next player');
 });

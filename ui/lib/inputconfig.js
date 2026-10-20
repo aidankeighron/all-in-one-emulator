@@ -9,9 +9,8 @@ const platformLib = require('./platform');
 const path = require('path');
 const { Ini, save } = require('./ini');
 const adapters = require('./saves/adapters');
-
-const GC_PORTS = 4;
-const WII_SLOTS = 4;
+const mappings = require('./mappings');
+const playersLib = require('./players');
 
 // Dolphin SIDevice values
 const SI_NONE = 0;
@@ -20,7 +19,6 @@ const SI_GC_ADAPTER = 12;
 
 // Dolphin source for a Wii Remote slot
 const WIIMOTE_NONE = 0;
-const WIIMOTE_EMULATED = 1;
 const WIIMOTE_REAL = 2;
 
 function flatpakDirs(home, id) {
@@ -34,48 +32,35 @@ function dolphinConfigDir({ platform, home, env, exePath }) {
     return path.join(flatpakDirs(home, 'org.DolphinEmu.dolphin-emu').config, 'dolphin-emu');
 }
 
-// Dolphin writes names that contain spaces or symbols between backticks
-const q = name => /^\w+$/.test(name) ? name : `\`${name}\``;
-
 // ---------- Who plays what ----------
 
-// realWiimotes: how many real Wii Remotes the person set up in the menu. Dolphin connects to those itself
-// (they are not visible to the computer), so they take the first Wii Remote slots, gamepads fill the rest.
-function players(controllers, realWiimotes = 0) {
-    const pads = controllers.filter(c => c.pad);
-    const visible = controllers.filter(c => c.pad || c.kind === 'wiimote');
-    const seen = visible.filter(c => c.kind === 'wiimote').length;
-    // Real remotes that are set up but not connected yet hold the first slots
-    const waiting = Array.from({ length: Math.max(0, realWiimotes - seen) }, (_, i) => ({ kind: 'wiimote', id: `real-wiimote-${i + 1}`, virtual: true }));
-    return {
-        pads,
-        adapter: controllers.some(c => c.adapter),
-        wii: [...waiting, ...visible].slice(0, WII_SLOTS)
-    };
+// settings: {players, wiiRemotes}; store: the mapping profiles (lib/mappings)
+function slotsFor(controllers, settings = {}, store = mappings.createStore('')) {
+    return playersLib.resolve(controllers, settings, id => store.get(id));
 }
 
-// For the controllers page: where each controller will play, as short phrases
-function assignments(controllers, realWiimotes = 0) {
-    const { pads, wii } = players(controllers, realWiimotes);
-    const out = {};
-    for (const c of [...controllers, ...wii.filter(w => w.virtual)]) {
-        const roles = [];
-        if (c.virtual) {
-            roles.push(`Wii Remote ${wii.indexOf(c) + 1}`, 'Connects when a game starts: press 1 + 2');
-        } else if (c.adapter) {
-            roles.push('GameCube: the port each controller is plugged into');
-        } else {
-            const p = pads.indexOf(c), w = wii.indexOf(c);
-            if (c.pad && p >= 0 && p < GC_PORTS) roles.push(`GameCube port ${p + 1}`);
-            if (w >= 0 && w < WII_SLOTS) roles.push(`Wii Remote ${w + 1}`);
+// For the controllers page: where each controller will play, as short phrases, plus the real Wii Remotes
+// that are set up but not connected (Dolphin connects those itself when a game starts)
+function describe(controllers, settings = {}, store) {
+    const slots = slotsFor(controllers, settings, store);
+    const roles = {};
+    const waiting = [];
+    for (const c of controllers) roles[c.id] = c.adapter ? ['GameCube: the port each controller is plugged into'] : [];
+    for (const s of slots) {
+        const n = s.index + 1;
+        if (s.mode === 'pad') {
+            roles[s.controller.id] = [`Player ${n}`, `Wii: ${s.wii.name}`, `GameCube: ${s.gc.name}`];
+        } else if (s.mode === 'real') {
+            const seen = controllers.find(c => c.kind === 'wiimote' && !roles[c.id].length);
+            if (seen) roles[seen.id] = [`Player ${n}`, 'Wii Remote (real)'];
+            else waiting.push({ id: `real-wiimote-${n}`, player: n, roles: [`Player ${n}`, 'Real Wii Remote', 'Connects when a game starts: press 1 + 2'] });
         }
-        out[c.id] = roles;
     }
-    return out;
+    for (const c of controllers) if (!c.adapter && !roles[c.id].length) roles[c.id] = ['Not used by a player'];
+    return { slots, roles, waiting };
 }
 
 // ---------- Dolphin ----------
-// Control names are Dolphin's SDL gamepad names ("Button A", "Left X+", "Pad N", ...).
 
 // Xbox pads on Windows are reached through XInput; everything else through SDL
 function dolphinDevice(c, platform) {
@@ -83,78 +68,39 @@ function dolphinDevice(c, platform) {
     return `SDL/${c.nameIndex}/${c.name}`;
 }
 
-const dpad = [['D-Pad/Up', 'Pad N'], ['D-Pad/Down', 'Pad S'], ['D-Pad/Left', 'Pad W'], ['D-Pad/Right', 'Pad E']];
-const stick = (prefix, side) => [
-    [`${prefix}/Up`, `${side} Y-`], [`${prefix}/Down`, `${side} Y+`],
-    [`${prefix}/Left`, `${side} X-`], [`${prefix}/Right`, `${side} X+`]
-];
-
-function gcPadEntries(c, platform) {
-    return [
-        ['Device', dolphinDevice(c, platform)],
-        ['Buttons/A', 'Button A'], ['Buttons/B', 'Button X'], ['Buttons/X', 'Button B'], ['Buttons/Y', 'Button Y'],
-        ['Buttons/Z', 'Shoulder R'], ['Buttons/Start', 'Start'],
-        ...stick('Main Stick', 'Left'), ...stick('C-Stick', 'Right'),
-        ['Triggers/L', 'Trigger L'], ['Triggers/R', 'Trigger R'],
-        ['Triggers/L-Analog', 'Trigger L'], ['Triggers/R-Analog', 'Trigger R'],
-        ...dpad
-    ].map(([k, v]) => [k, k === 'Device' ? v : q(v)]);
-}
-
-// Wii Remote + Nunchuk on a gamepad: right stick points, left stick is the Nunchuk stick
-function wiimotePadEntries(c, platform) {
-    return [
-        ['Source', String(WIIMOTE_EMULATED)],
-        ['Device', dolphinDevice(c, platform)],
-        ['Buttons/A', 'Button A'], ['Buttons/B', 'Trigger R'], ['Buttons/1', 'Button X'], ['Buttons/2', 'Button Y'],
-        ['Buttons/-', 'Back'], ['Buttons/+', 'Start'], ['Buttons/Home', 'Guide'],
-        ...stick('IR', 'Right'),
-        ['Shake/X', 'Thumb R'], ['Shake/Y', 'Thumb R'], ['Shake/Z', 'Thumb R'],
-        ...dpad,
-        ['Extension', 'Nunchuk'],
-        ['Nunchuk/Buttons/C', 'Shoulder L'], ['Nunchuk/Buttons/Z', 'Trigger L'],
-        ...stick('Nunchuk/Stick', 'Left'),
-        ['Nunchuk/Shake/X', 'Thumb L'], ['Nunchuk/Shake/Y', 'Thumb L'], ['Nunchuk/Shake/Z', 'Thumb L']
-    ].map(([k, v]) => [k, k === 'Source' || k === 'Device' || k === 'Extension' ? v : q(v)]);
-}
-
-function writeDolphin(controllers, { home, platform, env, exePath, wiiRemotes = 0 }) {
-    const { pads, adapter, wii } = players(controllers, wiiRemotes);
-    const realWiimotes = wii.filter(c => c.kind === 'wiimote');
-    if (!pads.length && !adapter && !realWiimotes.length) return { status: 'skipped', message: 'No supported controller connected' };
+function writeDolphin(controllers, { home, platform, env, exePath, wiiRemotes = 0, players, profiles }) {
+    const adapter = controllers.some(c => c.adapter);
+    const slots = slotsFor(controllers, { players, wiiRemotes }, profiles);
+    const anyone = slots.some(s => s.mode === 'pad' || s.mode === 'real');
+    if (!anyone && !adapter) return { status: 'skipped', message: 'No supported controller connected' };
 
     const dir = dolphinConfigDir({ platform, home, env, exePath });
     const main = Ini.read(path.join(dir, 'Dolphin.ini'));
     const gc = Ini.read(path.join(dir, 'GCPadNew.ini'));
     const wm = Ini.read(path.join(dir, 'WiimoteNew.ini'));
     const done = [];
+    // The GameCube ports are left alone when no gamepad or adapter is involved (only a real Wii Remote, say)
+    const touchPorts = adapter || slots.some(s => s.mode === 'pad');
 
-    if (pads.length || adapter) {
-        for (let i = 0; i < GC_PORTS; i++) {
-            const pad = pads[i];
-            if (pad) {
-                main.set('Core', `SIDevice${i}`, String(SI_GC_CONTROLLER));
-                gc.replaceSection(`GCPad${i + 1}`, gcPadEntries(pad, platform));
-                done.push(`GameCube port ${i + 1}`);
+    for (const s of slots) {
+        const i = s.index;
+        if (s.mode === 'pad') {
+            const device = dolphinDevice(s.controller, platform);
+            main.set('Core', `SIDevice${i}`, String(SI_GC_CONTROLLER));
+            gc.replaceSection(`GCPad${i + 1}`, mappings.dolphinSection(s.gc, device));
+            wm.replaceSection(`Wiimote${i + 1}`, mappings.dolphinSection(s.wii, device));
+            done.push(`Player ${i + 1}: ${s.controller.name} (${s.wii.name})`);
+        } else {
+            if (touchPorts) main.set('Core', `SIDevice${i}`, String(adapter ? SI_GC_ADAPTER : SI_NONE));
+            if (s.mode === 'real') {
+                wm.replaceSection(`Wiimote${i + 1}`, [['Source', String(WIIMOTE_REAL)]]);
+                done.push(`Player ${i + 1}: real Wii Remote`);
             } else {
-                main.set('Core', `SIDevice${i}`, String(adapter ? SI_GC_ADAPTER : SI_NONE));
+                wm.replaceSection(`Wiimote${i + 1}`, [['Source', String(WIIMOTE_NONE)]]);
             }
         }
     }
-
-    for (let i = 0; i < WII_SLOTS; i++) {
-        const c = wii[i];
-        if (!c) {
-            wm.replaceSection(`Wiimote${i + 1}`, [['Source', String(WIIMOTE_NONE)]]);
-        } else if (c.kind === 'wiimote') {
-            wm.replaceSection(`Wiimote${i + 1}`, [['Source', String(WIIMOTE_REAL)]]);
-            done.push(`Wii Remote ${i + 1} (real)`);
-        } else {
-            wm.replaceSection(`Wiimote${i + 1}`, wiimotePadEntries(c, platform));
-            done.push(`Wii Remote ${i + 1}`);
-        }
-    }
-    if (realWiimotes.length) main.set('Core', 'WiimoteContinuousScanning', 'True');
+    if (slots.some(s => s.mode === 'real')) main.set('Core', 'WiimoteContinuousScanning', 'True');
     if (adapter) done.push('GameCube adapter');
 
     const changed = [save(path.join(dir, 'Dolphin.ini'), main), save(path.join(dir, 'GCPadNew.ini'), gc), save(path.join(dir, 'WiimoteNew.ini'), wm)];
@@ -164,9 +110,12 @@ function writeDolphin(controllers, { home, platform, env, exePath, wiiRemotes = 
 const writers = { dolphin: writeDolphin };
 
 // Writes the emulator's controller config. Never throws: a failure here must not stop a game launching.
-// context: {home, platform, env, exePath(id)}. Defaults to this computer.
+// context: {home, platform, env, exePath(id), wiiRemotes, players, profiles}. Defaults to this computer.
 function apply(emulatorId, controllers, context = {}) {
-    const ctx = { wiiRemotes: context.wiiRemotes || 0, home: context.home || os.homedir(), platform: context.platform || platformLib.current(), env: context.env || process.env, exePath: context.exePath || (() => null) };
+    const ctx = {
+        wiiRemotes: context.wiiRemotes || 0, players: context.players, profiles: context.profiles || mappings.createStore(''),
+        home: context.home || os.homedir(), platform: context.platform || platformLib.current(), env: context.env || process.env, exePath: context.exePath || (() => null)
+    };
     const write = writers[emulatorId];
     if (!write) {
         return { emulator: emulatorId, status: 'unsupported', message: 'Set up controllers in the emulator itself (Settings → Open)' };
@@ -178,4 +127,4 @@ function apply(emulatorId, controllers, context = {}) {
     }
 }
 
-module.exports = { apply, assignments, players, gcPadEntries, wiimotePadEntries };
+module.exports = { apply, describe, slotsFor, dolphinDevice };

@@ -425,6 +425,33 @@
         #guide-body code { background: #eef2f6; border: 1px solid var(--wii-edge); border-radius: 6px; padding: 2px 7px; user-select: text; word-break: break-all; }
         .guide-box { background: #eaf6fd; border: 2px solid #9bd4f2; border-radius: 12px; padding: 10px 14px; font-weight: 700; color: #14507a; line-height: 1.7; }
         .guide-box.off { background: #fff3dc; border-color: #f0c777; color: #6b3b00; }
+        .panel.wide { width: min(980px, 96vw); min-height: 0; }
+        .sel { font: inherit; font-weight: 700; font-size: 14px; color: #4a5258; padding: 7px 10px; border: 2px solid var(--wii-edge); border-radius: 10px; background: #fff; min-width: 0; width: 100%; cursor: pointer; }
+        .sel:disabled { opacity: .45; cursor: default; }
+        .sel.pad-focus, .pl-foot .btn.pad-focus, .mp-actions .btn.pad-focus, .mp-item.pad-focus { outline: 3px solid var(--wii-blue); outline-offset: 2px; box-shadow: 0 0 14px var(--wii-blue-glow); }
+        .pl-head, .pl-row { display: grid; grid-template-columns: 90px 1.3fr 1.3fr 1.3fr; gap: 10px; align-items: center; }
+        .pl-head { font-size: 12px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: #8a9199; margin-bottom: 6px; }
+        .pl-row { margin-bottom: 8px; }
+        .pl-row .who { display: flex; align-items: center; gap: 8px; font-weight: 800; }
+        .pl-row .who i { width: 12px; height: 12px; border-radius: 50%; background: #d3dae0; }
+        .pl-row .who i.on { background: radial-gradient(circle at 35% 30%, #bfeaff, var(--wii-blue)); box-shadow: 0 0 8px var(--wii-blue-glow); }
+        .pl-state { grid-column: 2 / -1; font-size: 12px; color: #8a9199; margin: -4px 0 4px; font-weight: 700; }
+        .pl-foot { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; margin-top: 16px; align-items: center; }
+        .pl-foot .hint { margin-right: auto; font-size: 12px; color: #8a9199; font-weight: 700; }
+        .mp-wrap { display: grid; grid-template-columns: 250px 1fr; gap: 18px; min-height: 380px; }
+        .mp-list { display: flex; flex-direction: column; gap: 6px; max-height: 60vh; overflow-y: auto; padding-right: 4px; }
+        .mp-list h4 { margin: 10px 0 2px; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: #8a9199; }
+        .mp-item { text-align: left; font: inherit; font-weight: 700; padding: 8px 12px; border-radius: 12px; border: 2px solid var(--wii-edge); background: #fff; color: #4a5258; cursor: pointer; }
+        .mp-item small { display: block; font-weight: 600; color: #8a9199; }
+        .mp-item.active { border-color: var(--wii-blue); background: #eaf6fd; }
+        .mp-edit { display: flex; flex-direction: column; gap: 8px; max-height: 60vh; overflow-y: auto; padding-right: 6px; }
+        .mp-edit .desc { font-size: 13px; color: #6b747c; }
+        .mp-grp { margin: 10px 0 0; font-size: 12px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--wii-blue-deep); }
+        .mp-row { display: grid; grid-template-columns: 1fr 1.4fr; gap: 10px; align-items: center; font-weight: 700; font-size: 14px; }
+        .mp-actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; margin-top: 14px; align-items: center; }
+        .mp-actions .hint { margin-right: auto; font-size: 12px; color: #8a9199; font-weight: 700; }
+        .pad-card.connect.players-card .plus { background: linear-gradient(to bottom, #8bd48f, #4aa855); }
+        .pad-card.connect.players-card { border-color: #b7dfba; }
         .pair-steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
         .pair-list { display: flex; flex-direction: column; gap: 8px; }
         .pair-device { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: #fff; border: 2px solid var(--wii-edge); border-radius: 12px; padding: 8px 12px; font-weight: 700; }
@@ -770,6 +797,30 @@
         </div>
     </div>
 
+    <div class="overlay" id="players-overlay" style="z-index:56" onclick="if (event.target === this) closePlayers()">
+        <div class="panel wide">
+            <div class="eyebrow" style="font-size:12px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--wii-blue-deep)">Controllers</div>
+            <h2 style="margin-top:4px">Players and mappings</h2>
+            <div class="desc" style="margin-bottom:12px;font-size:13px;color:#6b747c">Choose who plays with what. Everything is written to the emulators now and again every time a game starts, so you can quit a game, swap controllers here and start another.</div>
+            <div id="players-body"></div>
+            <div class="pl-foot" id="players-foot"></div>
+        </div>
+    </div>
+
+    <div class="overlay" id="maps-overlay" style="z-index:57" onclick="if (event.target === this) closeMaps()">
+        <div class="panel wide">
+            <div class="eyebrow" style="font-size:12px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--wii-blue-deep)">Controllers</div>
+            <h2 style="margin-top:4px">Mappings</h2>
+            <div class="mp-wrap">
+                <div class="mp-list" id="maps-list"></div>
+                <div>
+                    <div class="mp-edit" id="maps-edit"></div>
+                    <div class="mp-actions" id="maps-actions"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="overlay" id="pair-overlay" style="z-index:56" onclick="if (event.target === this) closePair()">
         <div class="panel guide">
             <div class="eyebrow">Controllers</div>
@@ -847,7 +898,7 @@
 
         // How many tiles/cards on this page can be selected
         function itemCount() {
-            if (onControllers()) return padList.length + 1;   // the last tile connects another controller
+            if (onControllers()) return padList.length + 2;   // then two tiles: connect a controller, players and mappings
             return Math.max(0, Math.min(CHANNELS_PER_PAGE, allGames.length - page * CHANNELS_PER_PAGE));
         }
 
@@ -1024,7 +1075,7 @@
         }
 
         function renderControllers(grid) {
-            const slots = Math.min(CHANNELS_PER_PAGE, Math.max(4, padList.length + 1));
+            const slots = Math.min(CHANNELS_PER_PAGE, Math.max(4, padList.length + 2));
             for (let i = 0; i < slots; i++) {
                 const c = padList[i];
                 const card = document.createElement('div');
@@ -1046,6 +1097,12 @@
                     card.innerHTML = `<div class="plus"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div>
                         <div class="pad-name">Connect a controller</div><div class="pad-roles">Wii Remote, Switch Pro Controller or Joy-Con</div>`;
                     card.addEventListener('click', () => openPair());
+                    card.addEventListener('mouseenter', () => { if (zone !== 'grid' || selectedIndex !== i) Sfx.play('move'); zone = 'grid'; selectedIndex = i; renderFocus(); });
+                } else if (i === padList.length + 1) {
+                    card.className = 'wii-channel pad-card connect players-card';
+                    card.innerHTML = `<div class="plus"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3 19c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5"/><circle cx="17" cy="9" r="2.4"/><path d="M16 14c3 0 5 1.7 5 4.5"/></svg></div>
+                        <div class="pad-name">Players and mappings</div><div class="pad-roles">Who plays with what, and what each button does</div>`;
+                    card.addEventListener('click', () => openPlayers());
                     card.addEventListener('mouseenter', () => { if (zone !== 'grid' || selectedIndex !== i) Sfx.play('move'); zone = 'grid'; selectedIndex = i; renderFocus(); });
                 } else {
                     card.className = 'wii-channel pad-card channel-empty waiting';
@@ -1168,7 +1225,7 @@
             if (zone === 'arrow-left') return goPage(page - 1);
             if (zone === 'arrow-right') return goPage(page + 1);
             if (zone === 'bottom') return document.getElementById(BOTTOM_BUTTONS[bottomIndex]).click();
-            if (onControllers()) return selectedIndex === padList.length ? openPair() : undefined;
+            if (onControllers()) return selectedIndex === padList.length ? openPair() : selectedIndex === padList.length + 1 ? openPlayers() : undefined;
             const game = allGames[page * CHANNELS_PER_PAGE + selectedIndex];
             if (game) openSaveSheet(game);
         }
@@ -1961,6 +2018,306 @@
             renderGuide();
         }
 
+        // ================= PLAYERS AND MAPPINGS =================
+        // Four players, each with a controller and a mapping for the Wii and for the GameCube. Every change is saved and
+        // written into the emulators straight away (and again whenever a game starts).
+        const plr = { open: false, data: null, r: 0, c: 0, error: '', syncing: false };
+        const mps = { open: false, data: null, sel: null, draft: null, dirty: false, zone: 'list', i: 0, error: '', notice: '' };
+
+        // A select can be driven from a gamepad: A steps forward, X steps back
+        function stepSelect(el, delta) {
+            if (!el || el.disabled || el.tagName !== 'SELECT' || !el.options.length) return false;
+            const n = el.options.length;
+            let i = el.selectedIndex;
+            for (let tries = 0; tries < n; tries++) {
+                i = (i + delta + n) % n;
+                if (!el.options[i].disabled) break;
+            }
+            if (i === el.selectedIndex) return false;
+            el.selectedIndex = i;
+            el.dispatchEvent(new Event('change'));
+            Sfx.play('move');
+            return true;
+        }
+
+        const optionHtml = (value, label, selected, disabled) => `<option value="${escapeHtml(value)}" ${selected ? 'selected' : ''} ${disabled ? 'disabled' : ''}>${escapeHtml(label)}</option>`;
+
+        async function plrLoad() {
+            try { plr.data = await (await fetch('/api/players')).json(); plr.error = ''; }
+            catch { plr.error = 'The menu could not be reached.'; }
+            if (plr.open) renderPlayers();
+        }
+
+        async function plrSave(players) {
+            plr.syncing = true; renderPlayers();
+            try {
+                const res = await fetch('/api/players', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ players }) });
+                const data = await res.json();
+                if (res.ok) { plr.data = data; plr.error = ''; } else plr.error = data.message || 'That did not work.';
+            } catch { plr.error = 'The menu could not be reached.'; }
+            plr.syncing = false;
+            if (plr.open) renderPlayers();
+            refreshControllers();
+        }
+
+        async function plrSyncNow() {
+            Sfx.play('select');
+            plr.syncing = true; renderPlayers();
+            try { plr.data = await (await fetch('/api/players/sync', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })).json(); plr.error = ''; }
+            catch { plr.error = 'The menu could not be reached.'; }
+            plr.syncing = false;
+            if (plr.open) renderPlayers();
+        }
+
+        function slotText(sl) {
+            if (sl.mode === 'pad') return `Playing with ${sl.controller}`;
+            if (sl.mode === 'real') return 'Real Wii Remote: press 1 + 2 when the game starts';
+            if (sl.mode === 'none') return 'Not playing';
+            if (sl.missing) return `Waiting for ${sl.missing.replace(/^pad:[^:]*:[^:]*:/, '').replace(/#\d+$/, '')} to be connected`;
+            return 'Waiting for a controller';
+        }
+
+        function renderPlayers() {
+            const d = plr.data;
+            const body = document.getElementById('players-body');
+            const foot = document.getElementById('players-foot');
+            if (!d) { body.innerHTML = '<div class="sheet-busy" style="min-height:160px"><span class="spinner"></span><span>Loading…</span></div>'; foot.innerHTML = ''; return; }
+
+            const wiiProfiles = d.profiles.filter(p => p.target === 'wii'), gcProfiles = d.profiles.filter(p => p.target === 'gamecube');
+            const std = id => (d.profiles.find(p => p.id === id) || {}).name || id;
+            const rows = d.players.map((p, r) => {
+                const sl = d.slots[r];
+                const known = d.controllers.some(c => c.key === p.device);
+                const devOpts = [
+                    optionHtml('auto', 'Automatic (next free controller)', p.device === 'auto'),
+                    ...d.controllers.filter(c => c.kind !== 'wiimote').map(c => optionHtml(c.key, `${c.name} · ${c.connection}`, p.device === c.key)),
+                    optionHtml('real', 'A real Wii Remote', p.device === 'real'),
+                    optionHtml('none', 'Not playing', p.device === 'none'),
+                    ...(p.device.startsWith('pad:') && !known ? [optionHtml(p.device, `${p.device.replace(/^pad:[^:]*:[^:]*:/, '').replace(/#\d+$/, '')} (not connected)`, true)] : [])
+                ].join('');
+                const off = p.device === 'none';
+                const wiiOpts = [optionHtml('auto', `Automatic (${std('wii-nunchuk')})`, p.wii === 'auto'), ...wiiProfiles.map(m => optionHtml(m.id, m.name, p.wii === m.id))].join('');
+                const gcOpts = [optionHtml('auto', `Automatic (${std('gc-default')})`, p.gc === 'auto'), ...gcProfiles.map(m => optionHtml(m.id, m.name, p.gc === m.id))].join('');
+                const focus = (c) => plr.r === r && plr.c === c ? 'pad-focus' : '';
+                return `<div class="pl-row">
+                    <div class="who"><i class="on"></i>Player ${r + 1}</div>
+                    <select class="sel ${focus(0)}" data-r="${r}" data-c="0" data-f="device" aria-label="Player ${r + 1} controller">${devOpts}</select>
+                    <select class="sel ${focus(1)}" data-r="${r}" data-c="1" data-f="wii" ${off ? 'disabled' : ''} aria-label="Player ${r + 1} Wii mapping">${wiiOpts}</select>
+                    <select class="sel ${focus(2)}" data-r="${r}" data-c="2" data-f="gc" ${off || p.device === 'real' ? 'disabled' : ''} aria-label="Player ${r + 1} GameCube mapping">${gcOpts}</select>
+                    <div class="pl-state">${escapeHtml(slotText(sl))}</div></div>`;
+            }).join('');
+            body.innerHTML = `<div class="pl-head"><span></span><span>Controller</span><span>Wii mapping</span><span>GameCube mapping</span></div>${rows}`;
+
+            const synced = d.synced;
+            const hint = plr.syncing ? 'Writing to the emulators…' : plr.error ? plr.error
+                : synced && synced.status === 'configured' ? `Written to Dolphin: ${synced.message}`
+                : synced && synced.status === 'skipped' ? 'Nothing written yet: no controller is connected.' : 'Saved. Written when a game starts.';
+            const buttons = [['Sync now', 'sync', true], ['Edit mappings', 'maps'], ['Connect a controller', 'pair'], ['Close (B)', 'close']];
+            foot.innerHTML = `<span class="hint">${escapeHtml(hint)}</span>` + buttons.map(([t, a, primary], i) =>
+                `<button type="button" class="btn ${primary ? 'primary' : ''} ${plr.r === 4 && plr.c === i ? 'pad-focus' : ''}" data-foot="${a}" data-i="${i}">${t}</button>`).join('');
+
+            body.querySelectorAll('select').forEach(el => el.addEventListener('change', () => {
+                const list = plr.data.players.map(p => ({ ...p }));
+                list[Number(el.dataset.r)][el.dataset.f] = el.value;
+                plr.r = Number(el.dataset.r); plr.c = Number(el.dataset.c);
+                plrSave(list);
+            }));
+            body.querySelectorAll('select').forEach(el => el.addEventListener('focus', () => { plr.r = Number(el.dataset.r); plr.c = Number(el.dataset.c); }));
+            foot.querySelectorAll('button').forEach(el => el.addEventListener('click', () => { plr.r = 4; plr.c = Number(el.dataset.i); plrPress(); }));
+        }
+
+        function plrCols(r) { return r < 4 ? 3 : 4; }
+
+        function plrMove(dir) {
+            const before = `${plr.r}/${plr.c}`;
+            if (dir === 'down') plr.r = Math.min(4, plr.r + 1);
+            else if (dir === 'up') plr.r = Math.max(0, plr.r - 1);
+            else if (dir === 'right') plr.c = Math.min(plrCols(plr.r) - 1, plr.c + 1);
+            else if (dir === 'left') plr.c = Math.max(0, plr.c - 1);
+            plr.c = Math.min(plr.c, plrCols(plr.r) - 1);
+            if (before !== `${plr.r}/${plr.c}`) Sfx.play('move');
+            renderPlayers();
+            const el = document.querySelector('#players-overlay .pad-focus');
+            if (el) el.scrollIntoView({ block: 'nearest' });
+        }
+
+        function plrPress(delta = 1) {
+            if (plr.r < 4) {
+                const el = document.querySelector(`#players-body select[data-r="${plr.r}"][data-c="${plr.c}"]`);
+                return stepSelect(el, delta);
+            }
+            const act = ['sync', 'maps', 'pair', 'close'][plr.c];
+            if (delta < 0) return;
+            if (act === 'sync') return plrSyncNow();
+            Sfx.play('select');
+            if (act === 'maps') return openMaps();
+            if (act === 'pair') { closePlayers(true); return openPair(); }
+            closePlayers();
+        }
+
+        async function openPlayers() {
+            Sfx.play('open');
+            Object.assign(plr, { open: true, r: 0, c: 0, error: '' });
+            document.getElementById('players-overlay').classList.add('open');
+            plr.data = null; renderPlayers();
+            await plrLoad();
+        }
+
+        function closePlayers(quiet) {
+            plr.open = false;
+            document.getElementById('players-overlay').classList.remove('open');
+            lastInputTime = Date.now() + 300;
+            if (!quiet) Sfx.play('close');
+            refreshControllers();
+        }
+
+        // ----- mapping editor -----
+        const mpsProfile = () => mps.draft;
+        const mpsReadOnly = () => !mps.draft || mps.draft.builtin;
+
+        async function mpsLoad(selectId) {
+            try {
+                mps.data = await (await fetch('/api/mappings')).json();
+                const pick = mps.data.profiles.find(p => p.id === (selectId || (mps.draft && mps.draft.id))) || mps.data.profiles[0];
+                mpsSelect(pick.id);
+                mps.error = '';
+            } catch { mps.error = 'The menu could not be reached.'; }
+            if (mps.open) renderMaps();
+        }
+
+        function mpsSelect(id) {
+            const p = mps.data.profiles.find(x => x.id === id);
+            mps.draft = JSON.parse(JSON.stringify(p));
+            mps.sel = id; mps.dirty = false; mps.notice = '';
+        }
+
+        const sourceSelect = (ctl, value, ro) => {
+            const groups = {};
+            for (const src of mps.data.sources) (groups[src.group] = groups[src.group] || []).push(src);
+            const combo = value && !mps.data.sources.some(x => x.value === value);
+            const comboLabel = combo ? value.split(' | ').map(v => (mps.data.sources.find(x => x.value === v) || {}).label || v).join('  or  ') : '';
+            return `<select class="sel" data-key="${escapeHtml(ctl.key)}" ${ro ? 'disabled' : ''}>
+                ${optionHtml('', 'Not mapped', !value)}
+                ${combo ? optionHtml(value, comboLabel, true) : ''}
+                ${Object.entries(groups).map(([g, list]) => `<optgroup label="${escapeHtml(g)}">${list.map(x => optionHtml(x.value, x.label, x.value === value)).join('')}</optgroup>`).join('')}</select>`;
+        };
+
+        function renderMaps() {
+            const d = mps.data;
+            const list = document.getElementById('maps-list'), edit = document.getElementById('maps-edit'), actions = document.getElementById('maps-actions');
+            if (!d || !mps.draft) { list.innerHTML = ''; edit.innerHTML = '<div class="sheet-busy" style="min-height:160px"><span class="spinner"></span><span>Loading…</span></div>'; actions.innerHTML = ''; return; }
+            const p = mps.draft, ro = mpsReadOnly();
+
+            const group = (title, target) => `<h4>${title}</h4>` + d.profiles.filter(x => x.target === target).map(x =>
+                `<button type="button" class="mp-item ${x.id === mps.sel ? 'active' : ''}" data-id="${escapeHtml(x.id)}">${escapeHtml(x.name)}<small>${x.builtin ? 'Built in' : 'Yours'}</small></button>`).join('');
+            list.innerHTML = group('Wii', 'wii') + group('GameCube', 'gamecube');
+
+            const controls = d.controls[p.target].filter(c => !c.ext || c.ext === p.extension);
+            const byGroup = [];
+            for (const c of controls) { let g = byGroup.find(x => x.name === c.group); if (!g) byGroup.push(g = { name: c.group, items: [] }); g.items.push(c); }
+            const sideways = (p.settings || {})['Options/Sideways Wiimote'] === 'True';
+            edit.innerHTML = `
+                <div class="row"><input type="text" id="mp-name" value="${escapeHtml(p.name)}" maxlength="40" ${ro ? 'disabled' : ''} aria-label="Mapping name"></div>
+                <div class="desc">${escapeHtml(p.description || '')}${ro ? ' <b>Built in: press Duplicate to make your own copy you can change.</b>' : ''}</div>
+                ${p.target === 'wii' ? `<div class="mp-row"><span>Plugged into the Wii Remote</span><select class="sel" id="mp-ext" ${ro ? 'disabled' : ''}>
+                    ${d.extensions.map(e => optionHtml(e, { nunchuk: 'Nunchuk', classic: 'Classic Controller', none: 'Nothing' }[e], p.extension === e)).join('')}</select></div>
+                  <div class="mp-row"><span>Hold the remote sideways</span><select class="sel" id="mp-side" ${ro ? 'disabled' : ''}>${optionHtml('False', 'No', !sideways)}${optionHtml('True', 'Yes', sideways)}</select></div>` : ''}
+                ${byGroup.map(g => `<div class="mp-grp">${escapeHtml(g.name)}</div>${g.items.map(c => `<div class="mp-row"><span>${escapeHtml(c.label)}</span>${sourceSelect(c, p.entries[c.key] || '', ro)}</div>`).join('')}`).join('')}`;
+
+            const btn = (t, a, primary) => `<button type="button" class="btn ${primary ? 'primary' : ''}" data-act="${a}">${t}</button>`;
+            actions.innerHTML = `<span class="hint">${escapeHtml(mps.error || mps.notice || (mps.dirty ? 'Unsaved changes' : ''))}</span>`
+                + (ro ? btn('Duplicate to edit', 'dup', true) : btn('Save', 'save', mps.dirty) + btn('Duplicate', 'dup') + btn('Delete', 'del'))
+                + btn('Close (B)', 'close');
+
+            // events
+            list.querySelectorAll('.mp-item').forEach(el => el.addEventListener('click', () => { mps.zone = 'list'; mps.i = [...list.querySelectorAll('.mp-item')].indexOf(el); mpsSelect(el.dataset.id); renderMaps(); }));
+            edit.querySelectorAll('select[data-key]').forEach(el => el.addEventListener('change', () => { if (el.value) p.entries[el.dataset.key] = el.value; else delete p.entries[el.dataset.key]; mps.dirty = true; renderMaps(); }));
+            const nameEl = document.getElementById('mp-name');
+            if (nameEl) nameEl.addEventListener('input', () => { p.name = nameEl.value; mps.dirty = true; const h = document.querySelector('#maps-actions .hint'); if (h) h.textContent = 'Unsaved changes'; });
+            const ext = document.getElementById('mp-ext');
+            if (ext) ext.addEventListener('change', () => { p.extension = ext.value; mps.dirty = true; renderMaps(); });
+            const side = document.getElementById('mp-side');
+            if (side) side.addEventListener('change', () => { p.settings = { ...(p.settings || {}), 'Options/Sideways Wiimote': side.value }; mps.dirty = true; renderMaps(); });
+            actions.querySelectorAll('button').forEach(el => el.addEventListener('click', () => mpsAct(el.dataset.act)));
+            mpsHighlight();
+        }
+
+        // What the gamepad can reach: the profile list, then the editor's fields and buttons
+        function mpsItems() {
+            return mps.zone === 'list' ? [...document.querySelectorAll('#maps-list .mp-item')]
+                : [...document.querySelectorAll('#maps-edit select:not([disabled]), #maps-actions button')];
+        }
+
+        function mpsHighlight() {
+            document.querySelectorAll('#maps-overlay .pad-focus').forEach(el => el.classList.remove('pad-focus'));
+            const items = mpsItems();
+            mps.i = Math.max(0, Math.min(mps.i, items.length - 1));
+            const el = items[mps.i];
+            if (el) { el.classList.add('pad-focus'); el.scrollIntoView({ block: 'nearest' }); }
+        }
+
+        function mpsMove(dir) {
+            const before = `${mps.zone}/${mps.i}`;
+            if (dir === 'down') mps.i++;
+            else if (dir === 'up') mps.i--;
+            else if (dir === 'right' && mps.zone === 'list') { mps.zone = 'edit'; mps.i = 0; }
+            else if (dir === 'left' && mps.zone === 'edit') { mps.zone = 'list'; mps.i = Math.max(0, mps.data.profiles.findIndex(p => p.id === mps.sel)); }
+            mpsHighlight();
+            if (before !== `${mps.zone}/${mps.i}`) Sfx.play('move');
+        }
+
+        function mpsPress(delta = 1) {
+            const el = mpsItems()[mps.i];
+            if (!el) return;
+            if (mps.zone === 'list') { if (delta > 0) { mpsSelect(el.dataset.id); renderMaps(); mps.zone = 'edit'; mps.i = 0; mpsHighlight(); Sfx.play('select'); } return; }
+            if (el.tagName === 'SELECT') return stepSelect(el, delta);
+            if (delta > 0) el.click();
+        }
+
+        async function mpsPost(path, body) {
+            const res = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.message || 'That did not work.');
+            return data;
+        }
+
+        async function mpsAct(act) {
+            mps.error = '';
+            if (act !== 'del') mps.confirmDel = false;
+            try {
+                if (act === 'close') return closeMaps();
+                Sfx.play('select');
+                if (act === 'save') { const { profile } = await mpsPost('/api/mappings', mps.draft); mps.notice = 'Saved and written to the emulators'; await mpsLoad(profile.id); }
+                else if (act === 'dup') { const { profile } = await mpsPost('/api/mappings/duplicate', { id: mps.sel }); mps.notice = 'Copied. Change it as you like, then Save.'; await mpsLoad(profile.id); mps.zone = 'edit'; mps.i = 0; }
+                else if (act === 'del') {
+                    if (!mps.confirmDel) { mps.confirmDel = true; mps.notice = `Press Delete again to delete “${mps.draft.name}”. Players using it go back to the standard mapping.`; return renderMaps(); }
+                    mps.confirmDel = false;
+                    await mpsPost('/api/mappings/delete', { id: mps.sel }); mps.draft = null; mps.notice = 'Deleted'; await mpsLoad(mps.data.profiles[0].id);
+                }
+            } catch (err) { mps.error = err.message; }
+            if (mps.open) renderMaps();
+            if (plr.open) plrLoad();
+        }
+
+        async function openMaps() {
+            Object.assign(mps, { open: true, zone: 'list', i: 0, error: '', notice: '', warned: false, confirmDel: false });
+            document.getElementById('maps-overlay').classList.add('open');
+            mps.draft = null; renderMaps();
+            await mpsLoad();
+            mps.i = Math.max(0, mps.data.profiles.findIndex(p => p.id === mps.sel));
+            mpsHighlight();
+        }
+
+        function closeMaps() {
+            if (mps.dirty && !mps.warned) { mps.warned = true; mps.notice = 'Unsaved changes. Press Close again to throw them away.'; return renderMaps(); }
+            mps.warned = false; mps.dirty = false;
+            mps.open = false;
+            document.getElementById('maps-overlay').classList.remove('open');
+            lastInputTime = Date.now() + 300;
+            Sfx.play('close');
+            if (plr.open) plrLoad();
+        }
+
         // ================= CONNECT A CONTROLLER =================
         // Pairs Switch controllers and checks for Wii Remotes through the server (see lib/bluetooth.js).
         const pair = { open: false, info: null, job: null, focus: 0, buttons: [], poll: null, found: null, error: '' };
@@ -2024,9 +2381,9 @@
                 const ok = job.phase === 'done';
                 title = ok ? 'All set' : 'That did not work';
                 body = `<div class="guide-box ${ok ? '' : 'off'}">${escapeHtml(job.message)}</div>`;
-                if (ok && job.kind === 'wiimote' && info.wiiRemotes < 4) {
-                    body += `<p>Add it as Wii Remote ${info.wiiRemotes + 1}? Dolphin connects to it by itself when a game starts.</p>`;
-                    add(`Use as Wii Remote ${info.wiiRemotes + 1}`, 'wii-add', true);
+                if (ok && job.kind === 'wiimote') {
+                    body += `<p>Give it to the next free player? Dolphin connects to it by itself when a game starts. You can change who uses it on the Players screen.</p>`;
+                    add('Use it for the next player', 'wii-add', true);
                 }
                 if (!ok && job.kind !== 'setup') add('Try again', 'retry', true);
                 if (!ok && job.kind === 'setup') add('Try again', 'setup', true);
@@ -2038,7 +2395,7 @@
                         <li>Press <b>Open Bluetooth settings</b> and choose <b>Add a device &rarr; Bluetooth</b>.</li>
                         <li><b>Switch Pro Controller / Joy-Con:</b> hold the small sync button until the lights sweep, then pick it from the list.</li>
                         <li><b>Wii Remote:</b> press <b>1</b> + <b>2</b> and keep them held, pick <b>Nintendo RVL-CNT-01</b>, and if Windows asks for a code choose to connect without one.</li>
-                        <li>Back here, tell the menu how many real Wii Remotes to use below.</li>
+                        <li>Back here, open <b>Players and mappings</b> and choose <b>A real Wii Remote</b> for the player who uses it.</li>
                     </ol>`;
                 add('Open Bluetooth settings', 'open-settings', true);
             } else if (!info.ready) {
@@ -2064,11 +2421,11 @@
                     body += `<h3 style="margin:14px 0 6px">Paired controllers</h3><div class="pair-list">${info.paired.map((d, i) => `<div class="pair-device"><span>${escapeHtml(d.label)}<small>${escapeHtml(d.name)} · ${d.connected ? 'connected' : 'not connected'}</small></span></div>`).join('')}</div>`;
                     info.paired.forEach(d => add(`Forget ${d.label}${info.paired.filter(x => x.label === d.label).length > 1 ? ' ' + d.address.slice(-5) : ''}`, 'forget:' + d.address));
                 }
-                body += `<h3 style="margin:14px 0 6px">Real Wii Remotes in Dolphin</h3><p>${info.wiiRemotes ? `Using <b>${info.wiiRemotes}</b> real Wii Remote${info.wiiRemotes === 1 ? '' : 's'} (the first player${info.wiiRemotes === 1 ? '' : 's'}). They connect when a game starts: press <b>1</b> + <b>2</b>.` : 'None. Gamepads play as Wii Remotes instead.'}</p>`;
-                if (info.wiiRemotes < 4) add('More Wii Remotes', 'wii-more');
-                if (info.wiiRemotes > 0) add('Fewer Wii Remotes', 'wii-less');
+                body += `<p style="font-size:13px;color:#6b747c">Who plays with which controller, and what each button does, is set on the Players screen.</p>`;
+                add('Players and mappings', 'players');
                 add('Close (B)', 'close');
             }
+            if (pair.notice) body += `<div class="guide-box">${escapeHtml(pair.notice)}</div>`;
             if (pair.error) body += `<div class="guide-box off">${escapeHtml(pair.error)}</div>`;
             return { title, body, buttons };
         }
@@ -2093,7 +2450,7 @@
 
         async function openPair() {
             Sfx.play('open');
-            Object.assign(pair, { open: true, info: null, focus: 0, error: '', showResult: false });
+            Object.assign(pair, { open: true, info: null, focus: 0, error: '', notice: '', showResult: false });
             document.getElementById('pair-overlay').classList.add('open');
             renderPair();
             await pairRefresh();
@@ -2123,10 +2480,11 @@
             if (act === 'retry') { pair.focus = 0; return pairCall('/api/bluetooth/pair', { kind: pair.lastKind || 'switch' }); }
             if (act === 'open-settings') return pairCall('/api/bluetooth/open-settings');
             if (act === 'forget') { await pairCall('/api/bluetooth/forget', { address: b.act.slice(7) }); return pairRefresh(); }
-            if (['wii-add', 'wii-more', 'wii-less'].includes(act)) {
-                const n = Math.max(0, Math.min(4, (pair.info.wiiRemotes || 0) + (act === 'wii-less' ? -1 : 1)));
-                await pairCall('/api/bluetooth/wiiremotes', { count: n });
+            if (act === 'players') { closePair(); return openPlayers(); }
+            if (act === 'wii-add') {
+                await pairCall('/api/players/add-real');
                 pair.showResult = false;
+                if (!pair.error) { pair.notice = 'Done: that player will use a real Wii Remote.'; }
                 return pairRefresh();
             }
         }
@@ -2476,7 +2834,23 @@
 
             if (st.pressed.length) Sfx.unlock();
             if (st.count > 0 && !gameRunning) {
-                if (pair.open) {
+                if (mps.open) {
+                    if (now - lastInputTime > 150) {
+                        const dir = st.down ? 'down' : st.up ? 'up' : st.right ? 'right' : st.left ? 'left' : null;
+                        if (st.a) { mpsPress(1); lastInputTime = now + 250; }
+                        else if (st.x) { mpsPress(-1); lastInputTime = now + 250; }
+                        else if (st.b) { closeMaps(); lastInputTime = now + 400; }
+                        else if (dir) { mpsMove(dir); lastInputTime = now; }
+                    }
+                } else if (plr.open) {
+                    if (now - lastInputTime > 150) {
+                        const dir = st.down ? 'down' : st.up ? 'up' : st.right ? 'right' : st.left ? 'left' : null;
+                        if (st.a) { plrPress(1); lastInputTime = now + 250; }
+                        else if (st.x) { plrPress(-1); lastInputTime = now + 250; }
+                        else if (st.b) { closePlayers(); lastInputTime = now + 400; }
+                        else if (dir) { plrMove(dir); lastInputTime = now; }
+                    }
+                } else if (pair.open) {
                     if (now - lastInputTime > 180) {
                         if (st.a) { pairPress(); lastInputTime = now + 400; }
                         else if (st.b) { const running = pair.job && pair.job.phase === 'running'; if (running || !pair.showResult) closePair(); else { pair.showResult = false; renderPair(); } lastInputTime = now + 400; }
@@ -2515,6 +2889,8 @@
 
         // Keyboard works too (handy without a controller, or to check that the menu itself is fine)
         window.addEventListener('keydown', e => {
+            if (mps.open) { if (e.key === 'Escape') closeMaps(); return; }
+            if (plr.open) { if (e.key === 'Escape') closePlayers(); return; }
             if (pair.open) {
                 if (e.key === 'Escape') closePair();
                 else if (e.key === 'Enter' || e.key === ' ') pairPress();

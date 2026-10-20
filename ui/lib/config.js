@@ -55,6 +55,15 @@ function setWiiRemotes(n) {
     if (Number.isInteger(n) && n >= 0 && n <= 4) save({ ...load(), wiiRemotes: n });
 }
 
+// Which controller each of the four players uses, and which mapping (see players.js)
+function getPlayers() {
+    return require('./players').normalize(load().players);
+}
+
+function setPlayers(players) {
+    save({ ...load(), players: require('./players').normalize(players) });
+}
+
 const clamp01 = (v, fallback) => (typeof v === 'number' && v >= 0 && v <= 1 ? v : fallback);
 
 function getSound() {
@@ -141,7 +150,9 @@ function setEmulatorPath(id, file) {
 // Windows: a folder where unpacked emulators are found without any setup
 const emulatorsDir = path.join(path.dirname(configFile), 'emulators');
 
+const mappingsDir = path.join(path.dirname(configFile), 'mappings');
+
 const artworkDir = path.join(path.dirname(configFile), 'artwork');
 const soundsDir = process.env.SOUNDS_DIR || path.join(path.dirname(configFile), 'sounds');
 
-module.exports = { getRomsDir, setRomsDir, getAutoControllers, setAutoControllers, getWiiRemotes, setWiiRemotes, getSound, setSound, getCloud, getLibrary, setLibrary, libraryCacheFile, getEmulatorPaths, setEmulatorPath, emulatorsDir, configFile, artworkDir, soundsDir };
+module.exports = { getRomsDir, setRomsDir, getAutoControllers, setAutoControllers, getWiiRemotes, setWiiRemotes, getPlayers, setPlayers, getSound, setSound, getCloud, getLibrary, setLibrary, libraryCacheFile, getEmulatorPaths, setEmulatorPath, emulatorsDir, configFile, mappingsDir, artworkDir, soundsDir };
