@@ -18,8 +18,8 @@ The menu runs on Windows too. The differences from Linux:
   `{ "emulatorUrls": { "ryujinx": "https://example.com/ryujinx-win_x64.zip" } }`.
   Dolphin has no release feed the menu can read, so it keeps a **Download** button to its website, then
   unzip it or use **Locate**. The menu also looks in the usual places such as `C:\Dolphin-x64`. The source addresses
-  could not be checked from the build environment, so if **Install** says it could not reach them, use the manual
-  routes above and tell me what the project's real download address is.
+  have not been verified against the live servers: if **Install** says it could not reach them, use the manual routes
+  above, and correct `windows.release` in `emulators.json` once the project's real download address is known.
 - **Save slots and cloud saves work the same.** They use the emulator's data in `%APPDATA%` (or the folder beside a
   portable copy). Open each emulator once first so it creates its folders. Cloud saves need
   [Git for Windows](https://git-scm.com/download/win), signed in so that `git push` works.
