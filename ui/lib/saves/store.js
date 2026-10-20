@@ -19,7 +19,7 @@ class StoreError extends Error {
 
 function git(args, { cwd, buffer = false, timeout = 120000 } = {}) {
     return new Promise((resolve, reject) => {
-        const env = { ...process.env, GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'never', GIT_SSH_COMMAND: process.env.GIT_SSH_COMMAND || 'ssh -o BatchMode=yes' };
+        const env = { ...process.env, GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'never', GIT_SSH_COMMAND: process.env.GIT_SSH_COMMAND || 'ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new' };
         execFile('git', args, { cwd, env, timeout, maxBuffer: 512 * 1024 * 1024, encoding: buffer ? 'buffer' : 'utf8' }, (err, stdout, stderr) => {
             if (!err) return resolve(stdout);
             const text = String(stderr || err.message).trim();
@@ -51,7 +51,6 @@ class Store {
     // The way that worked is tried first next time. Throws AUTH when none of them is allowed in.
     async network(build, opts) {
         const token = await this.getToken().catch(() => null);
-        const tried = [];
         const ways = {
             plain: () => build(this.url, []),
             token: token && /^https:\/\//.test(this.url)
@@ -60,7 +59,7 @@ class Store {
             ssh: sshUrlOf(this.url) ? () => build(sshUrlOf(this.url), []) : null
         };
         const order = [this.mode, ...(token ? ['token'] : []), 'plain', 'token', 'ssh'].filter((m, i, all) => m && ways[m] && all.indexOf(m) === i);
-        let authError = null;
+        const why = {};
         for (const mode of order) {
             const { args, cwd = this.dir } = ways[mode]();
             try {
@@ -68,12 +67,19 @@ class Store {
                 this.mode = mode;
                 return out;
             } catch (err) {
-                tried.push(mode);
-                if (!AUTH_FAILURE.test(err.message)) throw err;
-                authError = err;
+                // ssh is only the last resort: its own failures (no key, unknown host) just mean "not this way"
+                const notThisWay = AUTH_FAILURE.test(err.message) || (mode === 'ssh' && /host key|could not read from remote|publickey|permission denied/i.test(err.message));
+                if (!notThisWay) throw err;
+                why[mode] = err.message.split('\n').filter(l => l.trim() && !/^fatal: Could not read from remote repository|^Please make sure/i.test(l)).pop() || err.message;
             }
         }
-        throw new StoreError('AUTH', `GitHub did not let the menu sign in (${tried.join(', ')}). Sign in once so git can save: run “gh auth login”, or put a token in config.json as cloudToken, or set up an SSH key. (${authError.message.split('\n').pop()})`);
+        const lines = [
+            token ? `The token was refused: ${why.token || 'check that it is for the saves repository with Contents read and write'}`
+                : 'No token was found (put one in cloud-token.txt next to package.json, or run “gh auth login”)',
+            `git's own sign-in: ${why.plain || 'not used'}`,
+            ...(why.ssh ? [`ssh: ${why.ssh}`] : [])
+        ];
+        throw new StoreError('AUTH', `GitHub did not let the menu sign in. ${lines.join('. ')}.`);
     }
 
     p(...parts) { return path.join(this.dir, ...parts); }

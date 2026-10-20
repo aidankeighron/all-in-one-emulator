@@ -298,6 +298,11 @@ Add an entry to `emulators.json`: its Flathub ID, the folders it handles, file e
 launch arguments (`{rom}` is replaced with the game's path). The menu picks it up on the next start.
 If an install fails, check the Flatpak ID there against [flathub.org](https://flathub.org).
 
+# Testing
+
+[docs/testing.md](docs/testing.md) lists what needs real hardware (multiple controllers, the pause menu, saves,
+Bluetooth) and how to try each, plus how to get two computers talking (Windows firewall, Tailscale).
+
 # Ideas for later
 
 - [Online mode](docs/online-mode.md): outline only, nothing built.

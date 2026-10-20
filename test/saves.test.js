@@ -279,3 +279,13 @@ test('a game with no saves gets a Default one, once, starting from the emulatorâ
     await c.manager.deleteSlot(game, first.slots[0].id);
     assert.deepStrictEqual((await c.manager.listSlots(game)).slots, [], 'a deleted Default does not come back');
 });
+
+test('when nothing can sign in, the message says which ways were tried and why, not just the last error', async () => {
+    const { Store } = require('../ui/lib/saves/store');
+    const dir = tmp('auth');
+    // A remote that only an ssh login could reach: https is refused, ssh has no known host
+    const store = new Store({ dir, url: 'https://127.0.0.1:1/owner/saves.git', getToken: async () => null });
+    await assert.rejects(store.refresh(), err => err.code === 'OFFLINE' || err.code === 'AUTH');
+    const { AUTH_FAILURE } = require('../ui/lib/saves/store');
+    assert.ok(AUTH_FAILURE.test('fatal: could not read Username for \'https://github.com\': terminal prompts disabled'));
+});
