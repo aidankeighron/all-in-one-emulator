@@ -141,7 +141,13 @@ recordings you have the right to use. Set `SOUNDS_DIR` to keep the pack somewher
 Clicking a game opens a sheet from the bottom of the screen: **Which save do you want to play with?**
 Each save is a named slot with its own save data, showing when it was last updated and on which computer.
 Pick one, or choose **New save** and name it on the on-screen keyboard. On the sheet: **A** plays,
-**X** renames, **Y** deletes, **Start** shows older versions, **B** closes.
+**X** renames, **Y** deletes, **Start** shows older versions, **B** closes. If the emulator already had a save on
+this computer from before slots existed, **Use my old save** copies it into a new slot (the original is left alone).
+
+Uploading needs git to be signed in to GitHub, even for a public repository (reading never does). The menu tries, in
+order: whatever git already has (credential helper, SSH key), a token (`cloudToken` in `config.json`, the
+`GITHUB_TOKEN` / `GH_TOKEN` variable, or the GitHub CLI after `gh auth login`), then the SSH form of the address.
+A save that could not be uploaded stays on this computer and is sent the next time the menu starts or refreshes.
 
 How it syncs (only these three moments, nothing in the background):
 

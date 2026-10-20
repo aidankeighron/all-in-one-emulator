@@ -112,6 +112,17 @@ function getCloud() {
     return { enabled: !!repoUrl, repoUrl, deviceName: cfg.deviceName || '' };
 }
 
+// An access token for pushing saves over https, for computers where git has no stored sign-in: cloudToken in
+// config.json, else GITHUB_TOKEN / GH_TOKEN, else whatever the GitHub CLI (gh auth login) holds
+async function getCloudToken() {
+    const cfg = load();
+    const direct = cfg.cloudToken || process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
+    if (direct) return String(direct).trim();
+    return new Promise(resolve => {
+        require('child_process').execFile('gh', ['auth', 'token'], { timeout: 5000, encoding: 'utf8' }, (err, out) => resolve(err ? null : String(out).trim() || null));
+    });
+}
+
 // Sharing this computer's games, and the other computer whose games to show
 function getLibrary() {
     const cfg = load();
@@ -155,4 +166,4 @@ const mappingsDir = path.join(path.dirname(configFile), 'mappings');
 const artworkDir = path.join(path.dirname(configFile), 'artwork');
 const soundsDir = process.env.SOUNDS_DIR || path.join(path.dirname(configFile), 'sounds');
 
-module.exports = { getRomsDir, setRomsDir, getAutoControllers, setAutoControllers, getWiiRemotes, setWiiRemotes, getPlayers, setPlayers, getSound, setSound, getCloud, getLibrary, setLibrary, libraryCacheFile, getEmulatorPaths, setEmulatorPath, emulatorsDir, configFile, mappingsDir, artworkDir, soundsDir };
+module.exports = { getRomsDir, setRomsDir, getAutoControllers, setAutoControllers, getWiiRemotes, setWiiRemotes, getPlayers, setPlayers, getSound, setSound, getCloud, getCloudToken, getLibrary, setLibrary, libraryCacheFile, getEmulatorPaths, setEmulatorPath, emulatorsDir, configFile, mappingsDir, artworkDir, soundsDir };

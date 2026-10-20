@@ -428,6 +428,13 @@
         .panel.wide { width: min(980px, 96vw); min-height: 0; }
         .sel { font: inherit; font-weight: 700; font-size: 14px; color: #4a5258; padding: 7px 10px; border: 2px solid var(--wii-edge); border-radius: 10px; background: #fff; min-width: 0; width: 100%; cursor: pointer; }
         .sel:disabled { opacity: .45; cursor: default; }
+        .dd { position: fixed; z-index: 70; box-sizing: border-box; overflow-y: auto; padding: 5px; background: #fff; border: 2px solid var(--wii-blue); border-radius: 14px; box-shadow: 0 0 0 3px rgba(58, 180, 242, 0.3), 0 10px 28px rgba(80, 100, 120, 0.4); }
+        .dd-head { padding: 7px 12px 2px; font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: #8a9199; }
+        .dd-item { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 7px 12px; border-radius: 9px; font-size: 14px; font-weight: 700; color: #4a5258; cursor: pointer; }
+        .dd-item.cur { color: var(--wii-blue-deep); }
+        .dd-item.cur::after { content: "✓"; font-weight: 800; }
+        .dd-item.on { background: #eaf6fd; outline: 2px solid var(--wii-blue); outline-offset: -2px; }
+        .dd-item.off { opacity: .4; cursor: default; }
         .sel.pad-focus, .pl-foot .btn.pad-focus, .mp-actions .btn.pad-focus, .mp-item.pad-focus { outline: 3px solid var(--wii-blue); outline-offset: 2px; box-shadow: 0 0 14px var(--wii-blue-glow); }
         .pl-head, .pl-row { display: grid; grid-template-columns: 90px 1.3fr 1.3fr 1.3fr; gap: 10px; align-items: center; }
         .pl-head { font-size: 12px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: #8a9199; margin-bottom: 6px; }
@@ -436,15 +443,18 @@
         .pl-row .who i { width: 12px; height: 12px; border-radius: 50%; background: #d3dae0; }
         .pl-row .who i.on { background: radial-gradient(circle at 35% 30%, #bfeaff, var(--wii-blue)); box-shadow: 0 0 8px var(--wii-blue-glow); }
         .pl-state { grid-column: 2 / -1; font-size: 12px; color: #8a9199; margin: -4px 0 4px; font-weight: 700; }
-        .pl-foot { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; margin-top: 16px; align-items: center; }
-        .pl-foot .hint { margin-right: auto; font-size: 12px; color: #8a9199; font-weight: 700; }
+        .panel.wide.fit { display: flex; flex-direction: column; overflow: hidden; }
+        .panel.wide.fit #players-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 6px 8px; margin: -6px -8px; }
+        .pl-foot { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; margin-top: 16px; padding-top: 6px; align-items: center; flex: none; }
+        .pl-foot .hint { flex: 1 1 100%; font-size: 12px; color: #8a9199; font-weight: 700; }
+        .pl-foot .btn { white-space: nowrap; }
         .mp-wrap { display: grid; grid-template-columns: 250px 1fr; gap: 18px; min-height: 380px; }
-        .mp-list { display: flex; flex-direction: column; gap: 6px; max-height: 60vh; overflow-y: auto; padding-right: 4px; }
+        .mp-list { display: flex; flex-direction: column; gap: 6px; max-height: 60vh; overflow-y: auto; padding: 6px 8px 6px 6px; margin: -6px 0; }
         .mp-list h4 { margin: 10px 0 2px; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: #8a9199; }
         .mp-item { text-align: left; font: inherit; font-weight: 700; padding: 8px 12px; border-radius: 12px; border: 2px solid var(--wii-edge); background: #fff; color: #4a5258; cursor: pointer; }
         .mp-item small { display: block; font-weight: 600; color: #8a9199; }
         .mp-item.active { border-color: var(--wii-blue); background: #eaf6fd; }
-        .mp-edit { display: flex; flex-direction: column; gap: 8px; max-height: 60vh; overflow-y: auto; padding-right: 6px; }
+        .mp-edit { display: flex; flex-direction: column; gap: 8px; max-height: 60vh; overflow-y: auto; padding: 6px 8px 6px 6px; margin: -6px 0; }
         .mp-edit .desc { font-size: 13px; color: #6b747c; }
         .mp-grp { margin: 10px 0 0; font-size: 12px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--wii-blue-deep); }
         .mp-row { display: grid; grid-template-columns: 1fr 1.4fr; gap: 10px; align-items: center; font-weight: 700; font-size: 14px; }
@@ -594,7 +604,7 @@
         .sheet-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
         .sheet-head .who { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
         .sheet-head .game { font-size: 15px; font-weight: 700; color: #4f5860; }
-        .sheet-chip { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; padding: 5px 14px; border-radius: 16px; background: #eaf6fd; border: 1.5px solid #9bd4f2; color: #14507a; }
+        .sheet-chip { display: inline-flex; align-items: center; gap: 8px; line-height: 1; font-size: 13px; font-weight: 700; padding: 5px 14px; border-radius: 16px; background: #eaf6fd; border: 1.5px solid #9bd4f2; color: #14507a; }
         .sheet-chip.warn { background: #fff3dc; border-color: #f0c777; color: #6b3b00; }
         .sheet-chip.bad { background: #fdecea; border-color: #f1a9a4; color: #8a1a14; }
         .sheet-hints { display: flex; justify-content: center; gap: 28px; flex-wrap: wrap; font-size: 13px; font-weight: 800; color: #4f5860; margin-top: 14px; }
@@ -617,7 +627,7 @@
         .slot-avatar.plus { background: #fff; border: 3px solid #b7c0c8; color: #4f5860; }
         .slot-name { font-size: 17px; font-weight: 800; text-align: center; line-height: 1.2; word-break: break-word; }
         .slot-meta { font-size: 12px; font-weight: 700; color: #4f5860; text-align: center; line-height: 1.5; }
-        .slot-tag { font-size: 11px; font-weight: 800; padding: 2px 10px; border-radius: 10px; background: #eef1f4; color: #4f5860; border: 1.5px solid #c9d1d8; }
+        .slot-tag { display: inline-flex; align-items: center; justify-content: center; line-height: 1; font-size: 11px; font-weight: 800; padding: 0 10px; border-radius: 10px; background: #eef1f4; color: #4f5860; border: 1.5px solid #c9d1d8; }
         .slot-tag.wait { background: #fff3dc; color: #6b3b00; border-color: #f0c777; }
         .slot-tag.bad { background: #fdecea; color: #8a1a14; border-color: #f1a9a4; }
 
@@ -798,7 +808,7 @@
     </div>
 
     <div class="overlay" id="players-overlay" style="z-index:56" onclick="if (event.target === this) closePlayers()">
-        <div class="panel wide">
+        <div class="panel wide fit">
             <div class="eyebrow" style="font-size:12px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--wii-blue-deep)">Controllers</div>
             <h2 style="margin-top:4px">Players and mappings</h2>
             <div class="desc" style="margin-bottom:12px;font-size:13px;color:#6b747c">Choose who plays with what. Everything is written to the emulators now and again every time a game starts, so you can quit a game, swap controllers here and start another.</div>
@@ -852,11 +862,14 @@
 
     <script src="/assets/audio.js"></script>
     <script>
-        const CHANNELS_PER_PAGE = 12;
-        const COLUMNS = 4;
+        // The games grid fills the window: as many columns and rows as fit tiles of a comfortable size (never fewer than 4 x 3)
+        let COLUMNS = 4;
+        let CHANNELS_PER_PAGE = 12;
+        const TILE_W = 250, TILE_H = 150, GRID_GAP = 18;
         const CONTROLLERS_PAGE = -1;          // the page to the left of the first games page
         const BOTTOM_BUTTONS = ['bb-rescan', 'bb-import', 'bb-settings'];
-        const BOTTOM_COLUMN = [0, 1, 3];      // which grid column each bottom button sits under
+        const cols = () => onControllers() ? 4 : COLUMNS;
+        const bottomColumn = i => [0, 1, cols() - 1][i];   // which grid column each bottom button sits under
 
         let allGames = [];
         let padList = [];
@@ -932,8 +945,9 @@
         // laid-out baseline lands exactly there (fonts disagree about where capitals sit inside a line).
         const pillCanvas = document.createElement('canvas').getContext('2d');
         function centerPills() {
-            document.querySelectorAll('.channel-badge:not(.badge-empty), .pill').forEach(el => {
-                const text = el.textContent.trim().toUpperCase();
+            document.querySelectorAll('.channel-badge:not(.badge-empty), .pill, .slot-tag, .sheet-chip > span:last-child').forEach(el => {
+                const mixed = el.classList.contains('slot-tag') || (el.parentElement && el.parentElement.classList.contains('sheet-chip'));   // these are not set in capitals
+                const text = mixed ? el.textContent.trim() : el.textContent.trim().toUpperCase();
                 if (!text) return;
                 el.style.height = el.style.paddingTop = el.style.paddingBottom = '';
                 const cs = getComputedStyle(el);
@@ -941,7 +955,7 @@
                 const m = pillCanvas.measureText(text);
                 const above = Math.round(m.actualBoundingBoxAscent);
                 const below = Math.max(0, Math.round(m.actualBoundingBoxDescent));
-                const margin = el.classList.contains('pill') ? 6 : 7;
+                const margin = el.classList.contains('pill') ? 6 : el.classList.contains('slot-tag') ? 5 : el.parentElement.classList.contains('sheet-chip') ? 4 : 7;
                 el.style.height = `${above + below + 2 * margin}px`;
 
                 // Where the baseline is right now: the text box's top plus the font's (rounded) ascent
@@ -957,10 +971,33 @@
         }
         document.fonts.ready.then(centerPills);
 
+        function fitGrid() {
+            const box = document.querySelector('.grid-container');
+            const cs = getComputedStyle(box);
+            const w = box.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+            const h = box.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+            const cols = Math.max(4, Math.min(8, Math.floor((w + GRID_GAP) / (TILE_W + GRID_GAP))));
+            const rows = Math.max(3, Math.min(6, Math.floor((h + GRID_GAP) / (TILE_H + GRID_GAP))));
+            if (cols === COLUMNS && rows * cols === CHANNELS_PER_PAGE) return false;
+            const first = page * CHANNELS_PER_PAGE;     // keep the first game that was showing on screen
+            COLUMNS = cols;
+            CHANNELS_PER_PAGE = cols * rows;
+            if (page >= 0) page = Math.floor(first / CHANNELS_PER_PAGE);
+            return true;
+        }
+        window.addEventListener('resize', () => { if (fitGrid()) { if (page >= pageCount()) page = pageCount() - 1; renderPage(); if (sheet.open) setSheetHeight(); } });
+
         function renderPage() {
             const grid = document.getElementById('channel-grid');
             grid.innerHTML = '';
             grid.classList.toggle('pads', onControllers());
+            if (onControllers()) { grid.style.gridTemplateColumns = grid.style.gridTemplateRows = grid.style.maxWidth = grid.style.maxHeight = ''; }
+            else {
+                grid.style.gridTemplateColumns = `repeat(${COLUMNS}, 1fr)`;
+                grid.style.gridTemplateRows = `repeat(${CHANNELS_PER_PAGE / COLUMNS}, 1fr)`;
+                grid.style.maxWidth = `${COLUMNS * 280}px`;
+                grid.style.maxHeight = `${(CHANNELS_PER_PAGE / COLUMNS) * 200}px`;
+            }
 
             if (onControllers()) renderControllers(grid); else renderGames(grid);
 
@@ -1180,36 +1217,37 @@
         }
 
         function moveWithinMenu(dir) {
+            const COLS = cols();
             const n = itemCount();
-            const col = selectedIndex % COLUMNS;
-            const lastRow = Math.floor((n - 1) / COLUMNS);
+            const col = selectedIndex % COLS;
+            const lastRow = Math.floor((n - 1) / COLS);
 
             if (zone === 'grid') {
                 if (dir === 'right') {
-                    if (col < COLUMNS - 1 && selectedIndex + 1 < n) selectedIndex++;
+                    if (col < COLS - 1 && selectedIndex + 1 < n) selectedIndex++;
                     else if (hasRight()) zone = 'arrow-right';
                 } else if (dir === 'left') {
                     if (col > 0) selectedIndex--;
                     else if (hasLeft()) zone = 'arrow-left';
                 } else if (dir === 'down') {
-                    if (selectedIndex + COLUMNS < n) selectedIndex += COLUMNS;
-                    else if (Math.floor(selectedIndex / COLUMNS) < lastRow) selectedIndex = n - 1;  // short last row
-                    else { zone = 'bottom'; bottomIndex = BOTTOM_COLUMN.findIndex(c => c >= col); if (bottomIndex < 0) bottomIndex = BOTTOM_BUTTONS.length - 1; }
+                    if (selectedIndex + COLS < n) selectedIndex += COLS;
+                    else if (Math.floor(selectedIndex / COLS) < lastRow) selectedIndex = n - 1;  // short last row
+                    else { zone = 'bottom'; bottomIndex = BOTTOM_BUTTONS.findIndex((b, i) => bottomColumn(i) >= col); if (bottomIndex < 0) bottomIndex = BOTTOM_BUTTONS.length - 1; }
                 } else if (dir === 'up') {
-                    if (selectedIndex - COLUMNS >= 0) selectedIndex -= COLUMNS;
+                    if (selectedIndex - COLS >= 0) selectedIndex -= COLS;
                 }
             } else if (zone === 'arrow-left' || zone === 'arrow-right') {
                 if (dir === 'down') { bottomIndex = zone === 'arrow-left' ? 0 : BOTTOM_BUTTONS.length - 1; zone = 'bottom'; }
                 else if ((dir === 'right' && zone === 'arrow-left') || (dir === 'left' && zone === 'arrow-right')) {
                     zone = 'grid';
-                    const row = Math.floor(selectedIndex / COLUMNS);
-                    selectedIndex = Math.min(n - 1, row * COLUMNS + (dir === 'right' ? 0 : COLUMNS - 1));
+                    const row = Math.floor(selectedIndex / COLS);
+                    selectedIndex = Math.min(n - 1, row * COLS + (dir === 'right' ? 0 : COLS - 1));
                 }
             } else if (zone === 'bottom') {
                 if (dir === 'left') bottomIndex = Math.max(0, bottomIndex - 1);
                 else if (dir === 'right') bottomIndex = Math.min(BOTTOM_BUTTONS.length - 1, bottomIndex + 1);
                 else if (dir === 'up') {
-                    if (n > 0) { zone = 'grid'; selectedIndex = Math.min(n - 1, lastRow * COLUMNS + BOTTOM_COLUMN[bottomIndex]); }
+                    if (n > 0) { zone = 'grid'; selectedIndex = Math.min(n - 1, lastRow * COLS + bottomColumn(bottomIndex)); }
                     else if (hasRight()) zone = 'arrow-right';
                     else if (hasLeft()) zone = 'arrow-left';
                 }
@@ -1373,21 +1411,24 @@
                     <div class="slot-row">${cards}
                         <div class="slot-card new ${sheet.index === n ? 'focus' : ''}" data-act="new">
                             <div class="slot-avatar plus"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div>
-                            <div class="slot-name">New save</div><div class="slot-meta">Start fresh and name it</div></div></div>
+                            <div class="slot-name">New save</div><div class="slot-meta">Start fresh and name it</div></div>
+                        ${sheet.status.existing ? `<div class="slot-card new ${sheet.index === n + 1 ? 'focus' : ''}" data-act="import">
+                            <div class="slot-avatar plus"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><polyline points="7 10 12 15 17 10"/><path d="M5 21h14"/></svg></div>
+                            <div class="slot-name">Use my old save</div><div class="slot-meta">The save already on this computer</div></div>` : ''}</div>
                     ${busy}
                     <div class="sheet-hints"><span>A &nbsp;Play</span><span>X &nbsp;Rename</span><span>Y &nbsp;Delete</span><span>Start &nbsp;History</span><span>B &nbsp;Close</span></div>`;
             } else if (sheet.view === 'keyboard') {
                 const kb = sheet.kb;
-                const label = k => k.type === 'char' ? (kb.shift ? k.ch.toUpperCase() : k.ch) : { delete: 'Delete', shift: 'Shift', space: 'space', clear: 'Clear', cancel: 'Cancel', ok: kb.mode === 'rename' ? 'Rename' : 'Create save' }[k.type];
+                const label = k => k.type === 'char' ? (kb.shift ? k.ch.toUpperCase() : k.ch) : { delete: 'Delete', shift: 'Shift', space: 'space', clear: 'Clear', cancel: 'Cancel', ok: kb.mode === 'rename' ? 'Rename' : kb.mode === 'import' ? 'Use it' : 'Create save' }[k.type];
                 const rows = KB_ROWS.map((row, r) => `<div class="kb-row">${row.map((k, c) => {
                     const cls = ['kb-key', k.type === 'delete' ? 'warn wide' : '', k.type === 'space' ? 'space' : '', ['shift', 'clear', 'cancel'].includes(k.type) ? 'wide' : '',
                         k.type === 'ok' ? 'primary wide' : '', k.type === 'shift' && kb.shift ? 'on' : '', kb.r === r && kb.c === c ? 'focus' : ''].join(' ');
                     return `<button type="button" class="${cls}" data-act="key" data-r="${r}" data-c="${c}">${escapeHtml(label(k))}</button>`;
                 }).join('')}</div>`).join('');
-                body.innerHTML = `<div class="sheet-head"><div class="who"><h1>${kb.mode === 'rename' ? 'Rename this save' : 'Name your new save'}</h1>${badge}<span class="game">${g ? escapeHtml(g.title) : ''}</span></div></div>
+                body.innerHTML = `<div class="sheet-head"><div class="who"><h1>${kb.mode === 'rename' ? 'Rename this save' : kb.mode === 'import' ? 'Name your old save' : 'Name your new save'}</h1>${badge}<span class="game">${g ? escapeHtml(g.title) : ''}</span></div></div>
                     <div class="kb-field"><div class="text">${escapeHtml(kb.text)}<span class="caret"></span></div><div class="count">${kb.text.length} / ${KB_MAX}</div></div>
                     <div class="kb-rows">${rows}</div>
-                    <div class="sheet-hints"><span>D-pad: move</span><span>A: type</span><span>B: delete</span><span>Y: shift</span><span>Start: ${kb.mode === 'rename' ? 'rename' : 'create'}</span></div>`;
+                    <div class="sheet-hints"><span>D-pad: move</span><span>A: type</span><span>B: cancel</span><span>X: delete</span><span>Y: shift</span><span>Start: ${kb.mode === 'rename' ? 'rename' : kb.mode === 'import' ? 'use it' : 'create'}</span></div>`;
             } else if (sheet.view === 'conflict') {
                 const c = sheet.conflict;
                 const when = iso => new Date(iso).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' });
@@ -1426,6 +1467,7 @@
                     <div class="sheet-busy" style="min-height:50px;font-weight:700;color:#4f5860">${escapeHtml(c.text)}</div>
                     <div class="sheet-buttons">${['Cancel', c.yes].map((t, i) => `<button type="button" class="btn ${sheet.btn === i ? 'focus' : ''}" data-act="confirm" data-i="${i}">${escapeHtml(t)}</button>`).join('')}</div>${busy}`;
             }
+            centerPills();
             setSheetHeight();
         }
 
@@ -1433,9 +1475,9 @@
             const st = sheet.status;
             if (!st) return '';
             const tick = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
-            if (st.problem) return `<span class="sheet-chip bad">${escapeHtml(st.problem.message)}</span>`;
-            if (!st.configured) return '<span class="sheet-chip warn">Saved on this computer only</span>';
-            if (!st.online) return `<span class="sheet-chip warn" title="${escapeHtml(st.reason || '')}">Offline: showing the saves on this computer</span>`;
+            if (st.problem) return `<span class="sheet-chip bad"><span>${escapeHtml(st.problem.message)}</span></span>`;
+            if (!st.configured) return '<span class="sheet-chip warn"><span>Saved on this computer only</span></span>';
+            if (!st.online) return `<span class="sheet-chip warn" title="${escapeHtml(st.reason || '')}"><span>Offline: showing the saves on this computer</span></span>`;
             return `<span class="sheet-chip">${tick}<span>Up to date with the cloud</span></span>`;
         }
 
@@ -1532,7 +1574,7 @@
                     await sleep(350);
                 }
             })();
-            return () => { live = false; };
+            return () => { live = false; sheet.busy = ''; };
         }
 
         async function saveApi(url, body) {
@@ -1642,7 +1684,7 @@
         }
 
         function openKeyboard(mode, slot) {
-            sheet.kb = { mode, slot, text: mode === 'rename' ? slot.name : '', shift: mode !== 'rename', r: 1, c: 0 };
+            sheet.kb = { mode, slot, text: mode === 'rename' ? slot.name : mode === 'import' ? 'My old save' : '', shift: mode === 'create', r: 1, c: 0 };
             sheet.view = 'keyboard';
             Sfx.play('open');
             renderSheet();
@@ -1667,7 +1709,7 @@
                 Sfx.play('select');
                 return renderSheet();
             }
-            const r = await saveApi('/api/saves/create', { path: game.path, name });
+            const r = await saveApi(kb.mode === 'import' ? '/api/saves/import' : '/api/saves/create', { path: game.path, name });
             if (!r.ok) { Sfx.play('error'); showToast(r.body.message || 'Could not create the save'); return; }
             Sfx.play('select');
             await reloadSlots(r.body.id);
@@ -1739,7 +1781,7 @@
             if (v === 'slots') {
                 const n = sheet.slots.length;
                 if (dir === 'left') sheet.index = Math.max(0, sheet.index - 1);
-                else if (dir === 'right') sheet.index = Math.min(n, sheet.index + 1);
+                else if (dir === 'right') sheet.index = Math.min(n + (sheet.status && sheet.status.existing ? 1 : 0), sheet.index + 1);
             } else if (v === 'keyboard') {
                 const kb = sheet.kb;
                 if (dir === 'left') kb.c = Math.max(0, kb.c - 1);
@@ -1764,6 +1806,7 @@
             const v = sheet.view;
             if (v === 'slots') {
                 if (sheet.index === sheet.slots.length) openKeyboard('create');
+                else if (sheet.index === sheet.slots.length + 1) openKeyboard('import');
                 else playSlot(sheet.slots[sheet.index]);
             } else if (v === 'keyboard') kbPress(sheet.kb.r, sheet.kb.c);
             else if (v === 'conflict') resolveConflict(['cloud', 'local', 'both'][sheet.btn]);
@@ -1773,9 +1816,9 @@
         }
 
         function sheetBack() {
-            if (sheet.busy) return;
+            // Even while something is loading: B leaves the sheet (a launch already under way carries on)
             if (sheet.view === 'slots' || sheet.view === 'loading' || sheet.view.startsWith('dl-')) return closeSheet(true);
-            if (sheet.view === 'keyboard' && sheet.kb.text) { sheet.kb.text = sheet.kb.text.slice(0, -1); Sfx.play('move'); return renderSheet(); }
+            if (sheet.busy && sheet.view !== 'keyboard') return closeSheet(true);
             sheet.view = 'slots';
             Sfx.play('back');
             renderSheet();
@@ -1791,6 +1834,7 @@
             }
             if (st.a) { sheetActivate(); lastInputTime = now + 400; return; }
             if (st.b) { sheetBack(); lastInputTime = now + 250; return; }
+            if (st.x && sheet.view === 'keyboard') { sheet.kb.text = sheet.kb.text.slice(0, -1); Sfx.play('move'); renderSheet(); lastInputTime = now + 150; return; }
             if (st.x && sheet.view === 'slots' && sheet.index < sheet.slots.length) { openKeyboard('rename', sheet.slots[sheet.index]); lastInputTime = now + 400; return; }
             if (st.y) {
                 if (sheet.view === 'keyboard') { sheet.kb.shift = !sheet.kb.shift; Sfx.play('move'); renderSheet(); }
@@ -1814,7 +1858,7 @@
 
         function sheetKey(e) {
             if (e.key === 'Escape') {   // Escape always backs out (B on a controller deletes a letter first)
-                if (!sheet.busy) { if (sheet.view === 'slots' || sheet.view === 'loading' || sheet.view.startsWith('dl-')) closeSheet(true); else { sheet.view = 'slots'; Sfx.play('back'); renderSheet(); } }
+                if (sheet.view === 'slots' || sheet.view === 'loading' || sheet.view.startsWith('dl-') || (sheet.busy && sheet.view !== 'keyboard')) closeSheet(true); else { sheet.view = 'slots'; Sfx.play('back'); renderSheet(); }
                 return e.preventDefault();
             }
             if (sheet.view === 'keyboard') {
@@ -1846,6 +1890,7 @@
             const act = el.dataset.act;
             if (act === 'play') { sheet.index = i; playSlot(sheet.slots[i]); }
             else if (act === 'new') openKeyboard('create');
+            else if (act === 'import') openKeyboard('import');
             else if (act === 'key') { sheet.kb.r = Number(el.dataset.r); sheet.kb.c = Number(el.dataset.c); kbPress(sheet.kb.r, sheet.kb.c); }
             else if (act === 'conflict') resolveConflict(['cloud', 'local', 'both'][i]);
             else if (act === 'confirm') confirmDelete(i === 1);
@@ -2024,21 +2069,88 @@
         const plr = { open: false, data: null, r: 0, c: 0, error: '', syncing: false };
         const mps = { open: false, data: null, sel: null, draft: null, dirty: false, zone: 'list', i: 0, error: '', notice: '' };
 
-        // A select can be driven from a gamepad: A steps forward, X steps back
-        function stepSelect(el, delta) {
-            if (!el || el.disabled || el.tagName !== 'SELECT' || !el.options.length) return false;
-            const n = el.options.length;
-            let i = el.selectedIndex;
-            for (let tries = 0; tries < n; tries++) {
-                i = (i + delta + n) % n;
-                if (!el.options[i].disabled) break;
+        // Dropdowns. A native <select> pops up a list a gamepad can't drive, so every select in the menu opens this list
+        // instead: up/down move through it, A (or Enter, or a click) picks, B (or Escape) leaves it as it was.
+        const dd = { open: false, sel: null, items: [], i: 0 };
+
+        function ddOpen(sel) {
+            if (!sel || sel.disabled || sel.tagName !== 'SELECT' || !sel.options.length) return false;
+            ddClose(true);
+            const items = [];
+            for (const node of sel.children) {
+                if (node.tagName === 'OPTGROUP') {
+                    items.push({ head: node.label });
+                    for (const o of node.children) items.push({ value: o.value, label: o.textContent, off: o.disabled });
+                } else items.push({ value: node.value, label: node.textContent, off: node.disabled });
             }
-            if (i === el.selectedIndex) return false;
-            el.selectedIndex = i;
-            el.dispatchEvent(new Event('change'));
-            Sfx.play('move');
+            Object.assign(dd, { open: true, sel, items, i: Math.max(0, items.findIndex(x => !x.head && x.value === sel.value)) });
+            const box = document.createElement('div');
+            box.className = 'dd';
+            box.id = 'dd';
+            box.setAttribute('role', 'listbox');
+            box.innerHTML = items.map((x, n) => x.head ? `<div class="dd-head">${escapeHtml(x.head)}</div>`
+                : `<div class="dd-item ${x.off ? 'off' : ''} ${x.value === sel.value ? 'cur' : ''}" role="option" data-i="${n}">${escapeHtml(x.label)}</div>`).join('');
+            document.body.appendChild(box);
+            const r = sel.getBoundingClientRect();
+            const room = { below: window.innerHeight - r.bottom - 14, above: r.top - 14 };
+            const up = room.below < 180 && room.above > room.below;
+            box.style.minWidth = `${Math.max(r.width, 200)}px`;
+            box.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - Math.max(r.width, 200) - 12))}px`;
+            box.style.maxHeight = `${Math.max(120, Math.min(340, up ? room.above : room.below))}px`;
+            if (up) box.style.bottom = `${window.innerHeight - r.top + 4}px`; else box.style.top = `${r.bottom + 4}px`;
+            box.addEventListener('mousedown', e => e.preventDefault());
+            box.addEventListener('click', e => {
+                const el = e.target.closest('.dd-item');
+                if (el) { dd.i = Number(el.dataset.i); ddChoose(); }
+            });
+            ddShow();
+            Sfx.play('open');
             return true;
         }
+
+        function ddShow() {
+            const box = document.getElementById('dd');
+            if (!box) return;
+            box.querySelectorAll('.dd-item').forEach(el => el.classList.toggle('on', Number(el.dataset.i) === dd.i));
+            const on = box.querySelector('.dd-item.on');
+            if (on) on.scrollIntoView({ block: 'nearest' });
+        }
+
+        function ddMove(delta) {
+            let i = dd.i;
+            do { i += delta; } while (dd.items[i] && (dd.items[i].head || dd.items[i].off));
+            if (!dd.items[i]) return;
+            dd.i = i;
+            Sfx.play('move');
+            ddShow();
+        }
+
+        function ddChoose() {
+            const sel = dd.sel, item = dd.items[dd.i];
+            if (!item || item.head || item.off) return;
+            ddClose(true);
+            Sfx.play('select');
+            if (sel.value !== item.value) {
+                sel.value = item.value;
+                sel.dispatchEvent(new Event('change'));
+            }
+        }
+
+        function ddClose(quiet) {
+            if (!dd.open) return;
+            dd.open = false;
+            const box = document.getElementById('dd');
+            if (box) box.remove();
+            if (!quiet) Sfx.play('back');
+            lastInputTime = Date.now() + 250;
+        }
+
+        // Mouse and keyboard on a select open the same list
+        document.addEventListener('mousedown', e => {
+            const sel = e.target.closest && e.target.closest('#players-overlay select, #maps-overlay select');
+            if (sel) { e.preventDefault(); sel.focus(); if (dd.open && dd.sel === sel) ddClose(); else ddOpen(sel); }
+            else if (dd.open && !e.target.closest('#dd')) ddClose();
+        }, true);
 
         const optionHtml = (value, label, selected, disabled) => `<option value="${escapeHtml(value)}" ${selected ? 'selected' : ''} ${disabled ? 'disabled' : ''}>${escapeHtml(label)}</option>`;
 
@@ -2144,7 +2256,8 @@
         function plrPress(delta = 1) {
             if (plr.r < 4) {
                 const el = document.querySelector(`#players-body select[data-r="${plr.r}"][data-c="${plr.c}"]`);
-                return stepSelect(el, delta);
+                if (delta > 0) ddOpen(el);
+                return;
             }
             const act = ['sync', 'maps', 'pair', 'close'][plr.c];
             if (delta < 0) return;
@@ -2164,6 +2277,7 @@
         }
 
         function closePlayers(quiet) {
+            ddClose(true);
             plr.open = false;
             document.getElementById('players-overlay').classList.remove('open');
             lastInputTime = Date.now() + 300;
@@ -2270,7 +2384,7 @@
             const el = mpsItems()[mps.i];
             if (!el) return;
             if (mps.zone === 'list') { if (delta > 0) { mpsSelect(el.dataset.id); renderMaps(); mps.zone = 'edit'; mps.i = 0; mpsHighlight(); Sfx.play('select'); } return; }
-            if (el.tagName === 'SELECT') return stepSelect(el, delta);
+            if (el.tagName === 'SELECT') { if (delta > 0) ddOpen(el); return; }
             if (delta > 0) el.click();
         }
 
@@ -2310,6 +2424,7 @@
 
         function closeMaps() {
             if (mps.dirty && !mps.warned) { mps.warned = true; mps.notice = 'Unsaved changes. Press Close again to throw them away.'; return renderMaps(); }
+            ddClose(true);
             mps.warned = false; mps.dirty = false;
             mps.open = false;
             document.getElementById('maps-overlay').classList.remove('open');
@@ -2834,7 +2949,14 @@
 
             if (st.pressed.length) Sfx.unlock();
             if (st.count > 0 && !gameRunning) {
-                if (mps.open) {
+                if (dd.open) {
+                    if (now - lastInputTime > 150) {
+                        if (st.a) { ddChoose(); lastInputTime = now + 300; }
+                        else if (st.b) { ddClose(); lastInputTime = now + 400; }
+                        else if (st.down) { ddMove(1); lastInputTime = now; }
+                        else if (st.up) { ddMove(-1); lastInputTime = now; }
+                    }
+                } else if (mps.open) {
                     if (now - lastInputTime > 150) {
                         const dir = st.down ? 'down' : st.up ? 'up' : st.right ? 'right' : st.left ? 'left' : null;
                         if (st.a) { mpsPress(1); lastInputTime = now + 250; }
@@ -2889,6 +3011,14 @@
 
         // Keyboard works too (handy without a controller, or to check that the menu itself is fine)
         window.addEventListener('keydown', e => {
+            if (dd.open) {
+                if (e.key === 'Escape') ddClose();
+                else if (e.key === 'Enter' || e.key === ' ') ddChoose();
+                else if (e.key === 'ArrowDown') ddMove(1);
+                else if (e.key === 'ArrowUp') ddMove(-1);
+                return e.preventDefault();
+            }
+            if ((mps.open || plr.open) && e.target.tagName === 'SELECT' && ['Enter', ' ', 'ArrowDown', 'ArrowUp'].includes(e.key)) { ddOpen(e.target); return e.preventDefault(); }
             if (mps.open) { if (e.key === 'Escape') closeMaps(); return; }
             if (plr.open) { if (e.key === 'Escape') closePlayers(); return; }
             if (pair.open) {
@@ -2921,6 +3051,7 @@
 
         // Start Loop & Load
         Sfx.load().then(() => { Sfx.play('boot'); Sfx.startMusic(); }).catch(() => {});
+        fitGrid();
         loadGames().then(() => syncAtStart(true));
         refreshControllers();
         requestAnimationFrame(pollGamepad);

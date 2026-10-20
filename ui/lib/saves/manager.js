@@ -25,13 +25,13 @@ class SaveError extends Error {
 const slug = text => String(text).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'game';
 const gameKeyOf = game => `${game.console}/${slug(game.title)}`;
 
-function createManager({ dir, adapters, getCloud, deviceName = os.hostname(), log = () => {} }) {
+function createManager({ dir, adapters, getCloud, getToken = async () => null, deviceName = os.hostname(), log = () => {} }) {
     const stateFile = path.join(dir, 'state.json');
     const tmpDir = path.join(dir, 'tmp');
     const backupDir = path.join(dir, 'backups');
 
-    let state = { device: { id: crypto.randomBytes(4).toString('hex') }, slots: {} };
-    try { state = { ...state, ...JSON.parse(fs.readFileSync(stateFile, 'utf8')) }; } catch { /* first run */ }
+    let state = { device: { id: crypto.randomBytes(4).toString('hex') }, slots: {}, imported: {} };
+    try { state = { ...state, ...JSON.parse(fs.readFileSync(stateFile, 'utf8')) }; if (!state.imported) state.imported = {}; } catch { /* first run */ }
     const saveState = () => {
         fs.mkdirSync(dir, { recursive: true });
         fs.writeFileSync(stateFile, JSON.stringify(state, null, 2));
@@ -54,7 +54,7 @@ function createManager({ dir, adapters, getCloud, deviceName = os.hostname(), lo
         const cfg = getCloud();
         if (!cfg.enabled || !cfg.repoUrl) return null;
         if (cfg.repoUrl !== storeKey) {
-            store = new Store({ dir: path.join(dir, 'repo'), url: cfg.repoUrl });
+            store = new Store({ dir: path.join(dir, 'repo'), url: cfg.repoUrl, getToken });
             storeKey = cfg.repoUrl;
         }
         return store;
@@ -76,7 +76,7 @@ function createManager({ dir, adapters, getCloud, deviceName = os.hostname(), lo
             return s;
         } catch (err) {
             lastError = { code: err.code, message: err.message };
-            if (err.code === 'OFFLINE' || err.code === 'NO_GIT') return null;
+            if (err.code === 'OFFLINE' || err.code === 'NO_GIT' || err.code === 'AUTH') return null;
             throw err;
         }
     }
@@ -175,7 +175,9 @@ function createManager({ dir, adapters, getCloud, deviceName = os.hostname(), lo
                 const slots = [...ids].map(id => describe(state.slots[id] || { id, name: remote.get(id).name, rev: 0 }, remote.get(id)));
                 slots.sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
                 setActivity('idle');
-                return { slots, online, configured: !!currentStore(), problem, reason: online || !lastError ? null : lastError.message, checkedAt: Date.now() };
+                if (!problem && !online && lastError && lastError.code === 'AUTH') problem = { code: 'AUTH', message: 'Cloud saves are not signed in to GitHub: saves stay on this computer' };
+                const existing = !state.imported[key] && adapters.get(game.emulator).existing().length > 0;
+                return { existing, slots, online, configured: !!currentStore(), problem, reason: online || !lastError ? null : lastError.message, checkedAt: Date.now() };
             });
         },
 
@@ -190,6 +192,29 @@ function createManager({ dir, adapters, getCloud, deviceName = os.hostname(), lo
                 for (const d of adapter.perSlot) fs.mkdirSync(path.join(root, d), { recursive: true });
                 st.baseHash = await archive.hashDirs(root, adapter.perSlot);
                 state.slots[st.id] = st;
+                saveState();
+                return describe(st, null);
+            });
+        },
+
+        // A new slot that starts with the saves the emulator already had on this computer (made before slots existed).
+        // They are copied, never moved: the originals stay where they are. They go to the cloud with the next sync.
+        importExisting(game, name) {
+            return locked(async () => {
+                const adapter = adapterFor(game);
+                const found = adapter.existing();
+                if (!found.length) throw new SaveError('NOTHING_TO_IMPORT', 'This computer has no earlier save for this emulator');
+                const clean = String(name || '').trim().slice(0, 24);
+                if (!clean) throw new SaveError('BAD_NAME', 'Give the save a name');
+                const st = slotRecord(game, null, clean);
+                const root = adapter.slotRoot(st.id);
+                fs.mkdirSync(root, { recursive: true });
+                for (const d of adapter.perSlot) fs.mkdirSync(path.join(root, d), { recursive: true });
+                st.baseHash = await archive.hashDirs(root, adapter.perSlot);   // the empty slot: the copy below counts as a change to upload
+                for (const { rel, abs } of found) fs.cpSync(abs, path.join(root, rel), { recursive: true, dereference: true });
+                st.pending = true;
+                state.slots[st.id] = st;
+                state.imported[gameKeyOf(game)] = st.id;
                 saveState();
                 return describe(st, null);
             });
@@ -313,7 +338,7 @@ function createManager({ dir, adapters, getCloud, deviceName = os.hostname(), lo
                 setActivity('uploading', `Saving “${st.name}” to the cloud…`, st.name);
                 try {
                     const s = await refreshRemote();
-                    if (!s) throw new StoreError('OFFLINE', 'offline');
+                    if (!s) throw new StoreError(lastError && lastError.code === 'AUTH' ? 'AUTH' : 'OFFLINE', lastError ? lastError.message : 'offline');
                     const remote = s.readMeta(st.gameKey, st.id);
                     if (remote && remote.rev > st.rev) throw new StoreError('CONFLICT', 'The cloud save changed on another computer', { remote });
                     const meta = await upload(adapter, st, s, remote ? remote.rev : 0, hash);
@@ -324,6 +349,8 @@ function createManager({ dir, adapters, getCloud, deviceName = os.hostname(), lo
                     if (err.code === 'CONFLICT') {
                         st.conflict = true;
                         setActivity('conflict', `“${st.name}” changed on another computer: choose which to keep next time you play it`, st.name);
+                    } else if (err.code === 'AUTH') {
+                        setActivity('error', `“${st.name}” is kept on this computer but could not be sent: ${err.message}`, st.name);
                     } else if (err.code === 'OFFLINE' || err.code === 'NO_GIT') {
                         setActivity('queued', `No connection: “${st.name}” will be saved to the cloud later`, st.name);
                     } else {
@@ -362,6 +389,7 @@ function createManager({ dir, adapters, getCloud, deviceName = os.hostname(), lo
                         }
                     } catch (err) {
                         log(`[SAVES] sync ${st.name}: ${err.message}`);
+                        if (!result.problem) result.problem = { code: err.code || 'FAILED', message: err.message };
                     }
                 }
                 saveState();

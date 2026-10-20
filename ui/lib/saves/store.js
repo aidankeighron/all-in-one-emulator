@@ -28,11 +28,51 @@ function git(args, { cwd, buffer = false, timeout = 120000 } = {}) {
     });
 }
 
+const AUTH_FAILURE = /could not read (username|password)|terminal prompts disabled|authentication failed|permission denied|publickey|invalid username or password|returned error: 40[13]|repository not found|access denied/i;
+
+// "https://github.com/owner/repo(.git)" -> "git@github.com:owner/repo.git"
+function sshUrlOf(url) {
+    const m = /^https?:\/\/([^/]+)\/(.+?)(?:\.git)?\/?$/.exec(url || '');
+    return m ? `git@${m[1]}:${m[2]}.git` : null;
+}
+
 class Store {
-    // dir: where the local clone lives; url: the remote
-    constructor({ dir, url }) {
+    // dir: where the local clone lives; url: the remote; getToken: optional async () => access token for https remotes
+    constructor({ dir, url, getToken = async () => null }) {
         this.dir = dir;
         this.url = url;
+        this.getToken = getToken;
+        this.mode = null;   // how the remote was last reached successfully: 'plain' | 'token' | 'ssh'
+    }
+
+    // Runs a network git command (fetch / push) against the remote, trying the ways of signing in one after the other:
+    // whatever git itself has (credential helper, ssh agent), then an access token, then the ssh form of the address.
+    // The way that worked is tried first next time. Throws AUTH when none of them is allowed in.
+    async network(build, opts) {
+        const token = await this.getToken().catch(() => null);
+        const tried = [];
+        const ways = {
+            plain: () => build(this.url, []),
+            token: token && /^https:\/\//.test(this.url)
+                ? () => build(this.url, ['-c', `http.extraheader=Authorization: Basic ${Buffer.from(`x-access-token:${token}`).toString('base64')}`])
+                : null,
+            ssh: sshUrlOf(this.url) ? () => build(sshUrlOf(this.url), []) : null
+        };
+        const order = [this.mode, 'plain', 'token', 'ssh'].filter((m, i, all) => m && ways[m] && all.indexOf(m) === i);
+        let authError = null;
+        for (const mode of order) {
+            const { args, cwd = this.dir } = ways[mode]();
+            try {
+                const out = await git(args, { cwd, ...opts });
+                this.mode = mode;
+                return out;
+            } catch (err) {
+                tried.push(mode);
+                if (!AUTH_FAILURE.test(err.message)) throw err;
+                authError = err;
+            }
+        }
+        throw new StoreError('AUTH', `GitHub did not let the menu sign in (${tried.join(', ')}). Sign in once so git can save: run “gh auth login”, or put a token in config.json as cloudToken, or set up an SSH key. (${authError.message.split('\n').pop()})`);
     }
 
     p(...parts) { return path.join(this.dir, ...parts); }
@@ -56,15 +96,20 @@ class Store {
         await this.ensureRepo();
         let hasRemote = true;
         try {
-            await git(['fetch', '-q', 'origin', `+${BRANCH}:refs/remotes/origin/${BRANCH}`], { cwd: this.dir, timeout: 60000 });
+            await this.network((url, pre) => ({ args: [...pre, 'fetch', '-q', url, `+${BRANCH}:refs/remotes/origin/${BRANCH}`] }), { timeout: 60000 });
         } catch (err) {
             if (/couldn't find remote ref/i.test(err.message)) hasRemote = false;
-            else if (err.code === 'NO_GIT') throw err;
+            else if (err.code === 'NO_GIT' || err.code === 'AUTH') throw err;
             else throw new StoreError('OFFLINE', err.message);
         }
         if (hasRemote) {
             await git(['checkout', '-q', '-f', '-B', BRANCH, `origin/${BRANCH}`], { cwd: this.dir });
             await git(['clean', '-fdq'], { cwd: this.dir });
+        } else {
+            // Nothing in the cloud yet: drop anything a push that never arrived left behind, so a retry starts from empty
+            try { await git(['update-ref', '-d', `refs/heads/${BRANCH}`], { cwd: this.dir }); } catch { /* none */ }
+            await git(['read-tree', '--empty'], { cwd: this.dir });
+            fs.rmSync(this.p('saves'), { recursive: true, force: true });
         }
         return { hasRemote };
     }
@@ -117,10 +162,11 @@ class Store {
             if (!dirty) return;
             await git(['commit', '-q', '-m', message], { cwd: this.dir });
             try {
-                await git(['push', '-q', '-u', 'origin', BRANCH], { cwd: this.dir, timeout: 180000 });
+                await this.network((url, pre) => ({ args: [...pre, 'push', '-q', url, `${BRANCH}:${BRANCH}`] }), { timeout: 180000 });
                 return;
             } catch (err) {
                 lastError = err;
+                if (err.code === 'AUTH' || err.code === 'NO_GIT') throw err;
                 if (/rejected|non-fast-forward|fetch first|failed to update ref/i.test(err.message)) continue;   // lost a race: redo
                 throw new StoreError('PUSH', err.message);
             }
@@ -174,4 +220,4 @@ class Store {
     }
 }
 
-module.exports = { Store, StoreError, BRANCH };
+module.exports = { Store, StoreError, BRANCH, sshUrlOf, AUTH_FAILURE };

@@ -60,6 +60,7 @@ const saves = createManager({
     dir: path.join(path.dirname(config.configFile), 'saves'),
     adapters: slotAdapters,
     getCloud: config.getCloud,
+    getToken: config.getCloudToken,
     log: console.log
 });
 // Game library sharing (see lib/library): this computer as a host, and another computer's games shown here
@@ -124,7 +125,7 @@ function findGame(relPath) {
 
 // Shows a failed save operation to the menu as {error, message}
 function saveFailure(err) {
-    const known = err instanceof SaveError || ['NO_GIT', 'OFFLINE', 'FIRST_RUN'].includes(err.code);
+    const known = err instanceof SaveError || ['NO_GIT', 'OFFLINE', 'AUTH', 'FIRST_RUN'].includes(err.code);
     return { status: known ? 409 : 500, body: { error: err.code || 'failed', message: err.message } };
 }
 
@@ -490,6 +491,7 @@ async function handleSaves(route, url, req, res) {
         }
         const body = req.method === 'POST' ? await readJson(req) : {};
         if (route === 'POST /api/saves/create') return sendJson(res, 200, await saves.createSlot(needGame(body), body.name)), true;
+        if (route === 'POST /api/saves/import') return sendJson(res, 200, await saves.importExisting(needGame(body), body.name)), true;
         if (route === 'POST /api/saves/rename') return sendJson(res, 200, await saves.renameSlot(needGame(body), body.slot, body.name)), true;
         if (route === 'POST /api/saves/delete') return sendJson(res, 200, await saves.deleteSlot(needGame(body), body.slot)), true;
         if (route === 'POST /api/saves/resolve') return sendJson(res, 200, await saves.resolve(needGame(body), body.slot, body.choice)), true;

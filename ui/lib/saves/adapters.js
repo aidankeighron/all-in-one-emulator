@@ -51,6 +51,15 @@ function linkExcept(realDir, slotDir, except, win = platformLib.current() === 'w
     }
 }
 
+const hasFiles = dir => {
+    try { return fs.readdirSync(dir, { withFileTypes: true }).some(e => !e.isDirectory() || hasFiles(path.join(dir, e.name))); } catch { return false; }
+};
+
+// Which of the save folders under `root` hold something
+function existingIn(root, perSlot) {
+    return perSlot.map(rel => ({ rel, abs: path.join(root, rel) })).filter(x => hasFiles(x.abs));
+}
+
 const firstRun = name => Object.assign(new Error(`Open ${name} once from Settings first, so it can create its folders`), { code: 'FIRST_RUN' });
 const appData = ctx => ctx.env.APPDATA || path.join(ctx.home, 'AppData', 'Roaming');
 
@@ -74,6 +83,8 @@ function ryujinx(ctx) {
         perSlot,
         slotRoot: slotId => path.join(slotsBase(), slotId),
         args: slotRoot => ['-r', slotRoot],
+        // The saves the emulator already had before slots existed: [{rel, abs}] for each save folder that has files in it
+        existing: () => existingIn(realRoot(), perSlot),
         assemble(slotRoot) {
             const real = realRoot();
             if (!fs.existsSync(real)) throw firstRun('Ryujinx');
@@ -109,6 +120,7 @@ function dolphin(ctx) {
         perSlot,
         slotRoot: slotId => path.join(slotsBase(), slotId),
         args: slotRoot => ['-u', slotRoot],
+        existing: () => existingIn(win ? dolphinWindowsUser(ctx) : path.join(flatpakApp, 'data', 'dolphin-emu'), perSlot),
         assemble(slotRoot) {
             mkdir(slotRoot);
             if (win) {

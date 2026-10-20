@@ -233,3 +233,35 @@ test('local backup is kept before a download replaces a changed save', async () 
 });
 
 
+
+test('a push that was refused leaves nothing behind: the save uploads on the next sync', async () => {
+    const remote = remoteRepo();
+    // The remote refuses every push (as GitHub does without a sign-in), then is fixed
+    const hook = path.join(remote, 'hooks', 'pre-receive');
+    fs.writeFileSync(hook, '#!/bin/sh\necho "fatal: could not read Username for github.com: terminal prompts disabled" >&2\nexit 1\n', { mode: 0o755 });
+    const a = computer('a', remote);
+    const slot = await a.manager.createSlot(game, 'First');
+    await a.manager.prepare(game, slot.id);
+    a.play(slot.id, { 'x.dat': 'progress' });
+    const first = await a.manager.finish(game, slot.id);
+    assert.notStrictEqual(first.status, 'saved');
+    fs.rmSync(hook);
+    const synced = await a.manager.syncAll();
+    assert.deepStrictEqual(synced.uploaded, ['First'], 'the queued save goes up once the remote accepts it');
+    const b = computer('b', remote);
+    const list = await b.manager.listSlots(game);
+    assert.strictEqual(list.slots.length, 1);
+    assert.strictEqual(list.slots[0].rev, 1);
+});
+
+test('a save the emulator already had can become a slot, and is not offered again', async () => {
+    const c = computer('a', 'x', { enabled: false });
+    const real = path.join(c.home, '.var/app/io.github.ryubing.Ryujinx/config/Ryujinx/bis/user/save/0000000000000001');
+    fs.mkdirSync(real, { recursive: true });
+    fs.writeFileSync(path.join(real, 'file.bin'), 'old progress');
+    assert.strictEqual((await c.manager.listSlots(game)).existing, true);
+    const slot = await c.manager.importExisting(game, 'Original');
+    assert.strictEqual(c.read(slot.id, '0000000000000001/file.bin'), 'old progress');
+    assert.ok(fs.existsSync(path.join(real, 'file.bin')), 'the original is left in place');
+    assert.strictEqual((await c.manager.listSlots(game)).existing, false);
+});

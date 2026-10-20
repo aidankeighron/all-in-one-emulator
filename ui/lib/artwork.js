@@ -11,6 +11,8 @@ const path = require('path');
 const fsp = fs.promises;
 const ART_BASE = 'https://art.gametdb.com';
 const SIDECAR_EXTS = ['png', 'jpg', 'jpeg', 'webp'];
+// Bumped when the lookup gets better, so games that missed before are looked up again
+const LOOKUP_VERSION = '2';
 const MISS_RETRY_MS = 7 * 24 * 60 * 60 * 1000;
 const MAX_IMAGE_BYTES = 3 * 1024 * 1024;
 
@@ -83,8 +85,11 @@ function chooseCovers(results, gameTitle) {
         .filter(p => p.thumbnail && p.thumbnail.source)
         .map(p => {
             const text = `${p.title} ${p.description || ''}`;
-            const isGame = /video game|\bgame\b/i.test(text) && !/series|franchise|media|soundtrack|film|character/i.test(p.description || '');
-            return { url: p.thumbnail.source, score: isGame ? titleMatch(p.title, gameTitle) : 0, index: p.index || 99 };
+            const notAGame = /series|franchise|media|soundtrack|film|character|list of/i.test(`${p.title} ${p.description || ''}`);
+            const isGame = /video game|\bgame\b/i.test(text);
+            const score = titleMatch(p.title, gameTitle);
+            // Wikipedia often has no short description: an article with exactly the game's name is accepted anyway
+            return { url: p.thumbnail.source, score: !notAGame && (isGame || (!p.description && score >= 0.99)) ? score : 0, index: p.index || 99 };
         })
         .filter(c => c.score >= 0.75)
         .sort((x, y) => y.score - x.score || x.index - y.index)
@@ -94,14 +99,20 @@ function chooseCovers(results, gameTitle) {
 // Searches Wikipedia for the game by name. Returns picture URLs to try; throws if the network is down.
 async function searchCoverUrls(game, fetchImpl, timeoutMs) {
     const hint = SEARCH_HINT[game.console] || '';
-    const params = new URLSearchParams({
-        action: 'query', format: 'json', generator: 'search', gsrsearch: `${game.title} ${hint} video game`.replace(/\s+/g, ' ').trim(),
-        gsrlimit: '6', gsrnamespace: '0', prop: 'pageimages|description', piprop: 'thumbnail', pithumbsize: '400', redirects: '1', origin: '*'
-    });
-    const res = await fetchImpl(`${WIKI_API}?${params}`, { signal: AbortSignal.timeout(timeoutMs), headers: { 'User-Agent': 'EmulatorMenu/1.0 (personal game launcher)' } });
-    if (!res.ok) return [];
-    const data = await res.json();
-    return chooseCovers(Object.values((data.query && data.query.pages) || {}), game.title);
+    // The precise search first, then the plain name when that finds nothing
+    const queries = [`${game.title} ${hint} video game`, `${game.title} video game`];
+    for (const q of queries) {
+        const params = new URLSearchParams({
+            action: 'query', format: 'json', generator: 'search', gsrsearch: q.replace(/\s+/g, ' ').trim(),
+            gsrlimit: '8', gsrnamespace: '0', prop: 'pageimages|description', piprop: 'thumbnail', pithumbsize: '400', redirects: '1', origin: '*'
+        });
+        const res = await fetchImpl(`${WIKI_API}?${params}`, { signal: AbortSignal.timeout(timeoutMs), headers: { 'User-Agent': 'EmulatorMenu/1.0 (personal game launcher)' } });
+        if (!res.ok) continue;
+        const data = await res.json();
+        const urls = chooseCovers(Object.values((data.query && data.query.pages) || {}), game.title);
+        if (urls.length) return urls;
+    }
+    return [];
 }
 
 // Where to download a cover from: a list of URLs to try in order, or null
@@ -145,7 +156,9 @@ function create({ cacheDir, romsDir, fetchImpl = globalThis.fetch, now = Date.no
     }
 
     function recentlyMissed(id) {
-        try { return now() - fs.statSync(missFile(id)).mtimeMs < MISS_RETRY_MS; } catch { return false; }
+        try {
+            return fs.readFileSync(missFile(id), 'utf8') === LOOKUP_VERSION && now() - fs.statSync(missFile(id)).mtimeMs < MISS_RETRY_MS;
+        } catch { return false; }
     }
 
     async function store(id, buf) {
@@ -196,7 +209,7 @@ function create({ cacheDir, romsDir, fetchImpl = globalThis.fetch, now = Date.no
             console.warn(`[ART] ${game.title}: ${err.message}`);
         }
         await fsp.mkdir(cacheDir, { recursive: true });
-        await fsp.writeFile(missFile(game.id), '');
+        await fsp.writeFile(missFile(game.id), LOOKUP_VERSION);
     }
 
     function pump() {
