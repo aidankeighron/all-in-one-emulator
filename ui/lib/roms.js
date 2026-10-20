@@ -87,12 +87,19 @@ async function readMagic(file, offset, length) {
     }
 }
 
-// Why a ".zip" can't be opened as a zip (undefined if it looks like one)
+// What an archive really is, going by its first bytes rather than its name
+async function archiveKind(file) {
+    const m = hex(await readMagic(file, 0, 4));
+    if (m === '504b0304' || m === '504b0506') return 'zip';
+    if (m === '52617221') return 'rar';
+    if (m.startsWith('377abcaf')) return '7z';
+    return 'unknown';
+}
+
+// Why an archive can't be opened as a zip, rar or 7z (undefined if it looks like one)
 async function describeNonZip(file) {
     const m = hex(await readMagic(file, 0, 4));
-    if (m === '504b0304' || m === '504b0506') return undefined;
-    if (m.startsWith('377abcaf')) return 'it is a 7z archive renamed to .zip';
-    if (m === '52617221') return 'it is a RAR archive renamed to .zip';
+    if (m === '504b0304' || m === '504b0506' || m === '52617221' || m.startsWith('377abcaf')) return undefined;
     if (m.startsWith('1f8b')) return 'it is a gzip file, not a zip';
     if (m === '3c21444f' || m === '3c68746d' || m === '3c48544d') return 'it is an HTML page (a failed download?), not a zip';
     if (m === '') return 'it is empty';
@@ -139,6 +146,20 @@ function extractZip(zipPath, tmpDir, wanted) {
     });
 }
 
+// RAR is read by a bundled library, so nothing has to be installed. Entries are flattened and renamed by position
+// (no folder structure from the archive reaches the disk).
+async function extractRar(archive, tmpDir, wanted) {
+    const { createExtractorFromFile } = require('node-unrar-js');
+    const extractor = await createExtractorFromFile({ filepath: archive, targetPath: tmpDir, filenameTransform: name => path.basename(name) });
+    const names = [...extractor.getFileList().fileHeaders]
+        .filter(h => !h.flags.directory && wanted.has(extOf(h.name)))
+        .map(h => h.name);
+    if (names.length === 0) return [];
+    const { files } = extractor.extract({ files: names });
+    for (const _ of files) { /* extraction happens as the iterator is consumed */ }
+    return (await walkFiles(tmpDir)).filter(i => wanted.has(extOf(i.name)));
+}
+
 function extractWithSevenZip(bin, archive, tmpDir) {
     return new Promise((resolve, reject) => {
         execFile(bin, ['x', '-y', `-o${tmpDir}`, archive], { maxBuffer: 64 * 1024 * 1024 }, err => err ? reject(err) : resolve());
@@ -181,7 +202,7 @@ async function findZips(dir, depth = 0) {
         if (e.name.startsWith('.')) continue;
         const p = path.join(dir, e.name);
         if (e.isDirectory() && depth < MAX_DEPTH) zips.push(...await findZips(p, depth + 1));
-        else if (e.isFile() && e.name.toLowerCase().endsWith('.zip')) zips.push(p);
+        else if (e.isFile() && /\.(zip|rar|7z)$/i.test(e.name)) zips.push(p);
     }
     return zips;
 }
@@ -228,9 +249,9 @@ async function processRoms(romsDir, manifest, { keepZips = !!process.env.KEEP_ZI
         }
 
         const why = await describeNonZip(zip);
-        if (why && !sevenZip) {
-            const needs7z = why.includes('7z') || why.includes('RAR');
-            log(`FAILED ${rel}: ${why}${needs7z ? ` (install ${process.platform === 'win32' ? '7-Zip' : 'p7zip-full'} to import it)` : ''}`);
+        const kind = why ? 'unknown' : await archiveKind(zip);
+        if (why || (kind === '7z' && !sevenZip)) {
+            log(`FAILED ${rel}: ${why || `it is a 7z archive (install ${process.platform === 'win32' ? '7-Zip' : 'p7zip-full'} to import it)`}`);
             failed++;
             continue;
         }
@@ -239,7 +260,9 @@ async function processRoms(romsDir, manifest, { keepZips = !!process.env.KEEP_ZI
         const tmp = await fsp.mkdtemp(path.join(romsDir, '.extract-'));
         try {
             let items;
-            if (why) {
+            if (kind === 'rar') {
+                items = await extractRar(zip, tmp, gameExts);
+            } else if (kind === '7z') {
                 await extractWithSevenZip(sevenZip, zip, tmp);
                 items = (await walkFiles(tmp)).filter(i => gameExts.has(extOf(i.name)));
             } else {
@@ -256,7 +279,7 @@ async function processRoms(romsDir, manifest, { keepZips = !!process.env.KEEP_ZI
             for (const item of items) {
                 const folder = forced || await detectFolder(item.file, extOf(item.name), manifest);
                 if (!folder) {
-                    log(`Could not tell which system ${item.name} is for; skipping it. Put the zip inside roms/<system>/ (e.g. roms/switch/) to choose.`);
+                    log(`Could not tell which system ${item.name} is for; skipping it. Put the archive inside roms/<system>/ (e.g. roms/switch/) to choose.`);
                     ok = false;
                     continue;
                 }
@@ -275,7 +298,7 @@ async function processRoms(romsDir, manifest, { keepZips = !!process.env.KEEP_ZI
             }
         } catch (err) {
             const size = stat.size;
-            log(`FAILED to extract ${rel} (${size} bytes): ${why || 'the archive is corrupt or incomplete; re-download or re-copy it and compare its size'}`);
+            log(`FAILED to extract ${rel} (${size} bytes): ${err.message || 'the archive is corrupt or incomplete'}. Re-download or re-copy it and compare its size`);
             failed++;
         } finally {
             await fsp.rm(tmp, { recursive: true, force: true });

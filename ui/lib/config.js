@@ -45,6 +45,16 @@ function setAutoControllers(on) {
     save({ ...load(), autoControllers: !!on });
 }
 
+// How many Wii Remotes to use as real remotes in Dolphin (0-4); they take the first Wii Remote slots
+function getWiiRemotes() {
+    const n = Number(load().wiiRemotes);
+    return Number.isInteger(n) && n >= 0 && n <= 4 ? n : 0;
+}
+
+function setWiiRemotes(n) {
+    if (Number.isInteger(n) && n >= 0 && n <= 4) save({ ...load(), wiiRemotes: n });
+}
+
 const clamp01 = (v, fallback) => (typeof v === 'number' && v >= 0 && v <= 1 ? v : fallback);
 
 function getSound() {
@@ -134,4 +144,4 @@ const emulatorsDir = path.join(path.dirname(configFile), 'emulators');
 const artworkDir = path.join(path.dirname(configFile), 'artwork');
 const soundsDir = process.env.SOUNDS_DIR || path.join(path.dirname(configFile), 'sounds');
 
-module.exports = { getRomsDir, setRomsDir, getAutoControllers, setAutoControllers, getSound, setSound, getCloud, getLibrary, setLibrary, libraryCacheFile, getEmulatorPaths, setEmulatorPath, emulatorsDir, configFile, artworkDir, soundsDir };
+module.exports = { getRomsDir, setRomsDir, getAutoControllers, setAutoControllers, getWiiRemotes, setWiiRemotes, getSound, setSound, getCloud, getLibrary, setLibrary, libraryCacheFile, getEmulatorPaths, setEmulatorPath, emulatorsDir, configFile, artworkDir, soundsDir };

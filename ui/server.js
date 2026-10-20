@@ -15,6 +15,7 @@ const sounds = require('./lib/sounds');
 const { createManager, SaveError } = require('./lib/saves/manager');
 const saveAdapters = require('./lib/saves/adapters');
 const library = require('./lib/library');
+const bluetoothLib = require('./lib/bluetooth');
 
 const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'emulators.json'), 'utf8'));
 const emulatorsById = new Map(manifest.emulators.map(e => [e.id, e]));
@@ -136,7 +137,7 @@ function artworkFor(romsDir) {
 function setupControllers(emulatorIds) {
     const connected = controllers.detect({ platform: runner.platform });
     const results = emulatorIds.map(id => {
-        const result = inputconfig.apply(id, connected, platformCtx);
+        const result = inputconfig.apply(id, connected, { ...platformCtx, wiiRemotes: config.getWiiRemotes() });
         console.log(`[PADS] ${id}: ${result.status}${result.message ? ` (${result.message})` : ''}`);
         return result;
     });
@@ -297,6 +298,38 @@ function readJson(req) {
     });
 }
 
+const bluetooth = bluetoothLib.createBluetooth({ log: console.log });
+
+// /api/bluetooth/*. Returns true when it sent a response.
+async function handleBluetooth(route, req, res) {
+    try {
+        if (route === 'GET /api/bluetooth') {
+            const [status, paired] = await Promise.all([bluetooth.status(), bluetooth.paired()]);
+            return sendJson(res, 200, { ...status, paired, wiiRemotes: config.getWiiRemotes() }), true;
+        }
+        if (route === 'GET /api/bluetooth/job') return sendJson(res, 200, { job: bluetooth.snapshot() }), true;
+        if (route === 'POST /api/bluetooth/setup') return sendJson(res, 200, { job: await bluetooth.setup() }), true;
+        if (route === 'POST /api/bluetooth/pair') return sendJson(res, 200, { job: bluetooth.startPairing((await readJson(req)).kind) }), true;
+        if (route === 'POST /api/bluetooth/cancel') return sendJson(res, 200, { job: bluetooth.cancel() }), true;
+        if (route === 'POST /api/bluetooth/forget') return sendJson(res, 200, await bluetooth.forget((await readJson(req)).address)), true;
+        if (route === 'POST /api/bluetooth/open-settings') return sendJson(res, 200, { ok: bluetooth.openSystemSettings() }), true;
+        if (route === 'POST /api/bluetooth/wiiremotes') {
+            const n = (await readJson(req)).count;
+            if (!Number.isInteger(n) || n < 0 || n > 4) return sendJson(res, 400, { error: 'bad_count', message: 'Choose between 0 and 4 Wii Remotes' }), true;
+            config.setWiiRemotes(n);
+            // Dolphin's sandbox needs Bluetooth access before it can find real remotes
+            if (n > 0) await runner.allowBluetooth(emulatorsById.get('dolphin')).catch(() => {});
+            setupControllers(['dolphin']);
+            return sendJson(res, 200, { wiiRemotes: n }), true;
+        }
+    } catch (err) {
+        const known = ['MANUAL', 'BUSY', 'BAD_KIND', 'BAD_ADDRESS'].includes(err.code);
+        console.error(`[BT] ${route}: ${err.message}`);
+        return sendJson(res, known ? 409 : 500, { error: err.code || 'failed', message: err.message }), true;
+    }
+    return false;
+}
+
 // Only this machine's own pages may use the API (blocks DNS rebinding and cross-site requests)
 function allowed(req) {
     if (!/^(localhost|127\.0\.0\.1)(:\d+)?$/.test(req.headers.host || '')) return false;
@@ -449,16 +482,23 @@ function createServer(onGameState) {
                     const handled = await handleSaves(route, url, req, res);
                     if (handled) return;
                 }
+                if (url.pathname.startsWith('/api/bluetooth')) {
+                    if (await handleBluetooth(route, req, res)) return;
+                }
                 if (route === 'POST /api/controllers/report') {
                     controllers.report((await readJson(req)).pads);      // Windows: the window says which gamepads it sees
                     return sendJson(res, 200, { ok: true });
                 }
                 if (route === 'GET /api/controllers') {
                     const list = controllers.detect({ platform: runner.platform });
-                    const roles = inputconfig.assignments(list);
+                    const wiiRemotes = config.getWiiRemotes();
+                    const roles = inputconfig.assignments(list, wiiRemotes);
+                    // Real Wii Remotes the person set up but that are not connected yet: Dolphin connects them itself
+                    const waiting = inputconfig.players(list, wiiRemotes).wii.filter(c => c.virtual)
+                        .map(c => ({ id: c.id, name: 'Wii Remote', kind: 'wiimote', label: 'Wii Remote', connection: 'Bluetooth', virtual: true, pad: false, player: list.length + 1, roles: roles[c.id] }));
                     return sendJson(res, 200, {
                         platform: runner.platform,
-                        controllers: list.map(c => ({ ...c, roles: roles[c.id] })),
+                        controllers: [...list.map(c => ({ ...c, roles: roles[c.id] })), ...waiting],
                         autoSetup: config.getAutoControllers(),
                         setup: lastSetup
                     });

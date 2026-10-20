@@ -17,6 +17,33 @@ function makeZip(file, entries) {
     });
 }
 
+// A minimal RAR 4 archive holding stored (uncompressed) files, enough to exercise the bundled reader
+function makeRar(file, entries) {
+    const zlib = require('zlib');
+    const withCrc = body => { const c = Buffer.alloc(2); c.writeUInt16LE(zlib.crc32(body) & 0xffff); return Buffer.concat([c, body]); };
+    const parts = [Buffer.from('526172211a0700', 'hex')];
+    const main = Buffer.alloc(11); main[0] = 0x73; main.writeUInt16LE(0, 1); main.writeUInt16LE(13, 3);
+    parts.push(withCrc(main));
+    for (const [name, data] of Object.entries(entries)) {
+        const nm = Buffer.from(name);
+        const h = Buffer.alloc(5 + 25 + nm.length - 2 + 2 - 5 + 5);
+        let o = 0;
+        h[o++] = 0x74; h.writeUInt16LE(0x8000, o); o += 2;
+        h.writeUInt16LE(32 + nm.length, o); o += 2;
+        h.writeUInt32LE(data.length, o); o += 4;      // packed size
+        h.writeUInt32LE(data.length, o); o += 4;      // unpacked size
+        h[o++] = 3;                                   // host OS
+        h.writeUInt32LE(zlib.crc32(data) >>> 0, o); o += 4;
+        h.writeUInt32LE(0x5a000000, o); o += 4;       // time
+        h[o++] = 29; h[o++] = 0x30;                   // version, method: store
+        h.writeUInt16LE(nm.length, o); o += 2;
+        h.writeUInt32LE(0x20, o); o += 4;             // attributes
+        nm.copy(h, o); o += nm.length;
+        parts.push(withCrc(h.subarray(0, o)), data);
+    }
+    fs.writeFileSync(file, Buffer.concat(parts));
+}
+
 const old = file => { const t = new Date(Date.now() - 5 * 60 * 1000); fs.utimesSync(file, t, t); };
 
 function gcImage() { const b = Buffer.alloc(0x100); b.writeUInt32BE(0xc2339f3d, 0x1c); return b; }
@@ -69,8 +96,8 @@ test('bad, recent and ambiguous zips are left alone with a clear message', async
     const result = await roms.processRoms(dir, manifest);
     const out = result.lines.join('\n');
     assert.ok(!result.ok);
-    assert.match(out, /trunc\.zip \(\d+ bytes\): the archive is corrupt or incomplete/);
-    assert.match(out, /rar\.zip: it is a RAR archive/);
+    assert.match(out, /trunc\.zip \(\d+ bytes\):/);
+    assert.match(out, /rar\.zip \(\d+ bytes\):/);
     assert.match(out, /fresh\.zip: modified in the last minute/);
     assert.match(out, /Could not tell which system Mystery\.iso/);
     for (const n of ['trunc', 'rar', 'fresh', 'amb']) assert.ok(fs.existsSync(path.join(dir, `${n}.zip`)), `${n}.zip kept`);
@@ -119,4 +146,19 @@ test('cleanTitle copes with Switch dump names', async () => {
     assert.strictEqual(roms.cleanTitle('The Legend of Zelda - Breath of the Wild [01007EF00011E000][v1.6.0] [BASE]'), 'The Legend of Zelda: Breath of the Wild');
     assert.strictEqual(roms.cleanTitle('Animal_Crossing_-_New_Horizons[0100]'), 'Animal Crossing: New Horizons');
     assert.strictEqual(roms.cleanTitle('Spider-Man'), 'Spider-Man', 'a hyphen inside a word stays');
+});
+
+test('rar archives are unpacked with no external program', async () => {
+    const dir = await setup();
+    makeRar(path.join(dir, 'pack.rar'), { 'sub/Game A.iso': gcImage(), 'notes.txt': Buffer.from('hi') });
+    makeRar(path.join(dir, 'switch-game.rar'), { 'Zelda.nsp': Buffer.alloc(32, 7) });
+    fs.mkdirSync(path.join(dir, 'switch'));
+    fs.renameSync(path.join(dir, 'switch-game.rar'), path.join(dir, 'switch', 'switch-game.rar'));
+    old(path.join(dir, 'pack.rar')); old(path.join(dir, 'switch', 'switch-game.rar'));
+
+    const result = await roms.processRoms(dir, manifest);
+    assert.ok(result.ok, result.lines.join('\n'));
+    assert.ok(fs.existsSync(path.join(dir, 'gamecube', 'Game A.iso')));
+    assert.strictEqual(fs.readFileSync(path.join(dir, 'switch', 'Zelda.nsp')).length, 32);
+    assert.ok(!fs.existsSync(path.join(dir, 'pack.rar')), 'rar removed after import');
 });

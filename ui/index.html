@@ -425,6 +425,19 @@
         #guide-body code { background: #eef2f6; border: 1px solid var(--wii-edge); border-radius: 6px; padding: 2px 7px; user-select: text; word-break: break-all; }
         .guide-box { background: #eaf6fd; border: 2px solid #9bd4f2; border-radius: 12px; padding: 10px 14px; font-weight: 700; color: #14507a; line-height: 1.7; }
         .guide-box.off { background: #fff3dc; border-color: #f0c777; color: #6b3b00; }
+        .pair-steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
+        .pair-list { display: flex; flex-direction: column; gap: 8px; }
+        .pair-device { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: #fff; border: 2px solid var(--wii-edge); border-radius: 12px; padding: 8px 12px; font-weight: 700; }
+        .pair-device small { display: block; color: #8a9199; font-weight: 600; }
+        .guide-box .spinner { display: inline-block; width: 16px; height: 16px; flex: none; }
+        .pair-log { font-size: 12px; color: #8a9199; max-height: 70px; overflow: hidden; word-break: break-all; }
+        .pair-buttons { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; margin-top: 18px; }
+        .pair-buttons .btn.pad-focus { outline: 3px solid var(--wii-blue); outline-offset: 2px; box-shadow: 0 0 14px var(--wii-blue-glow); }
+        #controller-status { cursor: pointer; }
+        .pad-card.connect { border: 3px dashed #9bd4f2; background: rgba(255, 255, 255, 0.55); justify-content: center; text-align: center; cursor: pointer; }
+        .pad-card.connect .plus { width: 52px; height: 52px; border-radius: 50%; background: linear-gradient(to bottom, #5cc6fa, #2c9fe0); color: #fff; display: flex; align-items: center; justify-content: center; }
+        .pad-card.connect .pad-name { color: var(--wii-blue-deep); }
+        .pad-card.connect.selected { border-style: solid; }
         .guide-dots { display: flex; gap: 8px; justify-content: center; margin-top: 14px; }
         .guide-dots i { width: 10px; height: 10px; border-radius: 50%; background: #d3dae0; }
         .guide-dots i.on { background: var(--wii-blue); box-shadow: 0 0 8px var(--wii-blue-glow); }
@@ -689,7 +702,7 @@
                     <button class="btn" id="browse-button" onclick="browseRomsDir()">Browse</button>
                     <button class="btn primary" onclick="saveRomsDir()">Save</button>
                 </div>
-                <div class="desc" style="margin-top:8px">Put games (or .zip files) in subfolders named after the system: <span id="folder-list"></span></div>
+                <div class="desc" style="margin-top:8px">Put games (or .zip, .rar or .7z files) in subfolders named after the system: <span id="folder-list"></span></div>
 
                 <h3>Emulators</h3>
                 <div id="flatpak-warning" class="notice" style="display:none">
@@ -754,6 +767,15 @@
                 <span class="desc">LB / RB: switch sections</span>
                 <button class="btn" onclick="closeSettings()">Close (B)</button>
             </div>
+        </div>
+    </div>
+
+    <div class="overlay" id="pair-overlay" style="z-index:56" onclick="if (event.target === this) closePair()">
+        <div class="panel guide">
+            <div class="eyebrow">Controllers</div>
+            <h2 id="pair-title" style="margin-top:4px">Connect a controller</h2>
+            <div id="pair-body"></div>
+            <div class="pair-buttons" id="pair-buttons"></div>
         </div>
     </div>
 
@@ -825,7 +847,7 @@
 
         // How many tiles/cards on this page can be selected
         function itemCount() {
-            if (onControllers()) return padList.length;
+            if (onControllers()) return padList.length + 1;   // the last tile connects another controller
             return Math.max(0, Math.min(CHANNELS_PER_PAGE, allGames.length - page * CHANNELS_PER_PAGE));
         }
 
@@ -908,7 +930,7 @@
                 const hint = document.createElement('div');
                 hint.className = 'empty-hint';
                 hint.innerHTML = `<div>No games found in <code>${escapeHtml(romsDir)}</code><br>
-                    Put games or .zip files in folders like <code>wii</code>, <code>gamecube</code>, <code>switch</code>,
+                    Put games or .zip/.rar files in folders like <code>wii</code>, <code>gamecube</code>, <code>switch</code>,
                     then press the import button.<br>Install emulators from the settings.</div>`;
                 grid.appendChild(hint);
             }
@@ -1002,7 +1024,7 @@
         }
 
         function renderControllers(grid) {
-            const slots = Math.min(CHANNELS_PER_PAGE, Math.max(4, padList.length));
+            const slots = Math.min(CHANNELS_PER_PAGE, Math.max(4, padList.length + 1));
             for (let i = 0; i < slots; i++) {
                 const c = padList[i];
                 const card = document.createElement('div');
@@ -1019,6 +1041,12 @@
                         </div>
                         <div class="pad-roles">${(c.roles || []).map(escapeHtml).join('<br>') || 'Not used by an emulator'}</div>`;
                     card.addEventListener('mouseenter', () => { if (zone !== 'grid' || selectedIndex !== i) Sfx.play('move'); zone = 'grid'; selectedIndex = i; renderFocus(); });
+                } else if (i === padList.length) {
+                    card.className = 'wii-channel pad-card connect';
+                    card.innerHTML = `<div class="plus"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div>
+                        <div class="pad-name">Connect a controller</div><div class="pad-roles">Wii Remote, Switch Pro Controller or Joy-Con</div>`;
+                    card.addEventListener('click', () => openPair());
+                    card.addEventListener('mouseenter', () => { if (zone !== 'grid' || selectedIndex !== i) Sfx.play('move'); zone = 'grid'; selectedIndex = i; renderFocus(); });
                 } else {
                     card.className = 'wii-channel pad-card channel-empty waiting';
                     card.innerHTML = `
@@ -1030,7 +1058,7 @@
             if (padList.length === 0) {
                 const hint = document.createElement('div');
                 hint.className = 'empty-hint';
-                hint.innerHTML = `<div>Plug in or connect an Xbox, Switch or GameCube controller, or a Wii Remote.<br>It shows up here and is set up in the emulators when a game starts.</div>`;
+                hint.innerHTML = `<div>Plug in an Xbox or GameCube controller, or press <b>Connect a controller</b> to pair a Wii Remote or Switch controller.<br>It shows up here and is set up in the emulators when a game starts.</div>`;
                 grid.appendChild(hint);
             }
         }
@@ -1059,6 +1087,8 @@
             } catch { /* server hiccup: try again next time */ }
         }
         setInterval(refreshControllers, 2000);
+
+        document.getElementById('controller-status').addEventListener('click', () => openPair());
 
         function updateControllerChip() {
             const chip = document.getElementById('controller-status');
@@ -1138,7 +1168,7 @@
             if (zone === 'arrow-left') return goPage(page - 1);
             if (zone === 'arrow-right') return goPage(page + 1);
             if (zone === 'bottom') return document.getElementById(BOTTOM_BUTTONS[bottomIndex]).click();
-            if (onControllers()) return;
+            if (onControllers()) return selectedIndex === padList.length ? openPair() : undefined;
             const game = allGames[page * CHANNELS_PER_PAGE + selectedIndex];
             if (game) openSaveSheet(game);
         }
@@ -1931,6 +1961,183 @@
             renderGuide();
         }
 
+        // ================= CONNECT A CONTROLLER =================
+        // Pairs Switch controllers and checks for Wii Remotes through the server (see lib/bluetooth.js).
+        const pair = { open: false, info: null, job: null, focus: 0, buttons: [], poll: null, found: null, error: '' };
+
+        const PAIR_HELP = {
+            switch: ['Hold the small round <b>sync button</b> on the controller until its four lights sweep back and forth.', 'Pro Controller: the button on the top edge. Joy-Con: the button on the rail side.'],
+            wiimote: ['Press <b>1</b> and <b>2</b> on the Wii Remote together and keep them held.', 'Do not use the red sync button under the battery cover.']
+        };
+
+        async function pairRefresh() {
+            try { pair.info = await (await fetch('/api/bluetooth')).json(); pair.job = pair.info.job || null; pair.error = ''; }
+            catch { pair.error = 'The menu could not check Bluetooth.'; }
+            if (pair.open) renderPair();
+        }
+
+        async function pairCall(path, body) {
+            try {
+                const res = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
+                const data = await res.json();
+                if (!res.ok) { pair.error = data.message || 'That did not work.'; } else { pair.error = ''; }
+                if (data.job !== undefined) pair.job = data.job;
+            } catch { pair.error = 'The menu could not be reached.'; }
+            startPairPoll();
+            if (pair.open) renderPair();
+        }
+
+        function startPairPoll() {
+            clearInterval(pair.poll);
+            pair.poll = setInterval(async () => {
+                if (!pair.open) return clearInterval(pair.poll);
+                try {
+                    const before = pair.job && pair.job.phase;
+                    pair.job = (await (await fetch('/api/bluetooth/job')).json()).job;
+                    if (!pair.job || pair.job.phase !== 'running') {
+                        clearInterval(pair.poll);
+                        if (before === 'running') { Sfx.play(pair.job && pair.job.phase === 'done' ? 'select' : 'error'); await pairRefresh(); return; }
+                    }
+                    renderPair();
+                } catch { /* try again next time */ }
+            }, 700);
+        }
+
+        function pairScreen() {
+            const info = pair.info, job = pair.job;
+            const buttons = [];
+            const add = (label, act, primary) => buttons.push({ label, act, primary });
+            let title = 'Connect a controller', body = '';
+
+            if (!info) {
+                body = '<div class="sheet-busy" style="min-height:120px"><span class="spinner"></span><span>Checking Bluetooth…</span></div>';
+                add('Close (B)', 'close');
+            } else if (job && job.phase === 'running') {
+                const setup = job.kind === 'setup';
+                title = setup ? 'Setting up Bluetooth' : job.kind === 'wiimote' ? 'Looking for a Wii Remote' : 'Looking for a Switch controller';
+                const help = PAIR_HELP[job.kind] || [];
+                body = `<div class="guide-box"><span class="spinner" style="vertical-align:-3px;margin-right:8px"></span>${escapeHtml(job.message)}</div>
+                    ${help.map(h => `<p>${h}</p>`).join('')}
+                    <div class="pair-log">${(job.lines || []).slice(-3).map(escapeHtml).join('<br>')}</div>`;
+                add('Cancel (B)', 'cancel');
+            } else if (job && ['done', 'failed'].includes(job.phase) && pair.showResult) {
+                const ok = job.phase === 'done';
+                title = ok ? 'All set' : 'That did not work';
+                body = `<div class="guide-box ${ok ? '' : 'off'}">${escapeHtml(job.message)}</div>`;
+                if (ok && job.kind === 'wiimote' && info.wiiRemotes < 4) {
+                    body += `<p>Add it as Wii Remote ${info.wiiRemotes + 1}? Dolphin connects to it by itself when a game starts.</p>`;
+                    add(`Use as Wii Remote ${info.wiiRemotes + 1}`, 'wii-add', true);
+                }
+                if (!ok && job.kind !== 'setup') add('Try again', 'retry', true);
+                if (!ok && job.kind === 'setup') add('Try again', 'setup', true);
+                add('Done (B)', 'result-ok', ok && !buttons.length);
+            } else if (info.manual) {
+                title = 'Connect a controller';
+                body = `<p>Windows connects controllers itself. Pair them there, then they show up in the menu.</p>
+                    <ol class="pair-steps">
+                        <li>Press <b>Open Bluetooth settings</b> and choose <b>Add a device &rarr; Bluetooth</b>.</li>
+                        <li><b>Switch Pro Controller / Joy-Con:</b> hold the small sync button until the lights sweep, then pick it from the list.</li>
+                        <li><b>Wii Remote:</b> press <b>1</b> + <b>2</b> and keep them held, pick <b>Nintendo RVL-CNT-01</b>, and if Windows asks for a code choose to connect without one.</li>
+                        <li>Back here, tell the menu how many real Wii Remotes to use below.</li>
+                    </ol>`;
+                add('Open Bluetooth settings', 'open-settings', true);
+            } else if (!info.ready) {
+                title = 'Set up Bluetooth';
+                const why = info.problems.includes('not_installed') ? 'This computer does not have Bluetooth support installed yet. The menu can install it for you. You will be asked for your password once.'
+                    : info.problems.includes('no_adapter') ? 'No Bluetooth adapter was found. Plug in a USB Bluetooth adapter (or turn Bluetooth on in the BIOS or with the laptop’s switch), then check again.'
+                    : 'Bluetooth is switched off. The menu can turn it on for you.';
+                body = `<div class="guide-box off">${escapeHtml(why)}</div>`;
+                if (job && job.phase === 'failed' && !pair.showResult) body += `<p>${escapeHtml(job.message)}</p>`;
+                if (info.problems.includes('no_adapter')) add('Check again', 'refresh', true);
+                else add(info.problems.includes('not_installed') ? 'Install and turn on Bluetooth' : 'Turn on Bluetooth', 'setup', true);
+                add('Close (B)', 'close');
+            } else {
+                body = `<p>Choose what you want to connect.</p>`;
+                add('Switch Pro Controller / Joy-Con', 'pair-switch', true);
+                add('Wii Remote', 'pair-wiimote');
+                if (!info.nintendoDriver) body += `<div class="guide-box off">This system’s Linux kernel (${escapeHtml(info.kernel)}) is older than 5.16, so Switch controllers will not work. Update the system to a newer kernel.</div>`;
+            }
+
+            // Controllers the computer already knows, and the real Wii Remote count
+            if (info && (info.ready || info.manual) && !(job && job.phase === 'running') && !(pair.showResult && job && ['done', 'failed'].includes(job.phase))) {
+                if (info.paired && info.paired.length) {
+                    body += `<h3 style="margin:14px 0 6px">Paired controllers</h3><div class="pair-list">${info.paired.map((d, i) => `<div class="pair-device"><span>${escapeHtml(d.label)}<small>${escapeHtml(d.name)} · ${d.connected ? 'connected' : 'not connected'}</small></span></div>`).join('')}</div>`;
+                    info.paired.forEach(d => add(`Forget ${d.label}${info.paired.filter(x => x.label === d.label).length > 1 ? ' ' + d.address.slice(-5) : ''}`, 'forget:' + d.address));
+                }
+                body += `<h3 style="margin:14px 0 6px">Real Wii Remotes in Dolphin</h3><p>${info.wiiRemotes ? `Using <b>${info.wiiRemotes}</b> real Wii Remote${info.wiiRemotes === 1 ? '' : 's'} (the first player${info.wiiRemotes === 1 ? '' : 's'}). They connect when a game starts: press <b>1</b> + <b>2</b>.` : 'None. Gamepads play as Wii Remotes instead.'}</p>`;
+                if (info.wiiRemotes < 4) add('More Wii Remotes', 'wii-more');
+                if (info.wiiRemotes > 0) add('Fewer Wii Remotes', 'wii-less');
+                add('Close (B)', 'close');
+            }
+            if (pair.error) body += `<div class="guide-box off">${escapeHtml(pair.error)}</div>`;
+            return { title, body, buttons };
+        }
+
+        function renderPair() {
+            const sc = pairScreen();
+            pair.buttons = sc.buttons;
+            pair.focus = Math.min(pair.focus, Math.max(0, sc.buttons.length - 1));
+            document.getElementById('pair-title').textContent = sc.title;
+            document.getElementById('pair-body').innerHTML = `<div style="display:flex;flex-direction:column;gap:10px;font-size:15px;line-height:1.55">${sc.body}</div>`;
+            const box = document.getElementById('pair-buttons');
+            box.innerHTML = '';
+            sc.buttons.forEach((b, i) => {
+                const el = document.createElement('button');
+                el.type = 'button';
+                el.className = `btn ${b.primary ? 'primary' : ''} ${i === pair.focus ? 'pad-focus' : ''}`;
+                el.textContent = b.label;
+                el.addEventListener('click', () => { pair.focus = i; pairPress(); });
+                box.appendChild(el);
+            });
+        }
+
+        async function openPair() {
+            Sfx.play('open');
+            Object.assign(pair, { open: true, info: null, focus: 0, error: '', showResult: false });
+            document.getElementById('pair-overlay').classList.add('open');
+            renderPair();
+            await pairRefresh();
+            if (pair.job && pair.job.phase === 'running') startPairPoll();
+        }
+
+        function closePair() {
+            if (pair.job && pair.job.phase === 'running') fetch('/api/bluetooth/cancel', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+            pair.open = false;
+            clearInterval(pair.poll);
+            document.getElementById('pair-overlay').classList.remove('open');
+            lastInputTime = Date.now() + 300;
+            refreshControllers();
+        }
+
+        async function pairPress() {
+            const b = pair.buttons[pair.focus];
+            if (!b) return;
+            Sfx.play('select');
+            const [act, arg] = b.act.split(':');
+            if (act === 'close') return closePair();
+            if (act === 'cancel') { await pairCall('/api/bluetooth/cancel'); pair.showResult = false; return pairRefresh(); }
+            if (act === 'result-ok') { pair.showResult = false; pair.focus = 0; return pairRefresh(); }
+            if (act === 'refresh') return pairRefresh();
+            if (act === 'setup') { pair.showResult = true; return pairCall('/api/bluetooth/setup'); }
+            if (act === 'pair-switch' || act === 'pair-wiimote') { pair.showResult = true; pair.lastKind = act.slice(5); pair.focus = 0; return pairCall('/api/bluetooth/pair', { kind: pair.lastKind }); }
+            if (act === 'retry') { pair.focus = 0; return pairCall('/api/bluetooth/pair', { kind: pair.lastKind || 'switch' }); }
+            if (act === 'open-settings') return pairCall('/api/bluetooth/open-settings');
+            if (act === 'forget') { await pairCall('/api/bluetooth/forget', { address: b.act.slice(7) }); return pairRefresh(); }
+            if (['wii-add', 'wii-more', 'wii-less'].includes(act)) {
+                const n = Math.max(0, Math.min(4, (pair.info.wiiRemotes || 0) + (act === 'wii-less' ? -1 : 1)));
+                await pairCall('/api/bluetooth/wiiremotes', { count: n });
+                pair.showResult = false;
+                return pairRefresh();
+            }
+        }
+
+        function pairMove(delta) {
+            if (!pair.buttons.length) return;
+            pair.focus = (pair.focus + delta + pair.buttons.length) % pair.buttons.length;
+            Sfx.play('move');
+            renderPair();
+        }
+
         function closeSettings() {
             Sfx.play('close');
             settingsOpen = false;
@@ -2269,7 +2476,14 @@
 
             if (st.pressed.length) Sfx.unlock();
             if (st.count > 0 && !gameRunning) {
-                if (guide.open) {
+                if (pair.open) {
+                    if (now - lastInputTime > 180) {
+                        if (st.a) { pairPress(); lastInputTime = now + 400; }
+                        else if (st.b) { const running = pair.job && pair.job.phase === 'running'; if (running || !pair.showResult) closePair(); else { pair.showResult = false; renderPair(); } lastInputTime = now + 400; }
+                        else if (st.down || st.right) { pairMove(1); lastInputTime = now; }
+                        else if (st.up || st.left) { pairMove(-1); lastInputTime = now; }
+                    }
+                } else if (guide.open) {
                     if (now - lastInputTime > 180) {
                         if (st.a || st.right) { guideStep(1); lastInputTime = now + 250; }
                         else if (st.b || st.left) { guideStep(-1); lastInputTime = now + 250; }
@@ -2301,6 +2515,13 @@
 
         // Keyboard works too (handy without a controller, or to check that the menu itself is fine)
         window.addEventListener('keydown', e => {
+            if (pair.open) {
+                if (e.key === 'Escape') closePair();
+                else if (e.key === 'Enter' || e.key === ' ') pairPress();
+                else if (e.key === 'ArrowDown' || e.key === 'ArrowRight') pairMove(1);
+                else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') pairMove(-1);
+                return e.preventDefault();
+            }
             if (guide.open) {
                 if (e.key === 'Escape') closeGuide();
                 else if (e.key === 'Enter' || e.key === 'ArrowRight') guideStep(1);

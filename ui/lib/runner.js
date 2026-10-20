@@ -52,6 +52,8 @@ function createRunner({ platform = platformLib.current(), env = process.env, get
         uninstall: (emu, onLine) => flatpakImpl.uninstall(emu.flatpak, onLine),
         grantAccess: async (emu, dir) => { if (!win) await flatpakImpl.grantAccess(emu.flatpak, dir); },
 
+        allowBluetooth: async emu => { if (!win) await flatpakImpl.allowBluetooth(emu.flatpak); },
+
         // Starts the emulator; onExit(code, stderrTail) when it ends. Returns the child process.
         launch(emu, args, onExit) {
             if (!win) return flatpakImpl.launch(emu.flatpak, args, onExit);

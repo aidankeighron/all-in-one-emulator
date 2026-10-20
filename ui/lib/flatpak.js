@@ -43,6 +43,11 @@ function grantAccess(id, dir) {
     return run(['override', '--user', `--filesystem=${dir}:ro`, id]);
 }
 
+// Real Wii Remotes: Dolphin's sandbox needs permission to use Bluetooth
+function allowBluetooth(id) {
+    return run(['override', '--user', '--allow=bluetooth', id]);
+}
+
 // Forcefully stops every running instance of this app
 function kill(id) {
     return run(['kill', id]);
@@ -58,4 +63,4 @@ function launch(id, args, onExit) {
     return child;
 }
 
-module.exports = { available, isInstalled, install, uninstall, grantAccess, launch, kill };
+module.exports = { available, isInstalled, install, uninstall, grantAccess, allowBluetooth, launch, kill };

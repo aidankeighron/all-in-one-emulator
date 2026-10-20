@@ -17,6 +17,7 @@
     "dist:win": "electron-builder --win portable"
   },
   "dependencies": {
+    "node-unrar-js": "^2.0.2",
     "yauzl": "^3.3.0",
     "yazl": "^3.3.1"
   },

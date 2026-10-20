@@ -1,7 +1,7 @@
 # Emulator Menu
 
 A Wii-style menu that launches your games in Dolphin (Wii/GameCube) and Ryujinx (Switch). Emulators are installed from inside the menu as Flatpaks, so there is
-no Docker and no per-emulator setup. Drop games (or `.zip` files) into your ROMs folder and play.
+no Docker and no per-emulator setup. Drop games (or `.zip`, `.rar` or `.7z` files) into your ROMs folder and play.
 
 # Windows
 
@@ -78,12 +78,13 @@ Nothing else to install: the AppImage already contains the menu and its runtime.
 your existing `roms/wii` and `roms/gamecube` work as they are). The AppImage uses `~/ROMs`. Change it
 any time in Settings, or set the `ROMS_DIR` environment variable.
 
-**Zip files.** Drop `.zip` files anywhere in the ROMs folder, then press the import button (the box icon, or **Y**).
+**Archives.** Drop `.zip`, `.rar` or `.7z` files anywhere in the ROMs folder, then press the import button (the box icon, or **Y**).
 They are also processed whenever the menu starts. Games are unzipped into the right system folder
-and the zip is deleted (set `KEEP_ZIPS=1` to keep it). A zip placed inside a system folder (for
+and the archive is deleted (set `KEEP_ZIPS=1` to keep it). A zip placed inside a system folder (for
 example `roms/switch/game.zip`) goes into that folder. Wii/GameCube images are told apart automatically;
 for other systems, put the zip in the system folder so the menu knows where it belongs. Zips that
-are broken, still copying, or really 7z/RAR files are left alone with a message explaining why.
+are broken or still copying are left alone with a message explaining why. Zip and RAR need nothing installed;
+`.7z` needs 7-Zip (`p7zip-full` on Linux).
 
 **Controller.** Move with the d-pad or left stick, **A** selects, **LB/RB** change page, **X**
 opens Settings, **Y** imports zips, **B** closes Settings. Press **down** from the last row of games to
@@ -207,9 +208,27 @@ are kept; only the controller entries are replaced, and the first time a file is
 copied next to it as `<file>.emulator-menu.bak`. Nothing is written when no suitable controller is
 connected, so keyboard setups are left alone.
 
+## Connecting Wii Remotes and Switch controllers
+
+Everything is done from the menu: on the Controllers page (LB from the first page, or click the controller
+chip at the top right) choose **Connect a controller**.
+
+- **Linux:** if Bluetooth is not installed or switched off, the menu offers to install and start it (it uses
+  `pkexec`, so you get one password prompt; `apt`, `dnf`, `pacman` and `zypper` are supported). Then:
+  - **Switch Pro Controller / Joy-Con:** hold the sync button; the menu finds the controller, pairs, trusts
+    and connects it. It then works like any gamepad. Needs Linux 5.16 or newer (the menu checks).
+  - **Wii Remote:** press 1 + 2; the menu checks it is in range, then **Use as Wii Remote N** tells Dolphin to
+    use that many real remotes. The menu deliberately does not pair Wii Remotes with the computer: Dolphin
+    connects to them itself, and cannot once the system has taken them. It also gives Dolphin's Flatpak
+    Bluetooth access. Press 1 + 2 again when a game starts.
+- **Windows:** Windows owns pairing, so the menu opens its Bluetooth page and lists the steps; the Wii Remote
+  count works the same way.
+- Not done through the menu: Ryujinx's own controller mapping (see the table above). Joy-Cons are paired one
+  at a time and appear as two controllers.
+- This was tested against a stand-in for `bluetoothctl`, not real Wii Remotes or Switch controllers.
+
 Things to know:
-- A real Wii Remote is paired by Dolphin itself (hold 1+2); the menu only tells Dolphin to use it. Dolphin
-  needs Bluetooth access, which the Flatpak has by default.
+- A real Wii Remote is connected by Dolphin itself (hold 1+2); the menu only tells Dolphin to use it.
 - The official GameCube adapter needs the udev rule from Dolphin's documentation so the Flatpak may use it.
   Adapter controllers play on the port they are plugged into.
 - Third-party GameCube adapters in "PC" mode look like ordinary gamepads and are not assigned to GameCube ports.
