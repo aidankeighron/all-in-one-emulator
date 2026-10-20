@@ -114,9 +114,17 @@ function getCloud() {
 
 // An access token for pushing saves over https, for computers where git has no stored sign-in: cloudToken in
 // config.json, else GITHUB_TOKEN / GH_TOKEN, else whatever the GitHub CLI (gh auth login) holds
+// cloud-token.txt beside the program (kept out of git): the way to hand a token to someone along with a zipped copy
+function tokenFile() {
+    for (const dir of [path.resolve(__dirname, '..', '..'), path.dirname(configFile)]) {
+        try { const t = fs.readFileSync(path.join(dir, 'cloud-token.txt'), 'utf8').trim(); if (t) return t; } catch { /* none here */ }
+    }
+    return '';
+}
+
 async function getCloudToken() {
     const cfg = load();
-    const direct = cfg.cloudToken || process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
+    const direct = cfg.cloudToken || process.env.GITHUB_TOKEN || process.env.GH_TOKEN || tokenFile();
     if (direct) return String(direct).trim();
     return new Promise(resolve => {
         require('child_process').execFile('gh', ['auth', 'token'], { timeout: 5000, encoding: 'utf8' }, (err, out) => resolve(err ? null : String(out).trim() || null));

@@ -145,7 +145,7 @@ Pick one, or choose **New save** and name it on the on-screen keyboard. On the s
 this computer from before slots existed, **Use my old save** copies it into a new slot (the original is left alone).
 
 Uploading needs git to be signed in to GitHub, even for a public repository (reading never does). The menu tries, in
-order: whatever git already has (credential helper, SSH key), a token (`cloudToken` in `config.json`, the
+order: whatever git already has (credential helper, SSH key), a token (`cloudToken` in `config.json`, a `cloud-token.txt` file beside the program, the
 `GITHUB_TOKEN` / `GH_TOKEN` variable, or the GitHub CLI after `gh auth login`), then the SSH form of the address.
 A save that could not be uploaded stays on this computer and is sent the next time the menu starts or refreshes.
 
@@ -207,7 +207,7 @@ Settings -> Sound & controls.
 | Emulator | What is set up |
 |---|---|
 | Dolphin | GameCube ports 1-4 and Wii Remotes 1-4. A gamepad becomes both a GameCube controller and an emulated Wii Remote with Nunchuk (right stick points, left stick is the Nunchuk stick). A connected Wii Remote is set to *Real Wiimote*. With an official GameCube adapter, ports without a gamepad use the adapter. |
-| Ryujinx | Not automatic: its controller settings depend on per-device IDs. Set them up once with **Open** in Settings. |
+| Ryujinx | Linux: each player's controller is written into Ryujinx's `Config.json` (`input_config`) by its SDL id, keeping your own button layout for that player. Open Ryujinx once first. Windows: set up once with **Open** in Settings. |
 
 Players are numbered in the order the system registered the controllers. Existing settings in the files
 are kept; only the controller entries are replaced, and the first time a file is changed the original is

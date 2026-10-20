@@ -85,8 +85,9 @@ test('Dolphin: second identical pad uses the next name index', () => {
     assert.strictEqual(gc.get('GCPad2', 'Device'), 'SDL/1/Xbox 360 Controller');
 });
 
-test('Ryujinx is reported as manual', () => {
-    assert.strictEqual(inputconfig.apply('ryujinx', [pad()]).status, 'unsupported');
+test('Ryujinx is skipped until it has been opened once', () => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'ryu-none-'));
+    assert.strictEqual(inputconfig.apply('ryujinx', [pad()], { home, platform: 'linux' }).status, 'skipped');
 });
 
 test('describe says where each controller plays', () => {
@@ -101,4 +102,25 @@ test('a real Wii Remote that is set up but not connected is listed as waiting', 
     assert.strictEqual(view.waiting.length, 1);
     assert.match(view.waiting[0].roles.join(' '), /Player 1.*press 1 \+ 2/);
     assert.deepStrictEqual(view.roles.js0.slice(0, 1), ['Player 2'], 'the gamepad moves to the next player');
+});
+
+test('Ryujinx: the controller id matches the one Ryujinx writes itself, and the player entry is filled in', () => {
+    const fs = require('fs'), os = require('os'), path = require('path');
+    const controllers = require('../ui/lib/controllers');
+    const proc = 'I: Bus=0003 Vendor=24c6 Product=592a Version=0101\nN: Name="Generic X-Box pad"\nP: Phys=\nS: Sysfs=/x\nU: Uniq=\nH: Handlers=js0 event5\nB: PROP=0\n';
+    const list = controllers.build(controllers.parseProc(proc));
+    assert.strictEqual(inputconfig.ryujinxId(list[0], list), '0-00000003-24c6-0000-2a59-000001010000');
+
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'ryu-'));
+    const dir = path.join(home, '.var/app/io.github.ryubing.Ryujinx/config/Ryujinx');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'Config.json'), JSON.stringify({ version: 70, docked_mode: true, input_config: [] }));
+    const result = inputconfig.apply('ryujinx', list, { home, platform: 'linux' });
+    assert.strictEqual(result.status, 'configured');
+    const written = JSON.parse(fs.readFileSync(path.join(dir, 'Config.json'), 'utf8'));
+    assert.strictEqual(written.docked_mode, true, 'other settings are kept');
+    assert.strictEqual(written.input_config[0].id, '0-00000003-24c6-0000-2a59-000001010000');
+    assert.strictEqual(written.input_config[0].player_index, 'Player1');
+    assert.strictEqual(written.input_config[0].right_joycon.button_a, 'A');
+    assert.ok(fs.existsSync(path.join(dir, 'Config.json.emulator-menu.bak')));
 });

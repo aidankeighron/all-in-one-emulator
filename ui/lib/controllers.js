@@ -25,7 +25,7 @@ const NOT_A_PAD = /keyboard|mouse|touchpad|trackpad|consumer control|system cont
 function parseProc(text) {
     const devices = [];
     for (const block of String(text || '').split(/\n\s*\n/)) {
-        const id = block.match(/^I: Bus=(\w+) Vendor=(\w+) Product=(\w+)/m);
+        const id = block.match(/^I: Bus=(\w+) Vendor=(\w+) Product=(\w+)(?: Version=(\w+))?/m);
         const name = block.match(/^N: Name="(.*)"$/m);
         const handlers = block.match(/^H: Handlers=(.*)$/m);
         if (!id || !name || !handlers) continue;
@@ -37,6 +37,7 @@ function parseProc(text) {
             bus: id[1].toLowerCase(),
             vendor: id[2].toLowerCase(),
             product: id[3].toLowerCase(),
+            version: (id[4] || '0000').toLowerCase(),
             js: js ? Number(js.slice(2)) : null,
             event: event ? Number(event.slice(5)) : null
         });
@@ -106,6 +107,8 @@ function build(procDevices, usbIds = []) {
             connection: d.bus === '0005' ? 'Bluetooth' : d.bus === '0003' ? 'USB' : 'Wired',
             vendor: d.vendor,
             product: d.product,
+            bus: d.bus,
+            version: d.version,
             js: d.js,
             sdlIndex: d.js !== null ? sdlOrder.indexOf(d) : null,
             nameIndex: nth,

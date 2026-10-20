@@ -3,7 +3,8 @@
 // is copied to <file>.emulator-menu.bak the first time we change it.
 //
 //   Dolphin   GameCube ports, Wii Remotes (emulated or real), official GameCube adapter
-//   Ryujinx   not written (see README): its format depends on per-device IDs
+//   Ryujinx   Config.json's input_config: one entry per player, found by the controller's SDL id (Linux only)
+const fs = require('fs');
 const os = require('os');
 const platformLib = require('./platform');
 const path = require('path');
@@ -107,7 +108,66 @@ function writeDolphin(controllers, { home, platform, env, exePath, wiiRemotes = 
     return { status: 'configured', changed: changed.some(Boolean), message: done.join(', ') };
 }
 
-const writers = { dolphin: writeDolphin };
+// ---------- Ryujinx ----------
+
+// The button layout used for a controller Ryujinx has no entry for yet: a Switch Pro Controller on a standard pad
+const RYUJINX_PAD = {
+    left_joycon_stick: { joystick: 'Left', invert_stick_x: false, invert_stick_y: false, rotate90_cw: false, stick_button: 'LeftStick' },
+    right_joycon_stick: { joystick: 'Right', invert_stick_x: false, invert_stick_y: false, rotate90_cw: false, stick_button: 'RightStick' },
+    deadzone_left: 0.1, deadzone_right: 0.1, range_left: 1, range_right: 1, trigger_threshold: 0.5,
+    motion: { motion_backend: 'GamepadDriver', sensitivity: 100, gyro_deadzone: 1, enable_motion: true },
+    rumble: { strong_rumble: 1, weak_rumble: 1, enable_rumble: false },
+    led: { enable_led: false, turn_off_led: false, use_rainbow: false, led_color: 0 },
+    left_joycon: { button_minus: 'Back', button_l: 'LeftShoulder', button_zl: 'LeftTrigger', button_sl: 'SingleLeftTrigger0', button_sr: 'SingleRightTrigger0', dpad_up: 'DpadUp', dpad_down: 'DpadDown', dpad_left: 'DpadLeft', dpad_right: 'DpadRight' },
+    right_joycon: { button_plus: 'Start', button_r: 'RightShoulder', button_zr: 'RightTrigger', button_sl: 'SingleLeftTrigger1', button_sr: 'SingleRightTrigger1', button_x: 'X', button_b: 'B', button_y: 'Y', button_a: 'A' },
+    version: 1, backend: 'GamepadSDL2', controller_type: 'ProController'
+};
+
+// Ryujinx names a controller by its SDL GUID (bus, vendor, product, version) written as a .NET Guid, with the
+// number of the identical controllers before it in front: "0-00000003-24c6-0000-2a59-000001010000"
+function ryujinxId(c, all) {
+    const le = hex => hex.padStart(4, '0').match(/../g).reverse().join('');
+    const bus = le(c.bus || '0003'), vendor = le(c.vendor), product = le(c.product), version = le(c.version || '0000');
+    // bytes: bus(2) crc(2) vendor(2) 0(2) product(2) 0(2) version(2) 0(2); the first three groups are printed byte-swapped
+    const bytes = [bus, '0000', vendor, '0000', product, '0000', version, '0000'];
+    const rev = h => h.match(/../g).reverse().join('');
+    const text = `${rev(bytes[0] + bytes[1])}-${rev(bytes[2])}-${rev(bytes[3])}-${bytes[4]}-${bytes[5]}${bytes[6]}${bytes[7]}`;
+    const same = all.filter(o => o.bus === c.bus && o.vendor === c.vendor && o.product === c.product && o.version === c.version);
+    return `${Math.max(0, same.indexOf(c))}-${text}`;
+}
+
+function writeRyujinx(controllers, { home, platform, players, profiles }) {
+    if (platform === 'win32') return { status: 'skipped', message: 'On Windows, set up Switch controllers in Ryujinx itself' };
+    const file = path.join(flatpakDirs(home, 'io.github.ryubing.Ryujinx').config, 'Ryujinx', 'Config.json');
+    if (!fs.existsSync(file)) return { status: 'skipped', message: 'Open Ryujinx once from Settings first' };
+    const slots = slotsFor(controllers, { players }, profiles).filter(s => s.mode === 'pad');
+    if (!slots.length) return { status: 'skipped', message: 'No supported controller connected' };
+
+    const original = fs.readFileSync(file, 'utf8');
+    const config = JSON.parse(original);
+    const old = Array.isArray(config.input_config) ? config.input_config : [];
+    const pads = controllers.filter(c => c.js !== null && c.js !== undefined);
+    const made = slots.map(s => {
+        const index = `Player${s.index + 1}`;
+        // Keep the person's own button layout for this player when there is one
+        const mine = old.find(e => e.player_index === index) || old.find(e => e.backend === 'GamepadSDL2') || RYUJINX_PAD;
+        const id = ryujinxId(s.controller, pads);
+        return { ...JSON.parse(JSON.stringify(mine)), backend: 'GamepadSDL2', id, name: `${s.controller.name} (${id.split('-')[0]})`, player_index: index };
+    });
+    const taken = new Set(made.map(e => e.player_index));
+    const ids = new Set(made.map(e => e.id));
+    const next = [...made, ...old.filter(e => !taken.has(e.player_index) && !ids.has(e.id))]
+        .sort((a, b) => a.player_index.localeCompare(b.player_index));
+    config.input_config = next;
+    const text = JSON.stringify(config, null, 2);
+    if (text === original.replace(/\r\n/g, '\n').trimEnd()) return { status: 'configured', changed: false, message: made.map(e => `${e.player_index}: ${e.name}`).join(', ') };
+    if (!fs.existsSync(file + '.emulator-menu.bak')) fs.copyFileSync(file, file + '.emulator-menu.bak');
+    fs.writeFileSync(`${file}.tmp-${process.pid}`, text);
+    fs.renameSync(`${file}.tmp-${process.pid}`, file);
+    return { status: 'configured', changed: true, message: made.map(e => `${e.player_index}: ${e.name}`).join(', ') };
+}
+
+const writers = { dolphin: writeDolphin, ryujinx: writeRyujinx };
 
 // Writes the emulator's controller config. Never throws: a failure here must not stop a game launching.
 // context: {home, platform, env, exePath(id), wiiRemotes, players, profiles}. Defaults to this computer.
@@ -127,4 +187,4 @@ function apply(emulatorId, controllers, context = {}) {
     }
 }
 
-module.exports = { apply, describe, slotsFor, dolphinDevice };
+module.exports = { apply, describe, slotsFor, dolphinDevice, ryujinxId };
