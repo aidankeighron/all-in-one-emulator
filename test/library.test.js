@@ -142,3 +142,11 @@ test('the share server refuses to start on a busy port and stops cleanly', async
     } finally { await a.share.stop(); }
     assert.strictEqual(a.share.running(), false);
 });
+
+test('access keys are short, and dashes and capitals do not matter when one is typed', () => {
+    const key = library.newKey();
+    assert.match(key, /^[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}$/);
+    assert.ok(library.keyMatches(key.toLowerCase().replace(/-/g, ' '), key));
+    assert.ok(!library.keyMatches('AAAA-AAAA-AAAA', key));
+    assert.ok(library.keyMatches('0123abcd', '0123abcd'), 'keys made by the old version still work');
+});

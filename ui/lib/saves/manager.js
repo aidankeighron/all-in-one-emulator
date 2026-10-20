@@ -30,8 +30,8 @@ function createManager({ dir, adapters, getCloud, getToken = async () => null, d
     const tmpDir = path.join(dir, 'tmp');
     const backupDir = path.join(dir, 'backups');
 
-    let state = { device: { id: crypto.randomBytes(4).toString('hex') }, slots: {}, imported: {} };
-    try { state = { ...state, ...JSON.parse(fs.readFileSync(stateFile, 'utf8')) }; if (!state.imported) state.imported = {}; } catch { /* first run */ }
+    let state = { device: { id: crypto.randomBytes(4).toString('hex') }, slots: {}, imported: {}, defaulted: {} };
+    try { state = { ...state, ...JSON.parse(fs.readFileSync(stateFile, 'utf8')) }; if (!state.imported) state.imported = {}; if (!state.defaulted) state.defaulted = {}; } catch { /* first run */ }
     const saveState = () => {
         fs.mkdirSync(dir, { recursive: true });
         fs.writeFileSync(stateFile, JSON.stringify(state, null, 2));
@@ -95,6 +95,22 @@ function createManager({ dir, adapters, getCloud, getToken = async () => null, d
             conflict: false,
             createdAt: new Date().toISOString()
         };
+    }
+
+    // Makes a slot on this computer; with useOld it starts from the emulator's earlier save (copied, never moved)
+    async function makeSlot(game, name, useOld) {
+        const adapter = adapterFor(game);
+        const st = slotRecord(game, null, name);
+        const root = adapter.slotRoot(st.id);
+        fs.mkdirSync(root, { recursive: true });
+        for (const d of adapter.perSlot) fs.mkdirSync(path.join(root, d), { recursive: true });
+        st.baseHash = await archive.hashDirs(root, adapter.perSlot);   // empty: anything copied in below counts as a change to upload
+        const found = useOld ? adapter.existing() : [];
+        for (const { rel, abs } of found) fs.cpSync(abs, path.join(root, rel), { recursive: true, dereference: true });
+        if (found.length) { st.pending = true; state.imported[gameKeyOf(game)] = st.id; }
+        state.slots[st.id] = st;
+        saveState();
+        return st;
     }
 
     function backupLocal(adapter, slotId, root) {
@@ -176,6 +192,14 @@ function createManager({ dir, adapters, getCloud, getToken = async () => null, d
                 slots.sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
                 setActivity('idle');
                 if (!problem && !online && lastError && lastError.code === 'AUTH') problem = { code: 'AUTH', message: 'Cloud saves are not signed in to GitHub: saves stay on this computer' };
+                // A game with no saves gets one called Default (once), starting from the emulator's old save if it has one,
+                // so there is always something to press A on. Not made while the cloud can't be read: it may already have one.
+                if (!slots.length && !state.defaulted[key] && (online || !currentStore())) {
+                    const made = await makeSlot(game, 'Default', true);
+                    state.defaulted[key] = true;
+                    saveState();
+                    slots.push(describe(made, null));
+                }
                 const existing = !state.imported[key] && adapters.get(game.emulator).existing().length > 0;
                 return { existing, slots, online, configured: !!currentStore(), problem, reason: online || !lastError ? null : lastError.message, checkedAt: Date.now() };
             });
@@ -183,17 +207,9 @@ function createManager({ dir, adapters, getCloud, getToken = async () => null, d
 
         createSlot(game, name) {
             return locked(async () => {
-                const adapter = adapterFor(game);
                 const clean = String(name || '').trim().slice(0, 24);
                 if (!clean) throw new SaveError('BAD_NAME', 'Give the save a name');
-                const st = slotRecord(game, null, clean);
-                const root = adapter.slotRoot(st.id);
-                fs.mkdirSync(root, { recursive: true });
-                for (const d of adapter.perSlot) fs.mkdirSync(path.join(root, d), { recursive: true });
-                st.baseHash = await archive.hashDirs(root, adapter.perSlot);
-                state.slots[st.id] = st;
-                saveState();
-                return describe(st, null);
+                return describe(await makeSlot(game, clean, false), null);
             });
         },
 
@@ -201,22 +217,10 @@ function createManager({ dir, adapters, getCloud, getToken = async () => null, d
         // They are copied, never moved: the originals stay where they are. They go to the cloud with the next sync.
         importExisting(game, name) {
             return locked(async () => {
-                const adapter = adapterFor(game);
-                const found = adapter.existing();
-                if (!found.length) throw new SaveError('NOTHING_TO_IMPORT', 'This computer has no earlier save for this emulator');
+                if (!adapterFor(game).existing().length) throw new SaveError('NOTHING_TO_IMPORT', 'This computer has no earlier save for this emulator');
                 const clean = String(name || '').trim().slice(0, 24);
                 if (!clean) throw new SaveError('BAD_NAME', 'Give the save a name');
-                const st = slotRecord(game, null, clean);
-                const root = adapter.slotRoot(st.id);
-                fs.mkdirSync(root, { recursive: true });
-                for (const d of adapter.perSlot) fs.mkdirSync(path.join(root, d), { recursive: true });
-                st.baseHash = await archive.hashDirs(root, adapter.perSlot);   // the empty slot: the copy below counts as a change to upload
-                for (const { rel, abs } of found) fs.cpSync(abs, path.join(root, rel), { recursive: true, dereference: true });
-                st.pending = true;
-                state.slots[st.id] = st;
-                state.imported[gameKeyOf(game)] = st.id;
-                saveState();
-                return describe(st, null);
+                return describe(await makeSlot(game, clean, true), null);
             });
         },
 
@@ -352,7 +356,9 @@ function createManager({ dir, adapters, getCloud, getToken = async () => null, d
                     } else if (err.code === 'AUTH') {
                         setActivity('error', `“${st.name}” is kept on this computer but could not be sent: ${err.message}`, st.name);
                     } else if (err.code === 'OFFLINE' || err.code === 'NO_GIT') {
-                        setActivity('queued', `No connection: “${st.name}” will be saved to the cloud later`, st.name);
+                        const why = String(err.message || '').split('\n').filter(Boolean).pop() || '';
+                        setActivity('queued', `Could not reach the cloud (${why.slice(0, 140)}): “${st.name}” will be saved later`, st.name);
+                        log(`[SAVES] could not reach the cloud: ${err.message}`);
                     } else {
                         setActivity('error', err.message, st.name);
                     }

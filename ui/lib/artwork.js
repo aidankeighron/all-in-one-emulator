@@ -104,7 +104,7 @@ async function searchCoverUrls(game, fetchImpl, timeoutMs) {
     for (const q of queries) {
         const params = new URLSearchParams({
             action: 'query', format: 'json', generator: 'search', gsrsearch: q.replace(/\s+/g, ' ').trim(),
-            gsrlimit: '8', gsrnamespace: '0', prop: 'pageimages|description', piprop: 'thumbnail', pithumbsize: '400', redirects: '1', origin: '*'
+            gsrlimit: '8', gsrnamespace: '0', prop: 'pageimages|description', piprop: 'thumbnail', pilicense: 'any', pithumbsize: '400', redirects: '1', origin: '*'
         });
         const res = await fetchImpl(`${WIKI_API}?${params}`, { signal: AbortSignal.timeout(timeoutMs), headers: { 'User-Agent': 'EmulatorMenu/1.0 (personal game launcher)' } });
         if (!res.ok) continue;

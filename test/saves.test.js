@@ -197,7 +197,7 @@ test('rename and delete reach the cloud', async () => {
     await a.manager.renameSlot(game, slot.id, 'New name');
     assert.strictEqual((await b.manager.listSlots(game)).slots[0].name, 'New name');
     await a.manager.deleteSlot(game, slot.id);
-    assert.strictEqual((await b.manager.listSlots(game)).slots.length, 0);
+    assert.deepStrictEqual((await b.manager.listSlots(game)).slots.map(s => s.name), ['Default'], 'only the Default save of a computer with no saves is left');
 });
 
 test('history keeps older versions and restore brings one back as a new version', async () => {
@@ -259,9 +259,23 @@ test('a save the emulator already had can become a slot, and is not offered agai
     const real = path.join(c.home, '.var/app/io.github.ryubing.Ryujinx/config/Ryujinx/bis/user/save/0000000000000001');
     fs.mkdirSync(real, { recursive: true });
     fs.writeFileSync(path.join(real, 'file.bin'), 'old progress');
+    await c.manager.createSlot(game, 'Other');   // so no Default is made
     assert.strictEqual((await c.manager.listSlots(game)).existing, true);
     const slot = await c.manager.importExisting(game, 'Original');
     assert.strictEqual(c.read(slot.id, '0000000000000001/file.bin'), 'old progress');
     assert.ok(fs.existsSync(path.join(real, 'file.bin')), 'the original is left in place');
     assert.strictEqual((await c.manager.listSlots(game)).existing, false);
+});
+
+test('a game with no saves gets a Default one, once, starting from the emulator’s old save', async () => {
+    const c = computer('a', 'x', { enabled: false });
+    const real = path.join(c.home, '.var/app/io.github.ryubing.Ryujinx/config/Ryujinx/bis/user/save/0000000000000001');
+    fs.mkdirSync(real, { recursive: true });
+    fs.writeFileSync(path.join(real, 'file.bin'), 'old progress');
+    const first = await c.manager.listSlots(game);
+    assert.deepStrictEqual(first.slots.map(s => s.name), ['Default']);
+    assert.strictEqual(c.read(first.slots[0].id, '0000000000000001/file.bin'), 'old progress');
+    assert.strictEqual(first.existing, false, 'the old save is already in Default');
+    await c.manager.deleteSlot(game, first.slots[0].id);
+    assert.deepStrictEqual((await c.manager.listSlots(game)).slots, [], 'a deleted Default does not come back');
 });

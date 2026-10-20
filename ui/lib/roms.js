@@ -160,6 +160,23 @@ async function extractRar(archive, tmpDir, wanted) {
     return (await walkFiles(tmpDir)).filter(i => wanted.has(extOf(i.name)));
 }
 
+// Command-line tools that can unpack a RAR, best first. The bundled library below runs in WebAssembly and fails
+// ("File read error") on big archives such as Switch games, so a real tool is used when the computer has one.
+function findRarTool() {
+    const seven = findSevenZip();
+    if (seven) return { bin: seven, args: (a, t) => ['x', '-y', `-o${t}`, a] };
+    const win = process.platform === 'win32';
+    const dirs = (process.env.PATH || '').split(path.delimiter);
+    const find = name => { for (const d of dirs) { const p = path.join(d, win ? `${name}.exe` : name); if (fs.existsSync(p)) return p; } return null; };
+    const unrar = find('unrar') || (win && fs.existsSync('C:\\Program Files\\WinRAR\\UnRAR.exe') ? 'C:\\Program Files\\WinRAR\\UnRAR.exe' : null);
+    if (unrar) return { bin: unrar, args: (a, t) => ['x', '-y', '-o+', a, t + path.sep] };
+    const unar = find('unar');
+    if (unar) return { bin: unar, args: (a, t) => ['-q', '-f', '-o', t, a] };
+    const bsdtar = find('bsdtar');
+    if (bsdtar) return { bin: bsdtar, args: (a, t) => ['-xf', a, '-C', t] };
+    return null;
+}
+
 function extractWithSevenZip(bin, archive, tmpDir) {
     return new Promise((resolve, reject) => {
         execFile(bin, ['x', '-y', `-o${tmpDir}`, archive], { maxBuffer: 64 * 1024 * 1024 }, err => err ? reject(err) : resolve());
@@ -261,7 +278,17 @@ async function processRoms(romsDir, manifest, { keepZips = !!process.env.KEEP_ZI
         try {
             let items;
             if (kind === 'rar') {
-                items = await extractRar(zip, tmp, gameExts);
+                const tool = findRarTool();
+                if (tool) {
+                    await new Promise((resolve, reject) => execFile(tool.bin, tool.args(zip, tmp), { maxBuffer: 64 * 1024 * 1024 }, err => err ? reject(err) : resolve()));
+                    items = (await walkFiles(tmp)).filter(i => gameExts.has(extOf(i.name)));
+                } else {
+                    try {
+                        items = await extractRar(zip, tmp, gameExts);
+                    } catch (err) {
+                        throw new Error(`${err.message}. Big RAR files need 7-Zip or unrar: ${process.platform === 'win32' ? 'install 7-Zip' : 'sudo apt install p7zip-full (or unrar)'} and try again`);
+                    }
+                }
             } else if (kind === '7z') {
                 await extractWithSevenZip(sevenZip, zip, tmp);
                 items = (await walkFiles(tmp)).filter(i => gameExts.has(extOf(i.name)));

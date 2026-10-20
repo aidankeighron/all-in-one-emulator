@@ -40,13 +40,13 @@ test('save slot endpoints: list, create, rename, delete', async () => {
         const p = encodeURIComponent('switch/Super Mario Odyssey.nsp');
         let r = await api(port, 'GET', `/api/saves?path=${p}`);
         assert.strictEqual(r.status, 200);
-        assert.deepStrictEqual([r.body.supported, r.body.online, r.body.slots.length], [true, true, 0]);
+        assert.deepStrictEqual([r.body.supported, r.body.online, r.body.slots.map(s => s.name)], [true, true, ['Default']]);
 
         r = await api(port, 'POST', '/api/saves/create', { path: 'switch/Super Mario Odyssey.nsp', name: 'Main run' });
         assert.strictEqual(r.status, 200);
         const id = r.body.id;
         r = await api(port, 'GET', `/api/saves?path=${p}`);
-        assert.deepStrictEqual(r.body.slots.map(s => s.name), ['Main run']);
+        assert.deepStrictEqual(r.body.slots.map(s => s.name).sort(), ['Default', 'Main run']);
 
         r = await api(port, 'POST', '/api/saves/rename', { path: 'switch/Super Mario Odyssey.nsp', slot: id, name: 'Renamed' });
         assert.strictEqual(r.body.name, 'Renamed');

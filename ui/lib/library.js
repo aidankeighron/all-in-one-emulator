@@ -27,8 +27,12 @@ class LibraryError extends Error {
 }
 
 const sha256 = text => crypto.createHash('sha256').update(String(text)).digest();
-const keyMatches = (given, key) => !!key && crypto.timingSafeEqual(sha256(given), sha256(key));
-const newKey = () => crypto.randomBytes(24).toString('hex');
+// Keys are typed by hand, so they use letters and numbers that are hard to mix up, in groups: K7MQ-4XPD-92RT.
+// Dashes, spaces and capitals don't matter when one is entered.
+const normalizeKey = text => String(text).toUpperCase().replace(/[^A-Z0-9]/g, '');
+const keyMatches = (given, key) => !!key && crypto.timingSafeEqual(sha256(normalizeKey(given)), sha256(normalizeKey(key)));
+const KEY_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+const newKey = () => Array.from({ length: 12 }, (_, i) => (i && i % 4 === 0 ? '-' : '') + KEY_ALPHABET[crypto.randomInt(KEY_ALPHABET.length)]).join('');
 
 // "folder/file" for a game this menu would list, with nothing that could escape the ROMs folder
 function isSafeGamePath(rel, manifest) {

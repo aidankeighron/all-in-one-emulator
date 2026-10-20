@@ -91,7 +91,7 @@ test('sharing this computer: turning it on makes a key and a server, turning it 
     try {
         let r = await api(port, 'POST', '/api/library/settings', { sharing: { enabled: true, port: 18765 } });
         assert.strictEqual(r.body.sharing.running, true);
-        assert.match(r.body.sharing.key, /^[0-9a-f]{48}$/);
+        assert.match(r.body.sharing.key, /^[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}$/);
         assert.ok(r.body.sharing.addresses.every(a => a.endsWith(':18765')));
 
         const index = await library.fetchIndex({ address: '127.0.0.1:18765', key: r.body.sharing.key, manifest });

@@ -21,6 +21,8 @@
       ],
       "args": [
         "-b",
+        "-C",
+        "Dolphin.Display.Fullscreen=True",
         "-e",
         "{rom}"
       ],

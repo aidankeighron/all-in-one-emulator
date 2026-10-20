@@ -19,11 +19,12 @@ class StoreError extends Error {
 
 function git(args, { cwd, buffer = false, timeout = 120000 } = {}) {
     return new Promise((resolve, reject) => {
-        const env = { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_SSH_COMMAND: process.env.GIT_SSH_COMMAND || 'ssh -o BatchMode=yes' };
+        const env = { ...process.env, GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'never', GIT_SSH_COMMAND: process.env.GIT_SSH_COMMAND || 'ssh -o BatchMode=yes' };
         execFile('git', args, { cwd, env, timeout, maxBuffer: 512 * 1024 * 1024, encoding: buffer ? 'buffer' : 'utf8' }, (err, stdout, stderr) => {
             if (!err) return resolve(stdout);
             const text = String(stderr || err.message).trim();
-            reject(new StoreError(err.code === 'ENOENT' ? 'NO_GIT' : 'GIT', err.code === 'ENOENT' ? 'git is not installed' : text));
+            const timedOut = err.killed || err.signal === 'SIGTERM';
+            reject(new StoreError(err.code === 'ENOENT' ? 'NO_GIT' : 'GIT', err.code === 'ENOENT' ? 'git is not installed' : timedOut ? `git took too long (it may be waiting for a GitHub sign-in): ${text}`.trim() : text));
         });
     });
 }
@@ -58,7 +59,7 @@ class Store {
                 : null,
             ssh: sshUrlOf(this.url) ? () => build(sshUrlOf(this.url), []) : null
         };
-        const order = [this.mode, 'plain', 'token', 'ssh'].filter((m, i, all) => m && ways[m] && all.indexOf(m) === i);
+        const order = [this.mode, ...(token ? ['token'] : []), 'plain', 'token', 'ssh'].filter((m, i, all) => m && ways[m] && all.indexOf(m) === i);
         let authError = null;
         for (const mode of order) {
             const { args, cwd = this.dir } = ways[mode]();

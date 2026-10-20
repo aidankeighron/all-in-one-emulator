@@ -165,3 +165,10 @@ test('a search that cannot reach the network is retried later, not remembered as
     await settle(art, [game]);
     assert.ok(art.find(game));
 });
+
+test('the cover search asks Wikipedia for pictures under any licence (game covers are not free images)', async () => {
+    const art = require('../ui/lib/artwork');
+    let asked = '';
+    await art.searchCoverUrls({ title: 'Super Mario Odyssey', console: 'switch' }, async url => { asked = url; return { ok: true, json: async () => ({}) }; }, 1000);
+    assert.match(asked, /pilicense=any/);
+});

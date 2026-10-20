@@ -83,8 +83,9 @@ They are also processed whenever the menu starts. Games are unzipped into the ri
 and the archive is deleted (set `KEEP_ZIPS=1` to keep it). A zip placed inside a system folder (for
 example `roms/switch/game.zip`) goes into that folder. Wii/GameCube images are told apart automatically;
 for other systems, put the zip in the system folder so the menu knows where it belongs. Zips that
-are broken or still copying are left alone with a message explaining why. Zip and RAR need nothing installed;
-`.7z` needs 7-Zip (`p7zip-full` on Linux).
+are broken or still copying are left alone with a message explaining why. Zip needs nothing installed. RAR uses 7-Zip, unrar, unar or bsdtar when the computer has one (they handle
+big archives such as Switch games), and a built-in reader otherwise, which can fail on very large files. `.7z` needs
+7-Zip (`p7zip-full` on Linux).
 
 **Controller.** Move with the d-pad or left stick, **A** selects, **LB/RB** change page, **X**
 opens Settings, **Y** imports zips, **B** closes Settings. Press **down** from the last row of games to
@@ -140,7 +141,7 @@ recordings you have the right to use. Set `SOUNDS_DIR` to keep the pack somewher
 
 Clicking a game opens a sheet from the bottom of the screen: **Which save do you want to play with?**
 Each save is a named slot with its own save data, showing when it was last updated and on which computer.
-Pick one, or choose **New save** and name it on the on-screen keyboard. On the sheet: **A** plays,
+Every game starts with a save called **Default** (made from the emulator's old save if it had one), so you can press A and play. Choose **New save** for another and name it on the on-screen keyboard. On the sheet: **A** plays,
 **X** renames, **Y** deletes, **Start** shows older versions, **B** closes. If the emulator already had a save on
 this computer from before slots existed, **Use my old save** copies it into a new slot (the original is left alone).
 
@@ -234,7 +235,7 @@ On the Controllers page, **Players and mappings** sets up everything for Dolphin
   **Duplicate to edit**, then change any control with its dropdown, set the extension (Nunchuk, Classic
   Controller, nothing) and whether the remote is held sideways, and **Save**. Players pick mappings from their own
   dropdowns, so an Xbox pad can use one mapping with a Nunchuk and another without.
-- With a gamepad: up/down/left/right move, **A** steps a dropdown forward, **X** steps it back, **B** closes.
+- With a gamepad: up/down/left/right move, **A** opens a dropdown, up/down choose in it, **A** picks and **B** cancels; **B** closes the screen.
 - The control and input names were checked against Dolphin's source code. Not verified on a real Dolphin install.
 - Not covered: Ryujinx (see above), and a mapping cannot yet be shared between computers.
 
