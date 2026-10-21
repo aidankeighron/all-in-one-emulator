@@ -45,6 +45,17 @@ function setAutoControllers(on) {
     save({ ...load(), autoControllers: !!on });
 }
 
+// Light or dark look: 'system' (follow the computer's setting), 'light' or 'dark'
+const THEMES = ['system', 'light', 'dark'];
+function getTheme() {
+    const t = load().theme;
+    return THEMES.includes(t) ? t : 'system';
+}
+
+function setTheme(theme) {
+    if (THEMES.includes(theme)) save({ ...load(), theme });
+}
+
 // How long Back + Start is held in a game to open the pause menu: 0 to 2 seconds in half-second steps
 const PAUSE_HOLD_STEPS = [0, 0.5, 1, 1.5, 2];
 function getPauseHold() {
@@ -185,4 +196,4 @@ const mappingsDir = path.join(path.dirname(configFile), 'mappings');
 const artworkDir = path.join(path.dirname(configFile), 'artwork');
 const soundsDir = process.env.SOUNDS_DIR || path.join(path.dirname(configFile), 'sounds');
 
-module.exports = { getRomsDir, setRomsDir, getAutoControllers, setAutoControllers, getWiiRemotes, setWiiRemotes, getPauseHold, setPauseHold, PAUSE_HOLD_STEPS, getFavorites, setFavorite, getPlayers, setPlayers, getSound, setSound, getCloud, getCloudToken, getLibrary, setLibrary, libraryCacheFile, getEmulatorPaths, getEmulatorUrls, setEmulatorPath, emulatorsDir, configFile, mappingsDir, artworkDir, soundsDir };
+module.exports = { getRomsDir, setRomsDir, getAutoControllers, setAutoControllers, getWiiRemotes, setWiiRemotes, getTheme, setTheme, THEMES, getPauseHold, setPauseHold, PAUSE_HOLD_STEPS, getFavorites, setFavorite, getPlayers, setPlayers, getSound, setSound, getCloud, getCloudToken, getLibrary, setLibrary, libraryCacheFile, getEmulatorPaths, getEmulatorUrls, setEmulatorPath, emulatorsDir, configFile, mappingsDir, artworkDir, soundsDir };

@@ -63,3 +63,18 @@ test('the pause hold time is 0 to 2 seconds in half-second steps, 1.5 by default
         assert.strictEqual((await api(port, 'GET', '/api/settings')).body.pauseHold, 2, 'a rejected value changes nothing');
     } finally { srv.close(); }
 });
+
+test('the theme is system by default, and can be set to light or dark', async () => {
+    const { server: srv, port } = await server.start({ port: 0 });
+    try {
+        assert.strictEqual((await api(port, 'GET', '/api/appearance')).body.theme, 'system');
+        for (const t of ['dark', 'light', 'system']) {
+            assert.strictEqual((await api(port, 'POST', '/api/settings', { theme: t })).status, 200);
+            assert.strictEqual((await api(port, 'GET', '/api/appearance')).body.theme, t);
+            assert.strictEqual((await api(port, 'GET', '/api/settings')).body.theme, t);
+        }
+        await api(port, 'POST', '/api/settings', { theme: 'dark' });
+        assert.strictEqual((await api(port, 'POST', '/api/settings', { theme: 'purple' })).status, 400);
+        assert.strictEqual((await api(port, 'GET', '/api/appearance')).body.theme, 'dark', 'a bad value changes nothing');
+    } finally { srv.close(); }
+});

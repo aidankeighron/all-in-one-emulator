@@ -79,11 +79,11 @@ Nothing else to install: the AppImage already contains the menu and its runtime.
 
    **Pause menu:** hold **Back + Start** (1.5 seconds by default; Settings -> Sound & controls has a slider from 0 to 2
    seconds in half-second steps, 0 opens it at once). The game is frozen (its processes are stopped, so
-   sound and input stand still) and the menu comes to the front with **Resume**, **Restart game** and **Quit to menu** as big buttons in the middle, and at the bottom the
-   four player lights with the controller each player has right now, plus **Change controllers** (the Players screen)
-   and **Connect a controller**. White bars top and bottom, like the Wii's HOME menu. D-pad moves, A chooses, B resumes. Holding the buttons again, or **B**,
-   resumes. Emulators read their controller settings only when a game starts, so after changing controllers the
-   screen suggests **Restart game**: it ends the game (the save is uploaded as usual) and starts it again on the
+   sound and input stand still) and the menu comes to the front with **Quit to menu** (left) and **Reset** (right) as long, thin Wii-style buttons over the game, and at the bottom
+   the connected controllers (picture, name, how it is connected, its player lights, and it lights up when you press
+   something on it) with **Change controllers** and **Connect controllers** on the right. There is no Resume button:
+   **B** closes the menu. Quit and Reset ask for a second **A** press, since they end the game. D-pad moves, A chooses. Holding the buttons again also closes it. Emulators read their controller settings only when a game starts, so after changing controllers the
+   screen suggests **Reset**: it ends the game (the save is uploaded as usual) and starts it again on the
    same save. **Quit to menu** ends the game like closing the emulator, so save first. In the app the pause menu is its own
    transparent window above everything, so the frozen game stays visible behind it; in a plain browser it shows inside the page. The menu reads the controller
    through `/dev/input/js*`; if that isn't readable on your system, the combo does nothing, and you can still
@@ -221,7 +221,12 @@ for different places, and don't forward the port to the internet. If the host ha
 (`sudo ufw allow from 192.168.0.0/16 to any port 8765`, or `sudo ufw allow in on tailscale0 to any port 8765`).
 Games are copyrighted: share only copies you made from games you own, between your own computers.
 
-## Controller setup per emulator
+## Light and dark
+
+Settings -> Sound & controls -> **Light or dark**: *System* (the default) follows the computer's light/dark setting and
+changes with it, or choose *Light* or *Dark*. The choice is saved in `config.json` (`theme`).
+
+# Controller setup per emulator
 
 The menu detects the controllers plugged in (Xbox, Switch Pro/Joy-Con, GameCube via the official
 adapter, Wii Remote, other gamepads) and, right before a game starts, writes them into that

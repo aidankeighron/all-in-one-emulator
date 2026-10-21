@@ -20,12 +20,12 @@ next to the menu: lines starting `[SAVES]`, `[PADS]`, `[PAUSE]`, `[LIBRARY]` and
    a dark, see-through layer over the game with the Paused screen on it. If it does not appear over the game, or appears but
    ignores the controller, the desktop is not putting the new window in front or giving it focus (some Wayland setups):
    note which desktop you use and what you see.
-2. **Resume** (or B): the game continues exactly where it was.
-3. **Change controllers**: change Player 1's controller or a mapping, close the screen: it now says *Controllers changed*
-   and highlights **Restart game**. Choose it: the game closes, the save uploads (`[SAVES]`), and the same game
+2. **B** closes the menu and the game continues exactly where it was. Press buttons on a controller: its card in the bottom bar lights up.
+3. **Change controllers** (bottom right): change Player 1's controller or a mapping, close the screen: it now says *Controllers changed*.
+   Choose **Reset** (right; it asks for A twice): the game closes, the save uploads (`[SAVES]`), and the same game
    starts again on the same save with the new settings.
 4. **Connect a controller** during the pause works the same as on the Controllers page.
-5. **Quit to menu** ends the game; the save is uploaded as usual.
+5. **Quit to menu** (left; asks for A twice) ends the game; the save is uploaded as usual.
 6. If the game could not be frozen the screen says it keeps running behind the menu. Check `flatpak ps` while a game runs.
 
 ## 3. Save system

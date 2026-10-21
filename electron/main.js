@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain, Menu, screen, shell } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, screen, shell } = require('electron');
 const path = require('path');
 const server = require('../ui/server');
 
@@ -73,7 +73,7 @@ async function createWindow() {
         height: 720,
         fullscreen: startFullscreen,
         autoHideMenuBar: true,
-        backgroundColor: '#e3eaf0',
+        backgroundColor: nativeTheme.shouldUseDarkColors ? '#0d1218' : '#e3eaf0',   // matches the page's first paint (the saved Light/Dark choice then applies)
         title: 'Emulator Menu',
         icon: path.join(__dirname, '..', 'ui', 'assets', 'icon.png'),
         webPreferences: {
