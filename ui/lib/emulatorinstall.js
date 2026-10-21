@@ -57,7 +57,10 @@ async function findDownload({ sources = [], override, fetchImpl = globalThis.fet
             return source.api ? await fromApi(source, fetchImpl) : await fromQuery(source, fetchImpl);
         } catch (err) {
             const host = (() => { try { return new URL(source.api || source.query).host; } catch { return 'a source'; } })();
-            failures.push(err.name === 'TimeoutError' ? `${host} did not answer in time` : err.message.includes(host) ? err.message : `${host}: ${err.message}`);
+            // Node's fetch only says "fetch failed"; the real reason (DNS, TLS, refused...) is on err.cause
+            const why = err.cause && (err.cause.code || err.cause.message);
+            const text = why && err.message === 'fetch failed' ? `could not connect (${why})` : err.message;
+            failures.push(err.name === 'TimeoutError' ? `${host} did not answer in time` : text.includes(host) ? text : `${host}: ${text}`);
         }
     }
     throw new Error(failures.length ? failures.join('; ') : 'No download source is set for this emulator');
