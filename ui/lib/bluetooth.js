@@ -13,7 +13,10 @@ const os = require('os');
 const { spawn, execFile } = require('child_process');
 
 const ANSI = /\x1b\[[0-9;?]*[A-Za-z]|[\x01\x02]/g;
-const clean = s => String(s).replace(ANSI, '').replace(/\r/g, '');
+// bluetoothctl puts its prompt ("[bluetooth]# ") in front of lines that arrive while it is waiting for a command; the line
+// is what follows it. Several can pile up in front of one line.
+const PROMPT = /^(?:\[[^\]\n]*\]#\s*)+/gm;
+const clean = s => String(s).replace(ANSI, '').replace(/\r/g, '').replace(PROMPT, '');
 
 // What a Bluetooth device name says it is
 function classifyDevice(name = '') {

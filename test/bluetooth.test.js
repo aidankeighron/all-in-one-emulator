@@ -113,6 +113,26 @@ test('a Joy-Con that is already listed and in range is found without any new eve
     assert.match(job.message, /Joy-Con \(R\) connected/);
 });
 
+// Lines that arrive while bluetoothctl waits for a command carry its prompt in front
+const PROMPTED = `
+const rl = require('readline').createInterface({ input: process.stdin });
+rl.on('line', l => {
+  const [cmd, addr] = l.trim().split(' ');
+  if (cmd === 'scan' && addr === 'on') setTimeout(() => console.log('[bluetooth]# \\x1b[0;92m[NEW]\\x1b[0m Device AA:BB:CC:DD:EE:FF Joy-Con (L)'), 40);
+  if (cmd === 'pair') setTimeout(() => console.log('[bluetooth]# [bluetooth]# Pairing successful'), 20);
+  if (cmd === 'trust') console.log('[Joy-Con (L)]# Changing ' + addr + ' trust succeeded');
+  if (cmd === 'connect') setTimeout(() => console.log('[Joy-Con (L)]# Connection successful'), 20);
+  if (cmd === 'quit') process.exit(0);
+});`;
+
+test('lines with the bluetoothctl prompt in front are still understood', async () => {
+    const b = bt.createBluetooth({ platform: 'linux', spawnImpl: fakeBluetoothctl(PROMPTED) });
+    b.startPairing('switch');
+    const job = await waitFor(b);
+    assert.strictEqual(job.phase, 'done', job.message);
+    assert.match(job.message, /Joy-Con \(L\) connected/);
+});
+
 test('a Wii Remote is only found, never paired with the computer', async () => {
     process.env.FAKE_NAME = 'Nintendo RVL-CNT-01';
     const lines = [];
