@@ -80,6 +80,9 @@ test('the Controllers page shows controllers in player order, and they can be mo
     try {
         await api(port, 'POST', '/api/players', { players: [] });
         let r = await api(port, 'GET', '/api/controllers');
+        // Joy-Cons are listed one by one until the person joins them
+        assert.deepStrictEqual(r.body.controllers.map(c => [c.name, c.player]), [['Logitech G29 Driving Force Racing Wheel', 1], ['Microsoft X-Box 360 pad', 2], ['Nintendo Switch Left Joy-Con', 3], ['Nintendo Switch Right Joy-Con', 4]]);
+        r = await api(port, 'POST', '/api/controllers/combine', { a: r.body.controllers[2].key, b: r.body.controllers[3].key });
         assert.deepStrictEqual(r.body.controllers.map(c => [c.name, c.player]), [['Logitech G29 Driving Force Racing Wheel', 1], ['Microsoft X-Box 360 pad', 2], ['Joy-Con pair', 3]]);
         const [wheel, xbox, pair] = r.body.controllers;
         assert.strictEqual(pair.maps.wii.id, 'wii-nunchuk-gyro');

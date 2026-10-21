@@ -111,7 +111,10 @@ test('detect applies the combining to what it found', () => {
     const file = require('path').join(require('os').tmpdir(), `proc-${process.pid}.txt`);
     require('fs').writeFileSync(file, proc);
     assert.strictEqual(controllers.detect({ platform: 'linux', procFile: file, usbRoot: '/nonexistent' }).length, 2);
-    const merged = controllers.detect({ platform: 'linux', procFile: file, usbRoot: '/nonexistent', merge: { auto: true } });
+    // Two Joy-Cons stay two controllers until the person joins them (both bumpers)
+    assert.strictEqual(controllers.detect({ platform: 'linux', procFile: file, usbRoot: '/nonexistent', merge: { merges: [], splits: [] } }).length, 2);
+    const keys = controllers.detect({ platform: 'linux', procFile: file, usbRoot: '/nonexistent' }).map(controllers.keyOf);
+    const merged = controllers.detect({ platform: 'linux', procFile: file, usbRoot: '/nonexistent', merge: { merges: [keys] } });
     assert.strictEqual(merged.length, 1);
     assert.strictEqual(merged[0].name, 'Joy-Con pair');
 });

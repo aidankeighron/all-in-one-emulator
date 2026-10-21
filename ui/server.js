@@ -230,8 +230,11 @@ async function startGame(relPath, slotId, onGameState) {
 
     const romsDir = config.getRomsDir();
     const abs = path.resolve(romsDir, relPath || '');
-    if (!relPath || !abs.startsWith(romsDir + path.sep) || !fs.existsSync(abs)) {
+    if (!relPath || !abs.startsWith(romsDir + path.sep)) {
         return { status: 400, body: { error: 'invalid', message: 'Invalid ROM path' } };
+    }
+    if (!fs.existsSync(abs)) {
+        return { status: 404, body: { error: 'missing', message: `“${path.basename(abs)}” is not in the ROMs folder any more (renamed or moved?). The list has been refreshed.` } };
     }
     const folder = path.relative(romsDir, abs).split(path.sep)[0].toLowerCase();
     const emu = emulatorsByFolder.get(folder);

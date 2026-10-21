@@ -57,9 +57,11 @@ function onPause(paused) {
         w.setBounds(bounds);
         w.setAlwaysOnTop(true, 'screen-saver');
         w.show();
+        w.setFullScreen(true);       // exactly the whole screen: the desktop may otherwise leave a gap (a top bar) in a corner
         w.moveTop();
         w.focus();
     } else if (pauseWin) {
+        pauseWin.setFullScreen(false);
         pauseWin.hide();
     }
 }

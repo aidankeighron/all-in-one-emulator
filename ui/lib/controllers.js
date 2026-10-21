@@ -205,7 +205,7 @@ function detect({ platform = process.platform, procFile = '/proc/bus/input/devic
         found = build(parseProc(text), readUsbIds(usbRoot));
     }
     if (hideNintendo) found = found.filter(c => !(c.kind === 'switch' && c.vendor === NINTENDO));
-    return merge ? combine(found, merge) : found;
+    return merge ? combine(found, { ...merge, auto: false }) : found;      // pairs are made by hand (both bumpers)
 }
 
 // ---------- Two Switch controllers as one ----------

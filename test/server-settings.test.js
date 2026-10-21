@@ -78,3 +78,15 @@ test('the theme is system by default, and can be set to light or dark', async ()
         assert.strictEqual((await api(port, 'GET', '/api/appearance')).body.theme, 'dark', 'a bad value changes nothing');
     } finally { srv.close(); }
 });
+
+test('starting a game whose file was renamed or moved says so', async () => {
+    const { server: srv, port } = await server.start({ port: 0 });
+    try {
+        let r = await api(port, 'POST', '/api/launch', { path: 'wii/Old Name.iso' });
+        assert.strictEqual(r.status, 404);
+        assert.strictEqual(r.body.error, 'missing');
+        assert.match(r.body.message, /Old Name\.iso/);
+        r = await api(port, 'POST', '/api/launch', { path: '../../etc/passwd' });
+        assert.strictEqual(r.status, 400);
+    } finally { srv.close(); }
+});
