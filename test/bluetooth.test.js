@@ -118,10 +118,10 @@ const PROMPTED = `
 const rl = require('readline').createInterface({ input: process.stdin });
 rl.on('line', l => {
   const [cmd, addr] = l.trim().split(' ');
-  if (cmd === 'scan' && addr === 'on') setTimeout(() => console.log('[bluetooth]# \\x1b[0;92m[NEW]\\x1b[0m Device AA:BB:CC:DD:EE:FF Joy-Con (L)'), 40);
+  if (cmd === 'scan' && addr === 'on') setTimeout(() => console.log('[bluetoothctl]> \\x1b[0;92m[NEW]\\x1b[0m Device AA:BB:CC:DD:EE:FF Joy-Con (L)'), 40);
   if (cmd === 'pair') setTimeout(() => console.log('[bluetooth]# [bluetooth]# Pairing successful'), 20);
   if (cmd === 'trust') console.log('[Joy-Con (L)]# Changing ' + addr + ' trust succeeded');
-  if (cmd === 'connect') setTimeout(() => console.log('[Joy-Con (L)]# Connection successful'), 20);
+  if (cmd === 'connect') setTimeout(() => console.log('[Joy-Con (L)]> Connection successful'), 20);
   if (cmd === 'quit') process.exit(0);
 });`;
 
