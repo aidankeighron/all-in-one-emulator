@@ -29,8 +29,46 @@ The menu runs on Windows too. The differences from Linux:
 - **The Back + Start pause menu is Linux only.** On Windows use the emulator's own Stop or Exit.
 - **Game library:** a Windows computer can browse and download games from the Linux host the same way. Hosting from
   Windows also works, but Windows Firewall will ask to allow it.
-- Build a Windows app on a Windows machine with `npm run dist:win` (a single portable `.exe` in `dist/`). Building it
-  on Linux needs Wine.
+- **Build a program you can pin to the taskbar** on a Windows machine (needs [Node.js](https://nodejs.org) 18 or newer):
+  ```
+  npm install
+  npm run build
+  ```
+  This writes two files to `dist/`: `Emulator-Menu-Setup-<version>.exe` (run it once: it installs the menu for your user,
+  adds Start menu and desktop shortcuts and starts it) and `Emulator-Menu-Portable-<version>.exe` (runs without installing).
+  To pin it, start the menu, right-click its icon on the taskbar and choose **Pin to taskbar**; the installer's Start menu entry
+  can be pinned too. Press **F11** for full screen, or start it with `--fullscreen`. `npm run dist:win` builds only the portable
+  file. The program has to be built on the system it is for, so building it on Linux needs Wine. Not tested on a real Windows
+  computer (the settings were checked as far as a Linux machine can).
+
+# Kiosk mode (Ubuntu)
+
+Kiosk mode makes the computer turn on, sign in **by itself with no password**, and open the menu full screen, with no lock
+screen, screen blanking or sleep. Turn it on from **Settings -> System -> Turn on kiosk mode** (run the menu as the
+app: `npm start` or the AppImage). It asks for the administrator password **once**, because it has to change the sign-in
+screen's settings, and it does three things:
+
+1. Automatic sign-in for your user in GDM (Ubuntu's sign-in screen; LightDM works too). The menu edits only a marked block
+   in `/etc/gdm3/custom.conf` and keeps the original as `custom.conf.emulator-menu.bak`.
+2. An autostart entry, `~/.config/autostart/emulator-menu.desktop`, that starts the menu when the desktop comes up.
+3. The desktop's screen lock, idle screen-off and sleep are switched off (the old values are saved and put back).
+
+**Getting out again:** **Settings -> System -> Leave kiosk mode** undoes all three (the next start asks for the password
+again). **Close menu** quits the menu to the desktop without changing anything. From a terminal you can also remove
+`~/.config/autostart/emulator-menu.desktop`, or set automatic login off in Ubuntu's **Settings -> Users**. If the menu
+cannot be reached at all, press Ctrl+Alt+F3 for a text console, sign in and run `sudo sed -i '/emulator-menu kiosk: begin/,/emulator-menu kiosk: end/d' /etc/gdm3/custom.conf`.
+
+Because anyone who turns the computer on is signed in, only use it on a computer that is not holding anything private.
+Not tested on a real Ubuntu install (the file edits and commands are tested against stand-ins).
+
+## The System tab
+
+The fourth tab of Settings (LB / RB reach it with the others), for Windows and Linux:
+
+- **Restart** and **Shut down**: press twice to confirm. They need no password for the signed-in person
+  (`systemctl reboot` / `poweroff` on Ubuntu, `shutdown /r` / `/s` on Windows).
+- **Close menu**: quits the menu (to the desktop). In kiosk mode the menu starts again at the next start.
+- **Kiosk mode** (Ubuntu): shows whether it is on, and turns it on or off as above.
 
 # Setup (Ubuntu)
 

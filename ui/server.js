@@ -21,6 +21,7 @@ const mappingsLib = require('./lib/mappings');
 const playersLib = require('./lib/players');
 const betterjoyLib = require('./lib/betterjoy');
 const joycondLib = require('./lib/joycond');
+const systemLib = require('./lib/system');
 
 const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'emulators.json'), 'utf8'));
 const emulatorsById = new Map(manifest.emulators.map(e => [e.id, e]));
@@ -416,6 +417,49 @@ async function handleBluetooth(route, req, res) {
     return false;
 }
 
+// The computer: restart, shut down, kiosk mode (Ubuntu), leave the menu
+const system = systemLib.createSystem({ platform: runner.platform, configDir: path.dirname(config.configFile) });
+let systemJob = null;
+
+function systemView() {
+    return { platform: runner.platform, kiosk: system.status(), job: systemJob && { kind: systemJob.kind, phase: systemJob.phase, message: systemJob.message, lines: systemJob.lines.slice(-4) } };
+}
+
+async function handleSystem(route, req, res) {
+    try {
+        if (route === 'GET /api/system') return sendJson(res, 200, systemView()), true;
+        if (route === 'POST /api/system/power') {
+            const { action } = await readJson(req);
+            if (!['restart', 'shutdown'].includes(action)) return sendJson(res, 400, { error: 'bad_action', message: 'Choose restart or shut down' }), true;
+            console.log(`[SYSTEM] ${action}`);
+            sendJson(res, 200, { ok: true });
+            setTimeout(() => system.power(action), 400);     // the answer gets out first
+            return true;
+        }
+        if (route === 'POST /api/system/quit') {
+            sendJson(res, 200, { ok: true });
+            setTimeout(() => process.exit(0), 300);
+            return true;
+        }
+        if (route === 'POST /api/system/kiosk') {
+            const { enabled } = await readJson(req);
+            if (typeof enabled !== 'boolean') return sendJson(res, 400, { error: 'bad_request', message: 'Say whether kiosk mode is on' }), true;
+            if (!system.status().supported) return sendJson(res, 409, { error: 'unsupported', message: 'Kiosk mode is set up for Ubuntu (Linux) only' }), true;
+            if (systemJob && systemJob.phase === 'running') return sendJson(res, 409, { error: 'busy', message: 'Something is already in progress' }), true;
+            const job = systemJob = { kind: enabled ? 'kiosk-on' : 'kiosk-off', phase: 'running', message: '', lines: [] };
+            const onLine = line => { job.message = line; job.lines.push(line); console.log(`[SYSTEM] ${line}`); };
+            (enabled ? system.enable({ onLine }) : system.disable({ onLine }))
+                .then(() => { job.phase = 'done'; })
+                .catch(err => { job.phase = 'failed'; job.message = err.message; console.error(`[SYSTEM] ${err.message}`); });
+            return sendJson(res, 200, systemView()), true;
+        }
+    } catch (err) {
+        console.error(`[SYSTEM] ${route}: ${err.message}`);
+        return sendJson(res, 500, { error: 'failed', message: err.message }), true;
+    }
+    return false;
+}
+
 // BetterJoy: what the setup screen shows, and the steps it runs (one at a time, polled while running)
 async function betterjoyView() {
     const st = await helper.status();
@@ -795,6 +839,9 @@ function createServer(onGameState) {
                 if (url.pathname.startsWith('/api/saves')) {
                     const handled = await handleSaves(route, url, req, res);
                     if (handled) return;
+                }
+                if (url.pathname.startsWith('/api/system')) {
+                    if (await handleSystem(route, req, res)) return;
                 }
                 if (url.pathname.startsWith('/api/betterjoy')) {
                     if (await handleBetterJoy(route, req, res)) return;

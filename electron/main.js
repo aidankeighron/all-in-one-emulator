@@ -131,6 +131,8 @@ if (!app.requestSingleInstanceLock()) {
         }
     });
     Menu.setApplicationMenu(null);
+    // Windows groups the taskbar icon (and keeps a pinned one working) by this id: it matches the installer's appId
+    if (process.platform === 'win32') app.setAppUserModelId('com.aidankeighron.emulatormenu');
     app.whenReady().then(createWindow);
     app.on('window-all-closed', () => app.quit());
 }

@@ -14,7 +14,10 @@
     "server": "node ui/server.js",
     "test": "node --test test/*.test.js",
     "dist": "electron-builder --linux AppImage",
-    "dist:win": "electron-builder --win portable"
+    "dist:win": "electron-builder --win portable",
+    "build": "node scripts/build.js",
+    "build:win": "node scripts/build.js win",
+    "build:linux": "node scripts/build.js linux"
   },
   "dependencies": {
     "node-unrar-js": "^2.0.2",
@@ -41,8 +44,27 @@
     },
     "afterPack": "scripts/after-pack.js",
     "win": {
-      "target": "portable",
+      "target": [
+        "nsis",
+        "portable"
+      ],
       "icon": "ui/assets/icon.png"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Emulator Menu",
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false,
+      "artifactName": "Emulator-Menu-Setup-${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "Emulator-Menu-Portable-${version}.${ext}"
+    },
+    "directories": {
+      "output": "dist"
     }
   }
 }

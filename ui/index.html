@@ -966,6 +966,7 @@
                     <button class="tab active" role="tab" data-tab="games" onclick="setTab('games')">Games</button>
                     <button class="tab" role="tab" data-tab="general" onclick="setTab('general')">Sound &amp; controls</button>
                     <button class="tab" role="tab" data-tab="library" onclick="setTab('library')">Game library</button>
+                    <button class="tab" role="tab" data-tab="system" onclick="setTab('system')">System</button>
                 </div>
             </div>
 
@@ -1026,6 +1027,41 @@
                     </div>
                     <button class="btn" id="theme-button" onclick="cycleTheme()">System</button>
                 </div>
+            </div>
+
+            <div class="tab-pane" data-pane="system" hidden>
+                <h3>This computer</h3>
+                <div class="emu-row" style="border-top:none">
+                    <div class="info">
+                        <div class="name">Restart</div>
+                        <div class="desc">Restarts the computer. Save your games first; press twice to confirm.</div>
+                    </div>
+                    <button class="btn" id="sys-restart" onclick="sysPower('restart')">Restart</button>
+                </div>
+                <div class="emu-row">
+                    <div class="info">
+                        <div class="name">Shut down</div>
+                        <div class="desc">Turns the computer off. Press twice to confirm.</div>
+                    </div>
+                    <button class="btn" id="sys-shutdown" onclick="sysPower('shutdown')">Shut down</button>
+                </div>
+                <div class="emu-row">
+                    <div class="info">
+                        <div class="name">Close the menu</div>
+                        <div class="desc">Quits the menu and goes to the desktop. In kiosk mode the menu starts again at the next start.</div>
+                    </div>
+                    <button class="btn" id="sys-quit" onclick="sysQuit()">Close menu</button>
+                </div>
+
+                <h3>Kiosk mode</h3>
+                <div class="emu-row" style="border-top:none" id="kiosk-row">
+                    <div class="info">
+                        <div class="name">Start straight into the menu <span id="kiosk-state"></span></div>
+                        <div class="desc" id="kiosk-desc">Checking…</div>
+                    </div>
+                    <button class="btn" id="kiosk-button" onclick="sysKiosk()" disabled>…</button>
+                </div>
+                <div id="kiosk-job" class="notice" style="display:none"></div>
             </div>
 
             <div class="tab-pane" data-pane="library" hidden>
@@ -2449,14 +2485,91 @@
         }
 
         // ---- Settings tabs: Games / Sound & controls / Game library (LB and RB switch) ----
-        const TABS = ['games', 'general', 'library'];
+        const TABS = ['games', 'general', 'library', 'system'];
         let settingsTab = 'games';
 
         function setTab(name, quiet) {
             settingsTab = name;
             document.querySelectorAll('#settings-overlay .tab-pane').forEach(p => { p.hidden = p.dataset.pane !== name; });
             document.querySelectorAll('#settings-overlay .tab').forEach(t => { t.classList.toggle('active', t.dataset.tab === name); t.setAttribute('aria-selected', String(t.dataset.tab === name)); });
+            if (name === 'system') sysRefresh();
             if (!quiet) { Sfx.play('page'); setPadFocus(document.querySelector('#settings-overlay .tab.active')); }
+        }
+
+        // ---- System tab: restart, shut down, close the menu, kiosk mode (Ubuntu) ----
+        const sys = { data: null, confirm: null, timer: null, poll: null };
+
+        async function sysRefresh() {
+            try { sys.data = await (await fetch('/api/system')).json(); } catch { sys.data = null; }
+            renderSystem();
+            const running = sys.data && sys.data.job && sys.data.job.phase === 'running';
+            clearInterval(sys.poll);
+            if (running && settingsOpen) sys.poll = setInterval(sysRefresh, 900);
+        }
+
+        function renderSystem() {
+            const d = sys.data;
+            const btn = document.getElementById('kiosk-button');
+            const desc = document.getElementById('kiosk-desc');
+            const state = document.getElementById('kiosk-state');
+            const jobBox = document.getElementById('kiosk-job');
+            if (!d) { desc.textContent = 'The menu could not be reached.'; btn.disabled = true; return; }
+            const k = d.kiosk, job = d.job, busy = job && job.phase === 'running';
+            if (!k.supported) {
+                desc.textContent = d.platform === 'win32' ? 'Kiosk mode is for Ubuntu. On Windows, pin the app to the taskbar (see the README) and use F11 for full screen.' : k.reason;
+                state.textContent = ''; btn.textContent = 'Not available'; btn.disabled = true;
+            } else {
+                state.textContent = k.enabled ? '· on' : '· off';
+                btn.disabled = !!busy || (!k.enabled && !k.canStart);
+                btn.textContent = busy ? 'Working…' : k.enabled ? 'Leave kiosk mode' : 'Turn on kiosk mode';
+                desc.textContent = k.enabled
+                    ? `On: the computer signs in as ${k.user} by itself, with no password, and opens the menu full screen. It never locks or sleeps. Leave kiosk mode to get the normal sign-in screen back.`
+                    : !k.canStart ? 'Start the menu as the app (npm start or the AppImage) to set this up.'
+                    : `Makes the computer sign in as ${k.user} by itself, with no password, and open the menu full screen, with no lock screen or sleep. You are asked for the administrator password once, now.${k.displayManager ? '' : ' This system’s sign-in screen is not GDM or LightDM, so automatic sign-in will need setting in the system settings.'}`;
+            }
+            const text = job && (job.phase === 'running' ? job.message || 'Working…' : job.phase === 'failed' ? job.message : job.kind.startsWith('kiosk') ? job.message : '');
+            jobBox.style.display = text ? '' : 'none';
+            jobBox.textContent = text || '';
+            jobBox.classList.toggle('off', !!(job && job.phase === 'failed'));
+        }
+
+        async function sysKiosk() {
+            if (!sys.data || !sys.data.kiosk.supported) return;
+            const enabled = !sys.data.kiosk.enabled;
+            Sfx.play('select');
+            try {
+                const res = await fetch('/api/system/kiosk', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled }) });
+                const data = await res.json();
+                if (!res.ok) return showToast(data.message || 'That did not work');
+                sys.data = data;
+            } catch { return showToast('The menu could not be reached.'); }
+            renderSystem();
+            sysRefresh();
+        }
+
+        // Restart, shut down and close ask for a second press, since they cannot be taken back
+        function sysConfirm(id, label, sure, action) {
+            const el = document.getElementById(id);
+            if (sys.confirm === id) { sys.confirm = null; clearTimeout(sys.timer); el.textContent = label; return action(); }
+            ['sys-restart', 'sys-shutdown', 'sys-quit'].forEach(x => { const b = document.getElementById(x); if (b && x !== id) b.textContent = b.dataset.label || b.textContent; });
+            el.dataset.label = label;
+            sys.confirm = id; el.textContent = sure; Sfx.play('select');
+            clearTimeout(sys.timer);
+            sys.timer = setTimeout(() => { sys.confirm = null; el.textContent = label; }, 4000);
+        }
+
+        function sysPower(action) {
+            const restart = action === 'restart';
+            sysConfirm(restart ? 'sys-restart' : 'sys-shutdown', restart ? 'Restart' : 'Shut down', 'Press again to confirm', async () => {
+                try { await fetch('/api/system/power', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action }) }); showToast(restart ? 'Restarting…' : 'Shutting down…'); }
+                catch { showToast('The menu could not be reached.'); }
+            });
+        }
+
+        function sysQuit() {
+            sysConfirm('sys-quit', 'Close menu', 'Press again to close', async () => {
+                try { await fetch('/api/system/quit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }); } catch { /* the menu is closing */ }
+            });
         }
 
         function cycleTab(delta) {
