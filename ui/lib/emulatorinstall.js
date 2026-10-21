@@ -6,7 +6,8 @@
 //   { "api": url }     a releases API in the format GitHub, Forgejo and Gitea share: { assets: [{ name, browser_download_url }] }
 //   { "query": url }   an update server that answers with JSON (or text) holding the zip's address
 // plus, optionally, "asset": a regular expression the zip's file name must match. config.json can also name a zip
-// directly: "emulatorUrls": { "ryujinx": "https://.../ryujinx-win_x64.zip" }, which is tried first.
+// directly: "emulatorUrls": { "ryujinx": "https://.../ryujinx-win_x64.zip" }, which is tried first. It can
+// also be the path of a zip you downloaded yourself, for when the servers cannot be reached.
 const fs = require('fs');
 const path = require('path');
 const { pipeline } = require('stream/promises');
@@ -25,6 +26,10 @@ function findZipUrl(value) {
     }
     return null;
 }
+
+// An override can also be a zip already on this computer (C:\Users\me\Downloads\ryujinx.zip or a file:// address)
+const isLocal = value => /^file:/i.test(value) || /^[A-Za-z]:[\\/]/.test(value) || value.startsWith('/');
+const localPath = value => /^file:/i.test(value) ? require('url').fileURLToPath(value) : value;
 
 const headers = { 'User-Agent': 'EmulatorMenu/1.0 (personal game launcher)', Accept: 'application/json' };
 
@@ -50,7 +55,7 @@ async function fromQuery(source, fetchImpl) {
 
 // The first source that answers. Throws one error listing why each failed.
 async function findDownload({ sources = [], override, fetchImpl = globalThis.fetch }) {
-    if (override) return { url: override, name: path.basename(new URL(override).pathname), version: '' };
+    if (override) return isLocal(override) ? { url: override, name: path.basename(localPath(override)), version: '' } : { url: override, name: path.basename(new URL(override).pathname), version: '' };
     const failures = [];
     for (const source of sources) {
         try {
@@ -68,6 +73,11 @@ async function findDownload({ sources = [], override, fetchImpl = globalThis.fet
 
 // Saves the url to file, reporting progress. Gives up if nothing arrives for STALL_MS.
 async function download(url, file, { fetchImpl = globalThis.fetch, onProgress = () => {} } = {}) {
+    if (isLocal(url)) {
+        fs.mkdirSync(path.dirname(file), { recursive: true });
+        fs.copyFileSync(localPath(url), file);
+        return;
+    }
     const ctl = new AbortController();
     let timer = setTimeout(() => ctl.abort(), STALL_MS);
     const poke = () => { clearTimeout(timer); timer = setTimeout(() => ctl.abort(), STALL_MS); };

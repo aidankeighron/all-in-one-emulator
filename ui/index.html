@@ -931,7 +931,7 @@
             <div class="round-button" id="bb-rescan" onclick="rescan()" title="Refresh game list">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
             </div>
-            <div class="round-button" id="bb-import" onclick="importRoms()" title="Import ROM zips (Y)">
+            <div class="round-button" id="bb-import" onclick="importRoms()" title="Import ROM zips">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
             </div>
         </div>
@@ -939,7 +939,7 @@
             <div class="time-display" id="clock">12:00</div>
             <div class="date-display" id="date">Mon 10/19</div>
         </div>
-        <div class="round-button" id="bb-settings" onclick="openSettings()" title="Settings (X)">
+        <div class="round-button" id="bb-settings" onclick="openSettings()" title="Settings">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
         </div>
     </div>
@@ -1171,7 +1171,13 @@
         }
 
         // ================= PAGES =================
-        function pageCount() { return Math.max(1, Math.ceil(allGames.length / CHANNELS_PER_PAGE)); }
+        // Games you have fill the first pages; the ones only on the other computer start on a page of their own
+        function gamePages() {
+            const chunk = list => Array.from({ length: Math.ceil(list.length / CHANNELS_PER_PAGE) }, (_, i) => list.slice(i * CHANNELS_PER_PAGE, (i + 1) * CHANNELS_PER_PAGE));
+            return [...chunk(allGames.filter(g => !g.remote)), ...chunk(allGames.filter(g => g.remote))];
+        }
+        function pageCount() { return Math.max(1, gamePages().length); }
+        function currentGame() { const p = gamePages()[page]; return p && p[selectedIndex]; }
         function onControllers() { return page === CONTROLLERS_PAGE; }
         function hasLeft() { return page > CONTROLLERS_PAGE; }
         function hasRight() { return page < pageCount() - 1; }
@@ -1179,7 +1185,7 @@
         // How many tiles/cards on this page can be selected
         function itemCount() {
             if (onControllers()) return padList.length + 2;   // then two tiles: connect a controller, players and mappings
-            return Math.max(0, Math.min(CHANNELS_PER_PAGE, allGames.length - page * CHANNELS_PER_PAGE));
+            return (gamePages()[page] || []).length;
         }
 
         // Fetch Games from Server
@@ -1246,10 +1252,10 @@
             const cols = Math.max(4, Math.min(8, Math.floor((w + GRID_GAP) / (TILE_W + GRID_GAP))));
             const rows = Math.max(3, Math.min(6, Math.floor((h + GRID_GAP) / (TILE_H + GRID_GAP))));
             if (cols === COLUMNS && rows * cols === CHANNELS_PER_PAGE) return false;
-            const first = page * CHANNELS_PER_PAGE;     // keep the first game that was showing on screen
+            const first = page >= 0 ? (gamePages()[page] || [])[0] : null;     // keep the first game that was showing on screen
             COLUMNS = cols;
             CHANNELS_PER_PAGE = cols * rows;
-            if (page >= 0) page = Math.floor(first / CHANNELS_PER_PAGE);
+            if (page >= 0) page = Math.max(0, gamePages().findIndex(p => p.includes(first)));
             return true;
         }
         window.addEventListener('resize', () => { if (fitGrid()) { if (page >= pageCount()) page = pageCount() - 1; renderPage(); if (sheet.open) setSheetHeight(); } });
@@ -1278,8 +1284,7 @@
         }
 
         function renderGames(grid) {
-            const startIdx = page * CHANNELS_PER_PAGE;
-            const pageGames = allGames.slice(startIdx, startIdx + CHANNELS_PER_PAGE);
+            const pageGames = gamePages()[page] || [];
 
             if (allGames.length === 0) {
                 const hint = document.createElement('div');
@@ -1297,7 +1302,6 @@
                 if (game && game.remote) {
                     channel.className = 'wii-channel channel-remote';
                     channel.innerHTML = `
-                        ${starHtml(game)}
                         <span class="channel-badge badge-${escapeHtml(game.console)}">${escapeHtml(game.console)}</span>
                         <span class="remote-dl" title="Download from the server"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="6 10 12 16 18 10"/><line x1="5" y1="20" x2="19" y2="20"/></svg></span>
                         <div class="channel-title">${escapeHtml(game.title)}</div>
@@ -1342,17 +1346,17 @@
             }
         }
 
-        const starHtml = game => `<button type="button" class="fav-star ${game.favorite ? 'on' : ''}" title="${game.favorite ? 'Remove from favorites' : 'Add to favorites'} (Start)" aria-label="${game.favorite ? 'Remove from favorites' : 'Add to favorites'}" aria-pressed="${!!game.favorite}"><svg viewBox="0 0 24 24" width="18" height="18" stroke-linejoin="round" stroke-width="2"><path d="M12 3.2l2.6 5.6 6.1.7-4.5 4.2 1.2 6-5.4-3-5.4 3 1.2-6-4.5-4.2 6.1-.7z"/></svg></button>`;
+        const starHtml = game => `<button type="button" class="fav-star ${game.favorite ? 'on' : ''}" title="${game.favorite ? 'Remove from favorites' : 'Add to favorites'} (X or Y)" aria-label="${game.favorite ? 'Remove from favorites' : 'Add to favorites'}" aria-pressed="${!!game.favorite}"><svg viewBox="0 0 24 24" width="18" height="18" stroke-linejoin="round" stroke-width="2"><path d="M12 3.2l2.6 5.6 6.1.7-4.5 4.2 1.2 6-5.4-3-5.4 3 1.2-6-4.5-4.2 6.1-.7z"/></svg></button>`;
 
         // Favourites come first. The game stays selected wherever it lands.
         async function toggleFavorite(game) {
             if (!game) return;
+            if (game.remote) { Sfx.play('error'); return showToast('Download the game to star it'); }
             const on = !game.favorite;
             game.favorite = on;
             Sfx.play(on ? 'select' : 'back');
-            allGames.sort((a, b) => (!!b.favorite - !!a.favorite) || a.title.localeCompare(b.title));
-            const at = allGames.indexOf(game);
-            if (!onControllers()) { page = Math.floor(at / CHANNELS_PER_PAGE); selectedIndex = at % CHANNELS_PER_PAGE; zone = 'grid'; }
+            allGames.sort((a, b) => (!!a.remote - !!b.remote) || (!!b.favorite - !!a.favorite) || a.title.localeCompare(b.title));
+            if (!onControllers()) { page = gamePages().findIndex(p => p.includes(game)); selectedIndex = gamePages()[page].indexOf(game); zone = 'grid'; }
             renderPage();
             showToast(on ? `${game.title} added to favorites` : `${game.title} removed from favorites`);
             try { await fetch('/api/favorites', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: game.path, favorite: on }) }); }
@@ -1560,7 +1564,7 @@
             if (zone === 'arrow-right') return goPage(page + 1);
             if (zone === 'bottom') return document.getElementById(BOTTOM_BUTTONS[bottomIndex]).click();
             if (onControllers()) return selectedIndex === padList.length ? openPair() : selectedIndex === padList.length + 1 ? openPlayers() : undefined;
-            const game = allGames[page * CHANNELS_PER_PAGE + selectedIndex];
+            const game = currentGame();
             if (game) openSaveSheet(game);
         }
 
@@ -1882,7 +1886,7 @@
         // Raises the sheet for a game, keeping that game highlighted above it
         function presentSheet(game, view) {
             Object.assign(sheet, { open: true, view, game, slots: [], status: null, index: 0, busy: '', kb: null, conflict: null, confirm: null, btn: 1 });
-            const at = allGames.indexOf(game) - page * CHANNELS_PER_PAGE;
+            const at = (gamePages()[page] || []).indexOf(game);
             if (at >= 0) { zone = 'grid'; selectedIndex = at; renderFocus(); }
             document.body.classList.add('sheet-open');
             document.getElementById('sheet').classList.add('open');
@@ -3514,9 +3518,7 @@
                     const dir = st.down ? 'down' : st.up ? 'up' : st.right ? 'right' : st.left ? 'left' : null;
                     if (st.rb) { pagePress(1); lastInputTime = now; }
                     else if (st.lb) { pagePress(-1); lastInputTime = now; }
-                    else if (st.x) { openSettings(); lastInputTime = now + 500; }
-                    else if (st.y) { importRoms(); lastInputTime = now + 500; }
-                    else if (st.start && zone === 'grid' && !onControllers()) { toggleFavorite(allGames[page * CHANNELS_PER_PAGE + selectedIndex]); lastInputTime = now + 400; }
+                    else if ((st.x || st.y) && zone === 'grid' && !onControllers()) { toggleFavorite(currentGame()); lastInputTime = now + 400; }
                     else if (st.a) { activate(); lastInputTime = now + 500; }
                     else if (dir) { navigate(dir); lastInputTime = now; }
                 }
@@ -3567,8 +3569,7 @@
             else if (e.key === 'Enter') activate();
             else if (e.key === 'PageDown') pagePress(1);
             else if (e.key === 'PageUp') pagePress(-1);
-            else if (e.key.toLowerCase() === 's') openSettings();
-            else if (e.key.toLowerCase() === 'f' && zone === 'grid' && !onControllers()) toggleFavorite(allGames[page * CHANNELS_PER_PAGE + selectedIndex]);
+            else if (['f', 'x', 'y'].includes(e.key.toLowerCase()) && zone === 'grid' && !onControllers()) toggleFavorite(currentGame());
         });
 
         // Browsers block sound until the first input; the Electron window allows it from the start

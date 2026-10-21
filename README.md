@@ -13,7 +13,7 @@ The menu runs on Windows too. The differences from Linux:
   (`windows.release`) and tried in order, because a project's download server can be down: Ryujinx's releases API
   on its own Forgejo (`git.ryujinx.app`), then its update server. If both fail, the progress line says why for
   each. Then either download the zip yourself and unzip it into its own folder inside the emulators folder (**Open
-  folder** opens it), press **Locate** and choose the program (`Dolphin.exe`, `Ryujinx.exe`), or put a direct zip
+  folder** opens it), press **Locate** and choose the program (`Dolphin.exe`, `Ryujinx.exe`), or put a direct zip (or the path of a zip you downloaded, like `C:\Users\you\Downloads\ryujinx-win_x64.zip`)
   address in `config.json` and press **Install** again:
   `{ "emulatorUrls": { "ryujinx": "https://example.com/ryujinx-win_x64.zip" } }`.
   Dolphin has no release feed the menu can read, so it keeps a **Download** button to its website, then
@@ -74,8 +74,8 @@ Nothing else to install: the AppImage already contains the menu and its runtime.
    | `wii`, `gamecube` | Dolphin | iso, rvz, wbfs, gcm, ciso, gcz, wia, wad |
    | `switch` | Ryujinx (Ryubing) | nsp, xci, nca, nro, nso |
 
-4. Click a game (or press **A**) to play. To favorite a game press **Start** on it (or **F**, or click the star on its tile):
-   favorites are listed first and keep their star between runs. Closing the emulator brings you back to the menu.
+4. Click a game (or press **A**) to play. To favorite a game press **X** or **Y** on it (or **F**, or click the star on its tile; only games you have can be starred):
+   games you have are listed first (favorites at the top), and games that are only on your other computer start on their own page. Favorites are listed first and keep their star between runs. Closing the emulator brings you back to the menu.
 
    **Pause menu:** hold **Back + Start** (1.5 seconds by default; Settings -> Sound & controls has a slider from 0 to 2
    seconds in half-second steps, 0 opens it at once). The game is frozen (its processes are stopped, so

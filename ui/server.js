@@ -584,16 +584,18 @@ function createServer(onGameState) {
                     const have = new Set(scanned.map(g => g.path));
                     const onServer = theirs ? theirs.games.filter(g => !have.has(g.path)).map(g => ({ ...g, remote: true, installed: installed.has(g.emulator), art: null })) : [];
                     games.push(...onServer);
-                    // Favourites first, then by title
+                    // Games you have come first (favourites, then by title); the ones still on the other computer follow
+                    // and cannot be starred
                     const stars = new Set(config.getFavorites());
-                    for (const g of games) g.favorite = stars.has(g.path);
-                    games.sort((a, b) => (b.favorite - a.favorite) || a.title.localeCompare(b.title));
+                    for (const g of games) g.favorite = !g.remote && stars.has(g.path);
+                    games.sort((a, b) => (!!a.remote - !!b.remote) || (b.favorite - a.favorite) || a.title.localeCompare(b.title));
                     return sendJson(res, 200, { games, romsDir, artPending: covers.pending(), server: theirs ? { name: theirs.name, offline: !!remote.error } : null });
                 }
                 if (route === 'GET /api/appearance') return sendJson(res, 200, { theme: config.getTheme() });
                 if (route === 'POST /api/favorites') {
                     const body = await readJson(req);
                     if (typeof body.path !== 'string' || typeof body.favorite !== 'boolean') return sendJson(res, 400, { error: 'invalid', message: 'Send a game path and true or false' });
+                    if (body.favorite && !roms.scanGames(config.getRomsDir(), manifest).some(g => g.path === body.path)) return sendJson(res, 400, { error: 'not_owned', message: 'Download the game before starring it' });
                     config.setFavorite(body.path, body.favorite);
                     return sendJson(res, 200, { path: body.path, favorite: body.favorite });
                 }
