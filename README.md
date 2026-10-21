@@ -79,8 +79,10 @@ Nothing else to install: the AppImage already contains the menu and its runtime.
 
    **Pause menu:** hold **Back + Start** (1.5 seconds by default; Settings -> Sound & controls has a slider from 0 to 2
    seconds in half-second steps, 0 opens it at once). The game is frozen (its processes are stopped, so
-   sound and input stand still) and the menu comes to the front with **Resume**, **Change controllers** (the Players
-   screen), **Connect a controller**, **Restart game** and **Quit to menu**. Holding the buttons again, or **B**,
+   sound and input stand still) and the menu comes to the front with **Resume** (top right), **Change controllers** (the Players
+   screen), **Connect a controller**, **Restart game** and **Quit to menu** (bottom). It is laid out like the Wii's HOME menu:
+   a white bar from the top, a curved bar from the bottom with big rounded buttons, and the four player lights showing
+   which controller each player has. D-pad moves, A chooses, B resumes. Holding the buttons again, or **B**,
    resumes. Emulators read their controller settings only when a game starts, so after changing controllers the
    screen suggests **Restart game**: it ends the game (the save is uploaded as usual) and starts it again on the
    same save. **Quit to menu** ends the game like closing the emulator, so save first. In the app the pause menu is its own

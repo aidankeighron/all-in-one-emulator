@@ -462,10 +462,53 @@
         html.pause-window, html.pause-window body { background: transparent !important; }
         body.pause-window > *:not(.overlay):not(.toast):not(script) { display: none !important; }
         body.pause-window .overlay { background: rgba(10, 20, 32, 0.55); }
-        .panel.pause { width: min(460px, 92vw); min-height: 0; }
-        .pause-list { display: flex; flex-direction: column; gap: 10px; }
-        .pause-list .btn { width: 100%; font-size: 17px; padding: 12px 18px; text-align: left; }
-        .pause-list .btn.pad-focus { outline: 3px solid var(--wii-blue); outline-offset: 2px; box-shadow: 0 0 14px var(--wii-blue-glow); }
+        /* The pause menu, in the style of the Wii's HOME menu: a white bar down from the top, a curved bar up from the
+           bottom with big rounded buttons and the four player lights, the game dimmed behind */
+        #pause-overlay { align-items: stretch; justify-content: stretch; background: rgba(12, 22, 34, 0.42); }
+        .wp { position: relative; width: 100%; height: 100%; overflow: hidden; }
+        .wp-top { position: absolute; top: 0; left: 0; right: 0; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 6vw 30px;
+            background: linear-gradient(to bottom, #ffffff 0%, #eef2f6 100%); border-bottom: 2px solid var(--wii-edge); border-radius: 0 0 50% 50% / 0 0 36px 36px;
+            box-shadow: 0 6px 22px rgba(0, 0, 0, 0.28); animation: wpTop 0.32s cubic-bezier(.2, .8, .2, 1); }
+        .wp-title { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+        .wp-eyebrow { font-size: 12px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; color: var(--wii-blue-deep); }
+        #pause-title { font-size: 24px; font-weight: 800; color: #4a5258; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .wp-bottom { position: absolute; bottom: 0; left: 0; right: 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 14px 4vw; padding: 34px 4vw 22px;
+            background: linear-gradient(to bottom, #ffffff 0%, #edf1f5 100%); border-top: 2px solid var(--wii-edge); border-radius: 50% 50% 0 0 / 36px 36px 0 0;
+            box-shadow: 0 -6px 22px rgba(0, 0, 0, 0.28); animation: wpBottom 0.32s cubic-bezier(.2, .8, .2, 1); }
+        @keyframes wpTop { from { transform: translateY(-110%); } }
+        @keyframes wpBottom { from { transform: translateY(110%); } }
+        .wp-note { position: absolute; left: 50%; bottom: 190px; transform: translateX(-50%); max-width: min(560px, 88vw); text-align: center; font-size: 14px; font-weight: 700; color: #4a5258;
+            background: rgba(255, 255, 255, 0.95); border: 2px solid var(--wii-blue); border-radius: 22px; padding: 9px 20px; box-shadow: 0 0 16px var(--wii-blue-glow); }
+        .wp-note.warn { border-color: #f0b84a; box-shadow: 0 0 16px rgba(240, 184, 74, 0.5); }
+        .wp-pads { display: flex; gap: 10px; }
+        .wp-pad { width: 78px; display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 11px; font-weight: 800; color: #8a9199; }
+        .wp-pad .art { width: 70px; height: 34px; display: flex; align-items: center; justify-content: center; }
+        .wp-pad .art svg { width: 100%; height: 100%; filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.2)); }
+        .wp-pad .art.none { color: #c4ccd3; font-size: 22px; }
+        .wp-pad .leds { display: flex; gap: 4px; }
+        .wp-pad .leds i { width: 8px; height: 8px; border-radius: 50%; background: #d3dae0; }
+        .wp-pad .leds i.on { background: radial-gradient(circle at 35% 30%, #bfeaff, var(--wii-blue)); box-shadow: 0 0 6px var(--wii-blue-glow); }
+        .wp-pad.here { color: #4a5258; }
+        .wp-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; }
+        .wp-btn { width: 134px; height: 104px; box-sizing: border-box; border-radius: 22px; border: 2px solid var(--wii-edge); cursor: pointer; font: inherit; font-weight: 800; font-size: 14px; line-height: 1.2; color: #4a5258;
+            background: linear-gradient(to bottom, #ffffff 0%, #f3f6f8 55%, #e4e9ed 100%); box-shadow: 0 3px 8px rgba(80, 100, 120, 0.22), inset 0 -4px 8px rgba(0, 0, 0, 0.04);
+            display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 8px; transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease; }
+        .wp-btn svg { width: 34px; height: 34px; fill: none; stroke: var(--wii-blue-deep); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+        .wp-btn.danger svg { stroke: #d0222e; }
+        .wp-btn:disabled { opacity: 0.55; cursor: default; }
+        .wp-btn.pad-focus, .wp-btn:hover:not(:disabled) { transform: scale(1.07); border-color: var(--wii-blue); outline: none; box-shadow: 0 0 0 3px rgba(58, 180, 242, 0.35), 0 0 22px var(--wii-blue-glow), 0 8px 18px rgba(0, 0, 0, 0.18); }
+        .wp-resume { flex-direction: row; width: auto; height: 52px; padding: 0 26px; border-radius: 26px; font-size: 17px; color: #fff; border-color: #2c9fe0; background: linear-gradient(to bottom, #5cc6fa, #2c9fe0); }
+        .wp-resume svg { width: 22px; height: 22px; stroke: #fff; fill: #fff; }
+        @media (max-width: 900px), (max-height: 600px) {
+            .wp-btn { width: 100px; height: 82px; font-size: 12px; border-radius: 18px; }
+            .wp-btn svg { width: 26px; height: 26px; }
+            .wp-pads { display: none; }
+            .wp-btn.wp-resume { width: auto; height: 44px; padding: 0 20px; font-size: 15px; border-radius: 22px; }
+            .wp-btn.wp-resume svg { width: 18px; height: 18px; }
+            .wp-bottom { padding-top: 28px; }
+            .wp-note { bottom: 150px; font-size: 12px; }
+            #pause-title { font-size: 18px; }
+        }
         .sel { font: inherit; font-weight: 700; font-size: 14px; color: #4a5258; padding: 7px 10px; border: 2px solid var(--wii-edge); border-radius: 10px; background: #fff; min-width: 0; width: 100%; cursor: pointer; }
         .sel:disabled { opacity: .45; cursor: default; }
         .dd { position: fixed; z-index: 70; box-sizing: border-box; overflow-y: auto; padding: 5px; background: #fff; border: 2px solid var(--wii-blue); border-radius: 14px; box-shadow: 0 0 0 3px rgba(58, 180, 242, 0.3), 0 10px 28px rgba(80, 100, 120, 0.4); }
@@ -873,12 +916,16 @@
     </div>
 
     <div class="overlay" id="pause-overlay" style="z-index:55">
-        <div class="panel pause">
-            <div class="wiihead"><div class="eyebrow" style="font-size:12px;font-weight:800;letter-spacing:.14em;text-transform:uppercase">Paused</div>
-            <h2 id="pause-title">Game paused</h2></div>
-            <div class="desc" id="pause-note" style="margin-bottom:14px;font-size:13px;color:#6b747c"></div>
-            <div class="pause-list" id="pause-list"></div>
-            <div class="sheet-hints" style="margin-top:16px"><span>D-pad: move</span><span>A: choose</span><span>B: resume</span></div>
+        <div class="wp">
+            <div class="wp-top">
+                <div class="wp-title"><span class="wp-eyebrow">Paused</span><span id="pause-title">Game paused</span></div>
+                <span id="pause-resume"></span>
+            </div>
+            <div class="wp-note" id="pause-note"></div>
+            <div class="wp-bottom">
+                <div class="wp-pads" id="pause-pads"></div>
+                <div class="wp-actions" id="pause-list"></div>
+            </div>
         </div>
     </div>
 
@@ -1271,6 +1318,7 @@
                 padList = data.controllers;
                 updateControllerChip();
                 if (changed && onControllers() && !settingsOpen) renderPage();
+                if (changed && pause.open) renderPause();
             } catch { /* server hiccup: try again next time */ }
         }
         setInterval(refreshControllers, 2000);
@@ -2168,15 +2216,38 @@
         if (isPauseWindow) { document.body.classList.add('pause-window'); document.documentElement.classList.add('pause-window'); }
         const pause = { open: false, i: 0, changed: false, frozen: true, busy: false, title: '' };
         const PAUSE_ITEMS = [['Resume', 'resume'], ['Change controllers', 'players'], ['Connect a controller', 'pair'], ['Restart game', 'restart'], ['Quit to menu', 'quit']];
+        const PAUSE_ICONS = {
+            resume: '<polygon points="6 4 20 12 6 20 6 4"/>',
+            players: '<rect x="2" y="7" width="20" height="11" rx="5.5"/><line x1="7" y1="10.5" x2="7" y2="14.5"/><line x1="5" y1="12.5" x2="9" y2="12.5"/><circle cx="16" cy="11.5" r="1"/><circle cx="18.5" cy="13.8" r="1"/>',
+            pair: '<polyline points="6.5 6.5 17.5 17.5 12 23 12 1 17.5 6.5 6.5 17.5"/>',
+            restart: '<polyline points="23 4 23 10 17 10"/><path d="M20.5 15a9 9 0 1 1-2.1-9.4L23 10"/>',
+            quit: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>'
+        };
 
         function renderPause() {
             document.getElementById('pause-title').textContent = pause.title || 'Game paused';
-            document.getElementById('pause-note').textContent = pause.changed
+            const note = document.getElementById('pause-note');
+            note.textContent = pause.changed
                 ? 'Controllers changed. A running game cannot pick them up: choose Restart game (it starts again on the same save).'
-                : pause.frozen ? 'The game is paused.' : 'The game keeps running behind this menu.';
-            document.getElementById('pause-list').innerHTML = PAUSE_ITEMS.map(([label, act], i) =>
-                `<button type="button" class="btn ${act === 'resume' ? 'primary' : ''} ${i === pause.i ? 'pad-focus' : ''}" data-act="${act}" data-i="${i}" ${pause.busy ? 'disabled' : ''}>${label}</button>`).join('');
-            document.querySelectorAll('#pause-list .btn').forEach(el => el.addEventListener('click', () => { pause.i = Number(el.dataset.i); pausePress(); }));
+                : pause.frozen ? '' : 'The game keeps running behind this menu.';
+            note.style.display = note.textContent ? '' : 'none';
+            note.classList.toggle('warn', !pause.changed);
+
+            const btn = (item, i) => {
+                const [label, act] = item;
+                const cls = act === 'resume' ? 'wp-btn wp-resume' : `wp-btn ${act === 'quit' ? 'danger' : ''}`;
+                const long = act === 'resume' ? 'Resume' : label;
+                return `<button type="button" class="${cls} ${i === pause.i ? 'pad-focus' : ''}" data-act="${act}" data-i="${i}" ${pause.busy ? 'disabled' : ''}><svg viewBox="0 0 24 24">${PAUSE_ICONS[act]}</svg><span>${long}</span></button>`;
+            };
+            document.getElementById('pause-resume').innerHTML = btn(PAUSE_ITEMS[0], 0);
+            document.getElementById('pause-list').innerHTML = PAUSE_ITEMS.slice(1).map((item, k) => btn(item, k + 1)).join('');
+
+            // The four player lights, with the controller each player has
+            document.getElementById('pause-pads').innerHTML = [1, 2, 3, 4].map(n => {
+                const c = padList.find(x => x.player === n);
+                return `<div class="wp-pad ${c ? 'here' : ''}"><div class="art ${c ? '' : 'none'}">${c ? padSvg(c.kind) : '–'}</div><div class="leds">${[1, 2, 3, 4].map(m => `<i class="${m === n ? 'on' : ''}"></i>`).join('')}</div></div>`;
+            }).join('');
+            document.querySelectorAll('#pause-overlay .wp-btn').forEach(el => el.addEventListener('click', () => { pause.i = Number(el.dataset.i); pausePress(); }));
         }
 
         function openPauseMenu(status) {
@@ -2204,8 +2275,12 @@
             if (!quiet) Sfx.play('close');
         }
 
-        function pauseMove(delta) {
-            const next = Math.max(0, Math.min(PAUSE_ITEMS.length - 1, pause.i + delta));
+        // Resume is the button in the top bar; the rest are in a row in the bottom bar
+        function pauseMove(dir) {
+            let next = pause.i;
+            if (dir === 'up') next = 0;
+            else if (dir === 'down') next = pause.i === 0 ? 1 : pause.i;
+            else if (pause.i > 0) next = Math.max(1, Math.min(PAUSE_ITEMS.length - 1, pause.i + (dir === 'right' ? 1 : -1)));
             if (next === pause.i) return;
             pause.i = next;
             Sfx.play('move');
@@ -3182,8 +3257,10 @@
                     if (now - lastInputTime > 180) {
                         if (st.a) { pausePress(); lastInputTime = now + 400; }
                         else if (st.b) { pause.i = 0; pausePress(); lastInputTime = now + 400; }
-                        else if (st.down) { pauseMove(1); lastInputTime = now; }
-                        else if (st.up) { pauseMove(-1); lastInputTime = now; }
+                        else if (st.down) { pauseMove('down'); lastInputTime = now; }
+                        else if (st.up) { pauseMove('up'); lastInputTime = now; }
+                        else if (st.right) { pauseMove('right'); lastInputTime = now; }
+                        else if (st.left) { pauseMove('left'); lastInputTime = now; }
                     }
                 } else if (guide.open) {
                     if (now - lastInputTime > 180) {
@@ -3238,8 +3315,10 @@
             if (pause.open) {
                 if (e.key === 'Escape') { pause.i = 0; pausePress(); }
                 else if (e.key === 'Enter' || e.key === ' ') pausePress();
-                else if (e.key === 'ArrowDown') pauseMove(1);
-                else if (e.key === 'ArrowUp') pauseMove(-1);
+                else if (e.key === 'ArrowDown') pauseMove('down');
+                else if (e.key === 'ArrowUp') pauseMove('up');
+                else if (e.key === 'ArrowRight') pauseMove('right');
+                else if (e.key === 'ArrowLeft') pauseMove('left');
                 return e.preventDefault();
             }
             if (guide.open) {
