@@ -159,7 +159,7 @@ function createBluetooth({ platform = process.platform, execImpl = execFile, spa
         session = child;
         const send = cmd => { try { child.stdin.write(`${cmd}\n`); } catch { /* already gone */ } };
         const names = new Map();
-        let timer = null, pending = null, finished = false;
+        let timer = null, pending = null, finished = false, infoFor = null;
 
         const finish = (phase, message) => {
             if (finished) return;
@@ -222,11 +222,25 @@ function createBluetooth({ platform = process.platform, execImpl = execFile, spa
                 // The answer to `devices`: controllers BlueZ already knows from an earlier scan (it announces those
                 // with property changes, not "[NEW]", so they would never be noticed otherwise)
                 const known = line.match(/^Device\s+((?:[0-9A-F]{2}:){5}[0-9A-F]{2})\s+(.*)$/i);
-                if (known) { names.set(known[1].toUpperCase(), known[2].trim()); continue; }
+                if (known && !known[2].startsWith('(')) {
+                    const addr = known[1].toUpperCase();
+                    names.set(addr, known[2].trim());
+                    // Listed by `devices`: ask whether it is connected or advertising right now (a controller added from
+                    // the system's Bluetooth settings is already here and never announces itself again)
+                    const t = classifyDevice(known[2]);
+                    if (t && wanted.includes(t) && !mine.device && !finished) send(`info ${addr}`);
+                    continue;
+                }
+                if (known) { infoFor = known[1].toUpperCase(); continue; }       // the header of an `info` answer
+                if (infoFor && /^(Connected:\s*yes|RSSI:\s*-?\d+)/i.test(line) && names.has(infoFor)) {
+                    const addr = infoFor; infoFor = null;
+                    found(addr, names.get(addr));
+                    continue;
+                }
                 const ev = parseLine(line);
                 if (!ev) continue;
-                // A known device that is advertising again: it is in range right now
-                if (ev.event === 'prop' && /RSSI:/i.test(ev.text) && names.has(ev.address)) { found(ev.address, names.get(ev.address)); continue; }
+                // Anything a known controller reports means it is in range right now
+                if (ev.event === 'prop' && names.has(ev.address) && /RSSI:|Connected: yes/i.test(ev.text)) { found(ev.address, names.get(ev.address)); continue; }
                 if (ev.event === 'new') { names.set(ev.address, ev.name); found(ev.address, ev.name); }
                 else if (ev.event === 'name') { names.set(ev.address, ev.name); found(ev.address, ev.name); }
             }

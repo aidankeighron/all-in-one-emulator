@@ -542,12 +542,13 @@
         }
         .sel { font: inherit; font-weight: 700; font-size: 14px; color: var(--tx-4a5258); padding: 7px 10px; border: 2px solid var(--wii-edge); border-radius: 10px; background: var(--bg-ffffff); min-width: 0; width: 100%; cursor: pointer; }
         .sel:disabled { opacity: .45; cursor: default; }
-        .dd { position: fixed; z-index: 70; box-sizing: border-box; overflow-y: auto; padding: 5px; background: var(--bg-ffffff); border: 2px solid var(--wii-blue); border-radius: 14px; box-shadow: 0 0 0 3px rgba(58, 180, 242, 0.3), 0 10px 28px rgba(80, 100, 120, 0.4); }
-        .dd-head { padding: 7px 12px 2px; font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--tx-8a9199); }
-        .dd-item { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 7px 12px; border-radius: 9px; font-size: 14px; font-weight: 700; color: var(--tx-4a5258); cursor: pointer; }
-        .dd-item.cur { color: var(--wii-blue-deep); }
+        /* Pick-a-thing lists (player slot, mappings in the players screen, Combine…): glossy white slab, pill rows, blue glow on the choice */
+        .dd { position: fixed; z-index: 70; box-sizing: border-box; overflow-y: auto; padding: 10px; background: linear-gradient(to bottom, var(--bg-ffffff) 0%, var(--bg-f3f6f8) 60%, var(--bg-e4e9ed) 100%); border: 3px solid var(--wii-blue); border-radius: 26px; box-shadow: 0 0 0 4px rgba(58, 180, 242, 0.3), 0 0 26px var(--wii-blue-glow), 0 12px 30px rgba(80, 100, 120, 0.4); }
+        .dd-head { margin: 6px 4px 6px; padding: 0 12px; height: 22px; display: flex; align-items: center; width: fit-content; border-radius: 11px; font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: #fff; background: linear-gradient(to bottom, #5cc6fa, #2c9fe0); }
+        .dd-item { display: flex; justify-content: space-between; gap: 12px; align-items: center; margin: 4px 0; padding: 10px 18px; border-radius: 22px; border: 2px solid var(--wii-edge); background: linear-gradient(to bottom, var(--bg-ffffff), var(--bg-eef2f6)); font-size: 15px; font-weight: 800; color: var(--tx-4a5258); cursor: pointer; transition: transform .12s ease, box-shadow .12s ease; }
+        .dd-item.cur { color: var(--wii-blue-deep); border-color: var(--bd-9bd4f2); }
         .dd-item.cur::after { content: "✓"; font-weight: 800; }
-        .dd-item.on { background: var(--bg-eaf6fd); outline: 2px solid var(--wii-blue); outline-offset: -2px; }
+        .dd-item.on { color: #fff; border-color: #2c9fe0; background: linear-gradient(to bottom, #5cc6fa, #2c9fe0); transform: scale(1.03); box-shadow: 0 0 0 3px rgba(58, 180, 242, 0.35), 0 0 16px var(--wii-blue-glow); }
         .dd-item.off { opacity: .4; cursor: default; }
         .sel.pad-focus, .pl-foot .btn.pad-focus, .mp-actions .btn.pad-focus, .mp-item.pad-focus { outline: 3px solid var(--wii-blue); outline-offset: 2px; box-shadow: 0 0 14px var(--wii-blue-glow); }
         .pl-head, .pl-row { display: grid; grid-template-columns: 124px 1.3fr 1fr 1fr 1fr; gap: 10px; align-items: center; }
@@ -579,16 +580,20 @@
         .pad-card.connect.players-card { border-color: var(--bd-b7dfba); }
         .pm-panel { min-height: 0; }
         .pm-cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
-        .pm-col { min-width: 0; padding: 6px; border: 2px solid var(--wii-edge); border-radius: 14px; max-height: 50vh; overflow-y: auto; }
-        .pm-col.active { border-color: var(--wii-blue); }
-        .pm-title { padding: 4px 8px 6px; font-size: 12px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--wii-blue-deep); }
+        .pm-col { min-width: 0; padding: 12px 10px; border: 2px solid var(--wii-edge); border-radius: 22px; max-height: 46vh; overflow-y: auto; background: linear-gradient(to bottom, var(--bg-ffffff) 0%, var(--bg-f3f6f8) 55%, var(--bg-e4e9ed) 100%); box-shadow: 0 3px 8px rgba(80, 100, 120, 0.15), inset 0 -4px 8px rgba(0, 0, 0, 0.04); transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease; }
+        .pm-col.active { border-color: var(--wii-blue); box-shadow: 0 0 0 3px rgba(58, 180, 242, 0.35), 0 0 22px var(--wii-blue-glow), 0 8px 18px rgba(0, 0, 0, 0.18); }
+        .pm-title { display: flex; justify-content: center; margin-bottom: 6px; }
+        .pm-title .channel-badge { height: 24px; font-size: 12px; padding: 0 16px; }
         .pair-steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
         .pair-list { display: flex; flex-direction: column; gap: 8px; }
         .pair-device { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--bg-ffffff); border: 2px solid var(--wii-edge); border-radius: 12px; padding: 8px 12px; font-weight: 700; }
         .pair-device small { display: block; color: var(--tx-8a9199); font-weight: 600; }
         .guide-box .spinner { display: inline-block; width: 16px; height: 16px; flex: none; }
         .pair-log { font-size: 12px; color: var(--tx-8a9199); max-height: 70px; overflow: hidden; word-break: break-all; }
-        .pair-buttons { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; margin-top: 18px; }
+        .pair-buttons { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 18px; }
+        .pair-buttons .btn { flex: 1 1 0; min-width: 150px; min-height: 58px; white-space: normal; line-height: 1.2; }
+        .pair-foot { display: flex; justify-content: center; margin-top: 14px; }
+        #pair-overlay .panel.guide { width: min(820px, 94vw); }
         .pair-buttons .btn.pad-focus { outline: 3px solid var(--wii-blue); outline-offset: 2px; box-shadow: 0 0 14px var(--wii-blue-glow); }
         #controller-status { cursor: pointer; }
         .pad-card.connect { border: 3px dashed var(--bd-9bd4f2); background: rgba(var(--glass-rgb), 0.55); justify-content: center; text-align: center; cursor: pointer; }
@@ -1152,7 +1157,8 @@
 
     <div class="overlay" id="padmap-overlay" style="z-index:58; align-items:flex-start; padding-top:7vh" onclick="if (event.target === this) closePadMap()">
         <div class="panel pm-panel">
-            <div class="settings-head"><h2>Mappings</h2><span class="desc" id="padmap-sub"></span></div>
+            <div class="wiihead"><div class="eyebrow" style="font-size:12px;font-weight:800;letter-spacing:.14em;text-transform:uppercase" id="padmap-sub">Controller</div>
+            <h2>Mappings</h2></div>
             <div class="pm-cols" id="padmap-cols"></div>
             <div class="row settings-foot">
                 <span class="desc">D-pad: move &nbsp; A: choose &nbsp; B: close</span>
@@ -1202,6 +1208,7 @@
             <h2 id="pair-title" style="margin-top:4px">Connect a controller</h2>
             <div id="pair-body"></div>
             <div class="pair-buttons" id="pair-buttons"></div>
+            <div class="pair-foot" id="pair-foot"></div>
         </div>
     </div>
 
@@ -1318,8 +1325,8 @@
         // laid-out baseline lands exactly there (fonts disagree about where capitals sit inside a line).
         const pillCanvas = document.createElement('canvas').getContext('2d');
         function centerPills() {
-            document.querySelectorAll('.channel-badge:not(.badge-empty), .pill, .slot-tag, .sheet-chip > span:last-child').forEach(el => {
-                const mixed = el.classList.contains('slot-tag') || (el.parentElement && el.parentElement.classList.contains('sheet-chip'));   // these are not set in capitals
+            document.querySelectorAll('.channel-badge:not(.badge-empty), .pill, .slot-tag, .sheet-chip > span:last-child, .pad-hints kbd').forEach(el => {
+                const mixed = el.matches('.slot-tag, .pad-hints kbd') || (el.parentElement && el.parentElement.classList.contains('sheet-chip'));   // these are not set in capitals
                 const text = mixed ? el.textContent.trim() : el.textContent.trim().toUpperCase();
                 if (!text) return;
                 el.style.height = el.style.paddingTop = el.style.paddingBottom = '';
@@ -1328,7 +1335,7 @@
                 const m = pillCanvas.measureText(text);
                 const above = Math.round(m.actualBoundingBoxAscent);
                 const below = Math.max(0, Math.round(m.actualBoundingBoxDescent));
-                const margin = el.classList.contains('pill') ? 6 : el.classList.contains('slot-tag') ? 5 : el.parentElement.classList.contains('sheet-chip') ? 4 : 7;
+                const margin = el.classList.contains('pill') ? 6 : el.classList.contains('slot-tag') ? 5 : el.matches('.pad-hints kbd') ? 7 : el.parentElement.classList.contains('sheet-chip') ? 4 : 7;
                 el.style.height = `${above + below + 2 * margin}px`;
 
                 // Where the baseline is right now: the text box's top plus the font's (rounded) ascent
@@ -1570,6 +1577,7 @@
             chips.push(['LB / RB', 'Change page', null]);
             bar.innerHTML = chips.map(([k, t, act]) => `<span class="chip ${act ? '' : 'dim'}" ${act ? `data-act="${act}"` : ''}><kbd>${k}</kbd>${escapeHtml(t)}</span>`).join('');
             bar.querySelectorAll('.chip[data-act]').forEach(el => el.addEventListener('click', () => padAction(el.dataset.act)));
+            centerPills();
         }
 
         // A list the gamepad can drive (the one the settings dropdowns use) for a choice on this page.
@@ -1659,7 +1667,7 @@
             document.getElementById('padmap-sub').textContent = `${c.name} · Player ${c.slot + 1}`;
             document.getElementById('padmap-cols').innerHTML = cols.map((col, n) => `
                 <div class="pm-col ${n === pm.col ? 'active' : ''}">
-                    <div class="pm-title">${escapeHtml(col.title)}</div>
+                    <div class="pm-title"><span class="channel-badge badge-${col.target}">${escapeHtml(col.title)}</span></div>
                     ${col.items.map((it, i) => `<div class="dd-item ${it.id === col.chosen ? 'cur' : ''} ${n === pm.col && i === pm.idx[n] ? 'on' : ''}" data-c="${n}" data-i="${i}">${escapeHtml(it.label)}</div>`).join('')}
                 </div>`).join('');
             document.querySelectorAll('#padmap-cols .dd-item').forEach(el => el.addEventListener('click', () => {
@@ -1667,6 +1675,7 @@
             }));
             const on = document.querySelector('#padmap-cols .dd-item.on');
             if (on) on.scrollIntoView({ block: 'nearest' });
+            centerPills();
         }
 
         function pmMove(dir) {
@@ -3444,8 +3453,8 @@
                 else add(info.problems.includes('not_installed') ? 'Install and turn on Bluetooth' : 'Turn on Bluetooth', 'setup', true);
                 add('Close (B)', 'close');
             } else {
-                body = `<p>Choose what you want to connect.</p>`;
-                add('Switch Pro Controller / Joy-Con', 'pair-switch', true);
+                body = `<p style="text-align:center">Choose what you want to connect.</p>`;
+                add('Switch Pro Controller or Joy-Con', 'pair-switch', true);
                 add('Wii Remote', 'pair-wiimote');
                 if (pair.helper && pair.helper.supported) add('Use two Joy-Cons as one controller', 'helper-open');
                 if (!info.nintendoDriver) body += `<div class="guide-box off">This system’s Linux kernel (${escapeHtml(info.kernel)}) is older than 5.16, so Switch controllers will not work. Update the system to a newer kernel.</div>`;
@@ -3457,8 +3466,6 @@
                     body += `<h3 style="margin:14px 0 6px">Paired controllers</h3><div class="pair-list">${info.paired.map((d, i) => `<div class="pair-device"><span>${escapeHtml(d.label)}<small>${escapeHtml(d.name)} · ${d.connected ? 'connected' : 'not connected'}</small></span></div>`).join('')}</div>`;
                     info.paired.forEach(d => add(`Forget ${d.label}${info.paired.filter(x => x.label === d.label).length > 1 ? ' ' + d.address.slice(-5) : ''}`, 'forget:' + d.address));
                 }
-                body += `<p style="font-size:13px;color:var(--tx-6b747c)">Who plays with which controller, and what each button does, is set on the Players screen.</p>`;
-                add('Players and mappings', 'players');
                 add('Close (B)', 'close');
             }
             if (pair.notice) body += `<div class="guide-box">${escapeHtml(pair.notice)}</div>`;
@@ -3538,15 +3545,16 @@
             pair.focus = Math.min(pair.focus, Math.max(0, sc.buttons.length - 1));
             document.getElementById('pair-title').textContent = sc.title;
             document.getElementById('pair-body').innerHTML = `<div style="display:flex;flex-direction:column;gap:10px;font-size:15px;line-height:1.55">${sc.body}</div>`;
-            const box = document.getElementById('pair-buttons');
-            box.innerHTML = '';
+            const box = document.getElementById('pair-buttons'), foot = document.getElementById('pair-foot');
+            box.innerHTML = foot.innerHTML = '';
+            // The choices sit in one row; Close (or Back) is on its own line at the bottom
             sc.buttons.forEach((b, i) => {
                 const el = document.createElement('button');
                 el.type = 'button';
                 el.className = `btn ${b.primary ? 'primary' : ''} ${i === pair.focus ? 'pad-focus' : ''}`;
                 el.textContent = b.label;
                 el.addEventListener('click', () => { pair.focus = i; pairPress(); });
-                box.appendChild(el);
+                (['close', 'helper-back'].includes(b.act) ? foot : box).appendChild(el);
             });
         }
 

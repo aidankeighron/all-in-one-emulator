@@ -92,6 +92,27 @@ test('a Joy-Con BlueZ already knows is found when it starts advertising again', 
     assert.match(job.message, /Joy-Con \(L\) connected/);
 });
 
+// A controller added from the system's Bluetooth settings is already there and says nothing more: `info` shows it is in range
+const LISTED = `
+const rl = require('readline').createInterface({ input: process.stdin });
+rl.on('line', l => {
+  const [cmd, addr] = l.trim().split(' ');
+  if (cmd === 'devices') console.log('Device AA:BB:CC:DD:EE:FF Joy-Con (R)\\nDevice 11:22:33:44:55:66 Keyboard');
+  if (cmd === 'info') console.log('Device ' + addr + ' (public)\\n\\tName: Joy-Con (R)\\n\\tPaired: no\\n\\tRSSI: -55');
+  if (cmd === 'pair') setTimeout(() => console.log('Pairing successful'), 20);
+  if (cmd === 'trust') console.log('Changing ' + addr + ' trust succeeded');
+  if (cmd === 'connect') setTimeout(() => console.log('Connection successful'), 20);
+  if (cmd === 'quit') process.exit(0);
+});`;
+
+test('a Joy-Con that is already listed and in range is found without any new event', async () => {
+    const b = bt.createBluetooth({ platform: 'linux', spawnImpl: fakeBluetoothctl(LISTED) });
+    b.startPairing('switch');
+    const job = await waitFor(b);
+    assert.strictEqual(job.phase, 'done', job.message);
+    assert.match(job.message, /Joy-Con \(R\) connected/);
+});
+
 test('a Wii Remote is only found, never paired with the computer', async () => {
     process.env.FAKE_NAME = 'Nintendo RVL-CNT-01';
     const lines = [];
