@@ -7,8 +7,8 @@ next to the menu: lines starting `[SAVES]`, `[PADS]`, `[PAUSE]`, `[LIBRARY]` and
 
 1. Plug in two controllers (two USB, or one USB and one Bluetooth). Open the **Controllers** page (LB from the first page).
    Each shows its own card with LEDs for its player number, in the order the system registered them.
-2. **Players and mappings**: set Player 2 to the second controller in the dropdown (A opens it, up/down choose, A picks).
-   Unplug and replug it: it should stay Player 2.
+2. Select the second controller's card: the hints at the bottom show what its buttons do. **A** -> choose Player 1: the cards swap
+   places and the LEDs follow. **X** -> change its Wii, GameCube or Switch mapping. Unplug and replug it: it should stay where you put it.
 3. Start a Wii or GameCube game: both controllers should work. Check `[PADS] dolphin: configured (Player 1: …, Player 2: …)`.
 4. Start a Switch game: `~/.var/app/io.github.ryubing.Ryujinx/config/Ryujinx/Config.json` should list `Player1` and `Player2`
    in `input_config`, and a `Config.json.emulator-menu.bak` should exist.
@@ -46,7 +46,9 @@ next to the menu: lines starting `[SAVES]`, `[PADS]`, `[PAUSE]`, `[LIBRARY]` and
 Linux needs Bluetooth (the menu offers to install it) and kernel 5.16 or newer for Switch controllers.
 
 - **Switch Pro Controller / Joy-Con:** Controllers page -> **Connect a controller**; hold the sync button; the menu pairs and
-  connects it. It should then appear as a controller card. Joy-Cons show as two controllers.
+  connects it. It should then appear as a controller card. A left and a right Joy-Con show as one **Joy-Con pair**; **Y** splits
+  and combines them. In Dolphin check that both halves work as one pad (`SDL_JOYSTICK_HIDAPI_COMBINE_JOY_CONS = 1` in `Dolphin.ini`), and
+  that the gyro mapping moves the pointer-less remote (needs a Dolphin with SDL motion support).
 - **Wii Remote:** press 1 + 2; the menu sees it; choose **Use as Wii Remote 1**. Start a Wii game and press 1 + 2 again when
   it starts. Do not pair the remote in Ubuntu's own Bluetooth settings: Dolphin cannot use it afterwards.
 - If something fails, copy the terminal lines and the text in the Connect screen.

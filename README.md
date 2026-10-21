@@ -118,8 +118,19 @@ last), and a stick that rests off-centre is learned as its centre after a second
 a second device can't take over the menu.
 
 **Controllers page.** One page to the left of the first games page (**LB** from the games, or the left
-arrow) shows every controller the system can see, which player it is, whether it is USB or Bluetooth,
-and where it will play (GameCube port, Wii Remote slot).
+arrow) shows every controller the system can see in player order (Player 1 first), whether it is USB or
+Bluetooth, and the mapping it has on the Wii, the GameCube and the Switch. Everything about a controller is
+changed here, with the controller itself; the bottom of the screen says what each button does for the
+controller on the selected tile:
+
+| Button | Does |
+|---|---|
+| **A** | Change its player slot: pick Player 1 to 4; whoever was there takes its old place, and each controller keeps the mappings it had |
+| **X** | Change its mapping: one list with the Wii, GameCube and Switch mappings made for this kind of controller (or *Automatic*) |
+| **Y** | Switch controllers only: combine it with another Switch controller (a left and a right Joy-Con are combined by themselves), or split a pair again |
+
+The **Connect a controller** and **Mappings** tiles open the two screens that stay separate: pairing, and the mapping
+editor. (The older **Players and mappings** table is still there from the pause menu's **Change controllers**.)
 
 If the controller does nothing in the menu, check the Controllers page: it lists what the system can see. If
 it is empty, press a button on the controller with the window focused (browsers only expose a controller
@@ -235,32 +246,60 @@ Settings -> Sound & controls.
 
 | Emulator | What is set up |
 |---|---|
-| Dolphin | GameCube ports 1-4 and Wii Remotes 1-4. A gamepad becomes both a GameCube controller and an emulated Wii Remote with Nunchuk (right stick points, left stick is the Nunchuk stick). A connected Wii Remote is set to *Real Wiimote*. With an official GameCube adapter, ports without a gamepad use the adapter. |
-| Ryujinx | Linux: each player's controller is written into Ryujinx's `Config.json` (`input_config`) by its SDL id, keeping your own button layout for that player. Open Ryujinx once first. Windows: a controller is matched to the entry Ryujinx already has for it (set each controller up once with **Open** in Settings; after that the menu keeps it on the right player). |
+| Dolphin | GameCube ports 1-4 and Wii Remotes 1-4. A gamepad becomes both a GameCube controller and an emulated Wii Remote, using the player's mappings (below). A connected Wii Remote is set to *Real Wiimote*. With an official GameCube adapter, ports without a gamepad use the adapter. |
+| Ryujinx | Linux: each player's controller is written into Ryujinx's `Config.json` (`input_config`) by its SDL id. Open Ryujinx once first. Windows: a controller is matched to the entry Ryujinx already has for it (set each controller up once with **Open** in Settings; after that the menu keeps it on the right player). The buttons come from the player's Switch mapping; a layout you made in Ryujinx is left alone until you pick a Switch mapping for that player. |
 
 Players are numbered in the order the system registered the controllers. Existing settings in the files
 are kept; only the controller entries are replaced, and the first time a file is changed the original is
 copied next to it as `<file>.emulator-menu.bak`. Nothing is written when no suitable controller is
 connected, so keyboard setups are left alone.
 
-## Players and mappings
+## Mappings
 
-On the Controllers page, **Players and mappings** sets up everything for Dolphin from inside the menu.
+A mapping says which button on the physical controller does what on the emulated one. Each is made for one **console**
+(Wii, GameCube, Switch) and one **kind of controller**: *Xbox / generic* (anything that is not Nintendo's),
+*Nintendo* (Switch Pro Controller, Joy-Con, a Joy-Con pair) or *official Wii Remote*. A player with **Automatic**
+gets the standard mapping for the kind of controller they have, and the lists on the Controllers page and the editor only
+offer mappings made for that kind.
 
-- **Players:** four players, each with a **controller** (automatic, a particular connected controller, a real
-  Wii Remote, or not playing), a **Wii mapping** and a **GameCube mapping**. Choices are remembered by controller
-  name, so a pad keeps its player when you unplug it and plug it in again. Changes are written to Dolphin
-  immediately (**Sync now** repeats it) and again every time a game starts, so: quit a game, change who has which
-  controller here, start another game, and it is picked up.
-- **Mappings:** each mapping is a small JSON file in `~/.config/all-in-one-emulator/mappings/` (`%APPDATA%` on
-  Windows). **Edit mappings** lists the built-in ones (Wii Remote + Nunchuk, Wii Remote only, sideways, wheel,
-  gyro pointer for Switch pads, Classic Controller, two GameCube layouts). Built-ins are read-only: press
-  **Duplicate to edit**, then change any control with its dropdown, set the extension (Nunchuk, Classic
-  Controller, nothing) and whether the remote is held sideways, and **Save**. Players pick mappings from their own
-  dropdowns, so an Xbox pad can use one mapping with a Nunchuk and another without.
+| | Xbox / generic | Nintendo (Switch Pro, Joy-Con) | Official Wii Remote |
+|---|---|---|---|
+| **GameCube** | GameCube (Xbox / generic) | GameCube (Nintendo): the buttons labelled A, B, X, Y act as A, B, X, Y | none: a Wii Remote only plays Wii |
+| **Wii** | Wii Classic Controller (automatic), or Wii Remote + Nunchuk | Wii Classic Controller (Nintendo), or Wii Remote + Nunchuk + gyro (automatic) | Official Wii Remote: used as it is, nothing to map |
+| **Switch** | Switch (Xbox / generic) | Switch (Nintendo) | none |
+
+The built-in ones have no pointer, shake or tilt (make those yourself); the one exception is the gyro mapping, which
+drives the Wii Remote's motion from a Switch controller's motion sensors (Dolphin has to see them, which it does for a
+Pro Controller or Joy-Con over Bluetooth). It has no pointer either.
+
+- **Mappings screen** (the **Mappings** tile): each mapping is a small JSON file in `~/.config/all-in-one-emulator/mappings/`
+  (`%APPDATA%` on Windows). Built-ins are read-only: **Duplicate to edit**, or **New mapping** to start from the standard
+  one for a console and controller. For your own mappings the **Console** and **Controller** dropdowns choose what it
+  is for, and every input's dropdown then lists what that kind of controller has, named the way its own buttons are
+  labelled (a Nintendo pad's *A* is the right button; an Xbox pad's *A* is the bottom one), with motion sensors and
+  Capture for Nintendo pads only. Wii mappings also choose the extension (Nunchuk, Classic Controller, nothing) and
+  whether the remote is held sideways; Switch mappings choose which stick is which and whether motion is on.
+- **Players:** the *Players and mappings* table (from the pause menu's **Change controllers**) has the same choices with
+  dropdowns: controller, Wii mapping, GameCube mapping, Switch mapping. Choices are remembered by controller
+  name, so a pad keeps its player when you unplug it and plug it in again. Changes are written to the emulators
+  immediately (**Sync now** repeats it) and again every time a game starts.
 - With a gamepad: up/down/left/right move, **A** opens a dropdown, up/down choose in it, **A** picks and **B** cancels; **B** closes the screen.
-- The control and input names were checked against Dolphin's source code. Not verified on a real Dolphin install.
-- Not covered: Ryujinx (see above), and a mapping cannot yet be shared between computers.
+- The control and input names were checked against Dolphin's source code. Not verified on a real Dolphin or Ryujinx install.
+- Not covered: a mapping cannot yet be shared between computers.
+
+## Two Switch controllers as one
+
+Windows (and Bluetooth in general) shows a pair of Joy-Cons as two controllers. The menu puts a left and a right
+Joy-Con together by itself, so they show as one **Joy-Con pair** card, take one player slot and use one mapping.
+**Y** on a Switch controller combines it with any other Switch controller, or splits a pair again (a pair you split
+stays split).
+
+- **Dolphin** does the joining: the menu writes `SDL_JOYSTICK_HIDAPI_COMBINE_JOY_CONS` into the `[SDL_Hints]` section of
+  `Dolphin.ini` and uses the device SDL then reports, `Nintendo Switch Joy-Con (L/R)`. This needs a recent Dolphin
+  (one that has the SDL Hints settings); on an older one the two halves stay separate. For motion the right Joy-Con's
+  sensors are used. Not tested on real Joy-Cons.
+- **Ryujinx** reads one device per player, so a pair is written as its left Joy-Con alone, and the setup message says
+  so. To play Switch games with two Joy-Cons as one in Ryujinx, join them in Windows or with Steam Input or BetterJoy first.
 
 ## Connecting Wii Remotes and Switch controllers
 
@@ -277,8 +316,8 @@ chip at the top right) choose **Connect a controller**.
     Bluetooth access. Press 1 + 2 again when a game starts.
 - **Windows:** Windows owns pairing, so the menu opens its Bluetooth page and lists the steps; the Wii Remote
   count works the same way.
-- Not done through the menu: Ryujinx's own controller mapping (see the table above). Joy-Cons are paired one
-  at a time and appear as two controllers.
+- Joy-Cons are paired one at a time. They appear as two controllers and are combined into one by the menu (see *Two
+  Switch controllers as one*).
 - This was tested against a stand-in for `bluetoothctl`, not real Wii Remotes or Switch controllers.
 
 Things to know:

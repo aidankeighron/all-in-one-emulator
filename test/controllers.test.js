@@ -61,3 +61,57 @@ test('an official GameCube adapter is listed once, as the adapter', () => {
     assert.strictEqual(list[0].adapter, true);
     assert.strictEqual(list[0].kind, 'gamecube');
 });
+
+// ---- two Switch controllers as one
+const joycon = (side, over = {}) => ({
+    id: `js${side === 'L' ? 3 : 4}`, name: `Joy-Con (${side})`, kind: 'switch', label: 'Switch Controller', connection: 'Bluetooth',
+    vendor: '057e', product: side === 'L' ? '2006' : '2007', bus: '0005', version: '0001', js: side === 'L' ? 3 : 4, sdlIndex: 0, nameIndex: 0, pad: true, player: 1, ...over
+});
+const xbox = () => ({ id: 'js0', name: 'Xbox 360 Controller', kind: 'xbox', label: 'Xbox Controller', connection: 'USB', vendor: '045e', product: '028e', js: 0, nameIndex: 0, pad: true, player: 1 });
+
+test('a left and a right Joy-Con are combined into one controller on their own', () => {
+    const out = controllers.combine([xbox(), joycon('R'), joycon('L')]);
+    assert.deepStrictEqual(out.map(c => c.name), ['Xbox 360 Controller', 'Joy-Con pair']);
+    const pair = out[1];
+    assert.ok(pair.combined && pair.pad);
+    assert.strictEqual(pair.kind, 'switch');
+    assert.strictEqual(pair.sdlName, 'Nintendo Switch Joy-Con (L/R)');
+    assert.deepStrictEqual(pair.memberNames, ['Joy-Con (L)', 'Joy-Con (R)'], 'left first, whatever order they were found in');
+    assert.match(controllers.keyOf(pair), /^pad:combo:/);
+    assert.deepStrictEqual(out.map(c => c.player), [1, 2]);
+});
+
+test('two Joy-Cons of the same side, or one on its own, stay as they are', () => {
+    const list = [joycon('L'), joycon('L', { id: 'js5', nameIndex: 1 })];
+    assert.deepStrictEqual(controllers.combine(list), list);
+    const alone = [joycon('R')];
+    assert.deepStrictEqual(controllers.combine(alone), alone);
+});
+
+test('the person can turn automatic combining off, split a pair, or combine any two Switch controllers', () => {
+    const l = joycon('L'), r = joycon('R');
+    assert.strictEqual(controllers.combine([l, r], { auto: false }).length, 2);
+    // a split pair stays split, and other Joy-Cons can still be paired
+    const split = controllers.combine([l, r], { splits: [[controllers.keyOf(r), controllers.keyOf(l)]] });
+    assert.strictEqual(split.length, 2);
+    // by hand: a Pro Controller and a Joy-Con
+    const pro = { ...joycon('L'), id: 'js7', name: 'Nintendo Switch Pro Controller', product: '2009', nameIndex: 0 };
+    const merged = controllers.combine([pro, r], { auto: false, merges: [[controllers.keyOf(pro), controllers.keyOf(r)]] });
+    assert.strictEqual(merged.length, 1);
+    assert.strictEqual(merged[0].sdlName, null, 'only two real Joy-Cons are joined by SDL');
+    // a pair whose half is unplugged is just the other half
+    assert.strictEqual(controllers.combine([r], { auto: false, merges: [[controllers.keyOf(pro), controllers.keyOf(r)]] }).length, 1);
+});
+
+test('detect applies the combining to what it found', () => {
+    const proc = [
+        dev('Nintendo Switch Left Joy-Con', { bus: '0005', vendor: '057e', product: '2006', handlers: 'event6 js1' }),
+        dev('Nintendo Switch Right Joy-Con', { bus: '0005', vendor: '057e', product: '2007', handlers: 'event7 js2' })
+    ].join('\n');
+    const file = require('path').join(require('os').tmpdir(), `proc-${process.pid}.txt`);
+    require('fs').writeFileSync(file, proc);
+    assert.strictEqual(controllers.detect({ platform: 'linux', procFile: file, usbRoot: '/nonexistent' }).length, 2);
+    const merged = controllers.detect({ platform: 'linux', procFile: file, usbRoot: '/nonexistent', merge: { auto: true } });
+    assert.strictEqual(merged.length, 1);
+    assert.strictEqual(merged[0].name, 'Joy-Con pair');
+});

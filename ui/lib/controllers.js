@@ -187,11 +187,91 @@ function report(pads, now = Date.now()) {
     reported = { at: now, pads: Array.isArray(pads) ? pads.slice(0, 16) : [] };
 }
 
-function detect({ platform = process.platform, procFile = '/proc/bus/input/devices', usbRoot, now = Date.now() } = {}) {
-    if (platform === 'win32') return now - reported.at < REPORT_TTL_MS ? fromGamepadApi(reported.pads) : [];
-    let text = '';
-    try { text = fs.readFileSync(procFile, 'utf8'); } catch { /* no input subsystem */ }
-    return build(parseProc(text), readUsbIds(usbRoot));
+// merge: {merges, splits, auto} as kept in config.json (see combine), applied to whatever was found
+function detect({ platform = process.platform, procFile = '/proc/bus/input/devices', usbRoot, now = Date.now(), merge } = {}) {
+    let found;
+    if (platform === 'win32') found = now - reported.at < REPORT_TTL_MS ? fromGamepadApi(reported.pads) : [];
+    else {
+        let text = '';
+        try { text = fs.readFileSync(procFile, 'utf8'); } catch { /* no input subsystem */ }
+        found = build(parseProc(text), readUsbIds(usbRoot));
+    }
+    return merge ? combine(found, merge) : found;
 }
 
-module.exports = { parseProc, classify, build, detect, hasGcAdapter, fromGamepadApi, report, KIND_LABELS, PAD_KINDS };
+// ---------- Two Switch controllers as one ----------
+// Windows (and Bluetooth in general) shows a pair of Joy-Cons as two separate controllers. A pair can be combined so that
+// the menu, the players and the emulators treat the two as one gamepad. Dolphin does the actual joining (it has SDL put the
+// two halves together, which then shows up as one "Nintendo Switch Joy-Con (L/R)" device); Ryujinx can only read one
+// device per player (see lib/inputconfig.js).
+
+const JOYCON_PAIR_SDL_NAME = 'Nintendo Switch Joy-Con (L/R)';
+
+// A controller's lasting identity (its js/event number changes between plugs)
+const keyOf = c => (c.combined ? `pad:combo:${c.memberKeys.map(k => k.replace(/^pad:/, '')).join('+')}` : `pad:${c.vendor || ''}:${c.product || ''}:${c.name}#${c.nameIndex || 0}`);
+
+// 'L' or 'R' for the two halves of a Joy-Con pair; null for anything else
+function joyconSide(c) {
+    if (c.combined || c.kind !== 'switch') return null;
+    if (c.vendor === NINTENDO && c.product === '2006') return 'L';
+    if (c.vendor === NINTENDO && c.product === '2007') return 'R';
+    if (/\(l\)|left joy-?con/i.test(c.name)) return 'L';
+    if (/\(r\)|right joy-?con/i.test(c.name)) return 'R';
+    return null;
+}
+
+// Joins controllers into pairs. merges: [[keyA, keyB], ...] the person asked for; splits: [[keyA, keyB], ...] pairs they
+// separated again; auto: join a left and a right Joy-Con (the first left with the first right, ...) without being asked.
+function combine(list, { merges = [], splits = [], auto = true } = {}) {
+    const byKey = new Map(list.map(c => [keyOf(c), c]));
+    const used = new Set();
+    const pairs = [];
+    const sameSet = (a, b, x, y) => (a === x && b === y) || (a === y && b === x);
+    const isSplit = (a, b) => splits.some(([x, y]) => sameSet(keyOf(a), keyOf(b), x, y));
+    const add = (a, b) => { used.add(a); used.add(b); pairs.push([a, b]); };
+
+    for (const [ka, kb] of merges) {
+        const a = byKey.get(ka), b = byKey.get(kb);
+        if (a && b && a !== b && a.pad && b.pad && !used.has(a) && !used.has(b)) add(a, b);
+    }
+    if (auto) {
+        const left = list.filter(c => joyconSide(c) === 'L' && !used.has(c));
+        for (const l of left) {
+            const r = list.find(c => joyconSide(c) === 'R' && !used.has(c) && !isSplit(l, c));
+            if (r) add(l, r);
+        }
+    }
+    if (!pairs.length) return list;
+
+    const out = [];
+    let nth = 0;
+    for (const c of list) {
+        if (!used.has(c)) { out.push(c); continue; }
+        const pair = pairs.find(([x, y]) => x === c || y === c);
+        if (pair.some(m => list.indexOf(m) < list.indexOf(c))) continue;          // already placed where its partner was
+        const [a, b] = pair;
+        const joycons = joyconSide(a) && joyconSide(b) && joyconSide(a) !== joyconSide(b);
+        const left = joyconSide(b) === 'L' ? b : a;
+        out.push({
+            id: `combo-${a.id}-${b.id}`,
+            name: joycons ? 'Joy-Con pair' : `${a.name} + ${b.name}`,
+            sdlName: joycons ? JOYCON_PAIR_SDL_NAME : null,
+            kind: 'switch',
+            label: 'Switch Controller (combined)',
+            connection: a.connection === b.connection ? a.connection : 'Bluetooth',
+            vendor: NINTENDO, product: joycons ? '2008' : left.product, bus: left.bus, version: left.version,
+            js: left.js, sdlIndex: left.sdlIndex,
+            nameIndex: nth++,
+            xinputIndex: null,
+            pad: true,
+            combined: true,
+            members: [a.id, b.id],
+            memberKeys: [keyOf(a), keyOf(b)],
+            memberNames: [a.name, b.name],
+            player: Math.min(a.player, b.player)
+        });
+    }
+    return out.map((c, i) => ({ ...c, player: i + 1 }));
+}
+
+module.exports = { parseProc, classify, build, detect, hasGcAdapter, fromGamepadApi, report, combine, keyOf, joyconSide, KIND_LABELS, PAD_KINDS, JOYCON_PAIR_SDL_NAME };

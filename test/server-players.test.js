@@ -49,16 +49,80 @@ test('players and mappings are saved, validated and synced to Dolphin through th
         r = await api(port, 'GET', '/api/players');
         assert.strictEqual(r.body.players[1].device, 'real');
 
-        r = await api(port, 'POST', '/api/mappings/duplicate', { id: 'wii-gyro' });
+        r = await api(port, 'POST', '/api/mappings/duplicate', { id: 'wii-nunchuk-gyro' });
         assert.ok(r.body.profile.name.startsWith('Copy of'));
         r = await api(port, 'POST', '/api/mappings/delete', { id: r.body.profile.id });
         assert.strictEqual(r.status, 200);
-        r = await api(port, 'POST', '/api/mappings/delete', { id: 'wii-gyro' });
+        r = await api(port, 'POST', '/api/mappings/delete', { id: 'wii-nunchuk-gyro' });
         assert.strictEqual(r.status, 400);
 
         r = await api(port, 'GET', '/api/mappings');
-        assert.ok(r.body.sources.length > 20 && r.body.controls.wii.length > 20);
+        assert.ok(r.body.sources.wii.generic.length > 20 && r.body.sources.wii.nintendo.length > r.body.sources.wii.generic.length && r.body.controls.wii.length > 20);
+        assert.ok(r.body.controls.switch.length > 10 && r.body.targets.switch && r.body.families.nintendo);
         r = await api(port, 'POST', '/api/players', { players: [] }, { Origin: 'http://evil.example' });
         assert.strictEqual(r.status, 403);
     } finally { srv.close(); }
+});
+
+test('the Controllers page shows controllers in player order, and they can be moved, remapped, combined and split', async () => {
+    const controllers = require('../ui/lib/controllers');
+    const dev = (name, bus, vendor, product, js) => `I: Bus=${bus} Vendor=${vendor} Product=${product} Version=0110\nN: Name="${name}"\nP: Phys=\nS: Sysfs=/x\nU: Uniq=\nH: Handlers=event${js + 10} js${js}\nB: PROP=0\n`;
+    const procFile = path.join(tmp('proc'), 'devices');
+    fs.writeFileSync(procFile, [
+        dev('Logitech G29 Driving Force Racing Wheel', '0003', '046d', 'c24f', 0),
+        dev('Microsoft X-Box 360 pad', '0003', '045e', '028e', 1),
+        dev('Nintendo Switch Left Joy-Con', '0005', '057e', '2006', 2),
+        dev('Nintendo Switch Right Joy-Con', '0005', '057e', '2007', 3)
+    ].join('\n'));
+    const realDetect = controllers.detect;
+    controllers.detect = opts => realDetect({ ...opts, procFile, usbRoot: '/nonexistent' });
+    const { server: srv, port } = await server.start({ port: 0 });
+    try {
+        await api(port, 'POST', '/api/players', { players: [] });
+        let r = await api(port, 'GET', '/api/controllers');
+        assert.deepStrictEqual(r.body.controllers.map(c => [c.name, c.player]), [['Logitech G29 Driving Force Racing Wheel', 1], ['Microsoft X-Box 360 pad', 2], ['Joy-Con pair', 3]]);
+        const [wheel, xbox, pair] = r.body.controllers;
+        assert.strictEqual(pair.maps.wii.id, 'wii-nunchuk-gyro');
+        assert.strictEqual(xbox.maps.sw.id, 'switch-generic');
+        assert.ok(pair.canCombine && !xbox.canCombine);
+
+        // the real pad takes player 1 from the wheel: the page shows it first
+        r = await api(port, 'POST', '/api/players/move', { from: 1, to: 0 });
+        assert.strictEqual(r.status, 200);
+        assert.deepStrictEqual(r.body.controllers.map(c => [c.name, c.player]), [['Microsoft X-Box 360 pad', 1], ['Logitech G29 Driving Force Racing Wheel', 2], ['Joy-Con pair', 3]]);
+        // and it is the same on the next look, and in the Players screen
+        r = await api(port, 'GET', '/api/controllers');
+        assert.strictEqual(r.body.controllers[0].name, 'Microsoft X-Box 360 pad');
+        r = await api(port, 'GET', '/api/players');
+        assert.strictEqual(r.body.slots[0].controller, 'Microsoft X-Box 360 pad');
+        // into an empty player
+        r = await api(port, 'POST', '/api/players/move', { from: 2, to: 3 });
+        assert.strictEqual(r.body.controllers.find(c => c.name === 'Joy-Con pair').player, 4);
+        r = await api(port, 'POST', '/api/players/move', { from: 0, to: 7 });
+        assert.strictEqual(r.status, 400);
+        r = await api(port, 'POST', '/api/players/move', { to: 1 });
+        assert.strictEqual(r.status, 400);
+
+        // a mapping for one player and console, only if it is for that console
+        r = await api(port, 'POST', '/api/players/mapping', { player: 0, target: 'gamecube', id: 'gc-nintendo' });
+        assert.strictEqual(r.body.controllers[0].maps.gc.id, 'gc-nintendo');
+        r = await api(port, 'POST', '/api/players/mapping', { player: 0, target: 'gamecube', id: 'wii-classic' });
+        assert.strictEqual(r.status, 400);
+        r = await api(port, 'POST', '/api/players/mapping', { player: 0, target: 'gamecube', id: 'auto' });
+        assert.strictEqual(r.body.controllers[0].maps.gc.id, 'gc-default');
+
+        // take the Joy-Cons apart, then put the Xbox pad and the right Joy-Con together by hand
+        const members = pair.memberKeys;
+        r = await api(port, 'POST', '/api/controllers/split', { members });
+        assert.strictEqual(r.body.controllers.length, 4);
+        assert.ok(r.body.controllers.every(c => !c.combined));
+        assert.strictEqual(r.body.controllers.find(c => c.name === 'Nintendo Switch Left Joy-Con').player, 4, 'the left half keeps the pair’s player');
+        r = await api(port, 'POST', '/api/controllers/combine', { a: members[0], b: members[1] });
+        assert.strictEqual(r.body.controllers.length, 3);
+        assert.strictEqual(r.body.controllers.find(c => c.name === 'Joy-Con pair').player, 4, 'and the pair keeps it again');
+        r = await api(port, 'POST', '/api/controllers/combine', { a: members[0], b: members[0] });
+        assert.strictEqual(r.status, 400);
+        r = await api(port, 'POST', '/api/controllers/split', { members: ['x'] });
+        assert.strictEqual(r.status, 400);
+    } finally { srv.close(); controllers.detect = realDetect; }
 });

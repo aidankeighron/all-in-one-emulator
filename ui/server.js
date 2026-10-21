@@ -141,11 +141,14 @@ function artworkFor(romsDir) {
 
 const mappings = mappingsLib.createStore(config.mappingsDir);
 
+// What is plugged in now, with any Switch controllers the person put together shown as one
+const detectPads = () => controllers.detect({ platform: runner.platform, merge: config.getJoyconPairs() });
+
 // Writes the controller settings of one emulator (or all installed ones) from what is plugged in now
 function setupControllers(emulatorIds) {
-    const connected = controllers.detect({ platform: runner.platform });
+    const connected = detectPads();
     const results = emulatorIds.map(id => {
-        const result = inputconfig.apply(id, connected, { ...platformCtx, wiiRemotes: config.getWiiRemotes(), players: config.getPlayers(), profiles: mappings });
+        const result = inputconfig.apply(id, connected, { ...platformCtx, wiiRemotes: config.getWiiRemotes(), players: config.getPlayers(), profiles: mappings, joyconsSplit: config.getJoyconPairs().splits.length > 0 });
         console.log(`[PADS] ${id}: ${result.status}${result.message ? ` (${result.message})` : ''}`);
         return result;
     });
@@ -394,18 +397,53 @@ async function handleBluetooth(route, req, res) {
 
 // What the Players screen shows
 function playersView() {
-    const list = controllers.detect({ platform: runner.platform });
+    const list = detectPads();
     const settings = { players: config.getPlayers(), wiiRemotes: config.getWiiRemotes() };
     const view = inputconfig.describe(list, settings, mappings);
     return {
         platform: runner.platform,
         players: settings.players,
         wiiRemotes: settings.wiiRemotes,
-        controllers: list.filter(c => !c.adapter && (c.pad || c.kind === 'wiimote')).map(c => ({ key: playersLib.padKey(c), name: c.name, label: c.label, connection: c.connection, kind: c.kind })),
-        slots: view.slots.map(s => ({ index: s.index, mode: s.mode, controller: s.controller ? s.controller.name : null, missing: s.missing, wii: s.wii.name, gc: s.gc.name })),
+        controllers: list.filter(c => !c.adapter && (c.pad || c.kind === 'wiimote')).map(c => ({ key: playersLib.padKey(c), name: c.name, label: c.label, connection: c.connection, kind: c.kind, family: mappingsLib.familyOf(c) })),
+        slots: view.slots.map(s => ({ index: s.index, mode: s.mode, controller: s.controller ? s.controller.name : null, missing: s.missing, family: s.family, wii: s.wii.name, gc: s.gc.name, sw: s.sw.name, auto: s.auto })),
         adapter: list.some(c => c.adapter),
-        profiles: mappings.list().map(p => ({ id: p.id, name: p.name, target: p.target, builtin: p.builtin, description: p.description })),
+        profiles: mappings.list().map(p => ({ id: p.id, name: p.name, target: p.target, family: p.family, builtin: p.builtin, description: p.description })),
         synced: lastSetup.find(r => r.emulator === 'dolphin') || null
+    };
+}
+
+// The Controllers page: every controller in player order (player 1 first, then the ones nobody is using), with the
+// mapping each one has for each console
+function controllersView() {
+    const list = detectPads();
+    const view = inputconfig.describe(list, { players: config.getPlayers(), wiiRemotes: config.getWiiRemotes() }, mappings);
+    const slotOf = id => (view.playerOf[id] ? view.playerOf[id] - 1 : null);
+    // what the player picked for each console ('auto' or a mapping id) and what automatic means for this controller
+    const choicesOf = s => (s ? { choice: { wii: s.request.wii, gc: s.request.gc, sw: s.request.sw }, auto: s.auto } : { choice: null, auto: null });
+    const mapOf = s => ({ wii: { id: s.wii.id, name: s.wii.name }, gc: { id: s.gc.id, name: s.gc.name }, sw: { id: s.sw.id, name: s.sw.name } });
+    const shown = list.map(c => {
+        const slot = slotOf(c.id);
+        const s = slot === null ? null : view.slots[slot];
+        const family = mappingsLib.familyOf(c);
+        return {
+            ...c, key: playersLib.padKey(c), roles: view.roles[c.id], family,
+            slot, player: slot === null ? null : slot + 1, maps: s ? mapOf(s) : null, ...choicesOf(s),
+            canCombine: c.pad && !c.adapter && c.kind === 'switch'
+        };
+    });
+    // Real Wii Remotes a player is set to use but that are not connected yet: Dolphin connects them itself
+    const waiting = view.waiting.map(w => {
+        const s = view.slots[w.player - 1];
+        return { id: w.id, name: 'Wii Remote', kind: 'wiimote', label: 'Wii Remote', family: 'wiimote', connection: 'Bluetooth', virtual: true, pad: false, slot: w.player - 1, player: w.player, roles: w.roles, maps: mapOf(s), ...choicesOf(s), key: 'real' };
+    });
+    const ordered = [...shown, ...waiting].sort((a, b) => (a.slot ?? 99) - (b.slot ?? 99));
+    return {
+        platform: runner.platform,
+        controllers: ordered,
+        slots: view.slots.map(s => ({ index: s.index, mode: s.mode, controller: s.controller ? s.controller.name : (s.mode === 'real' ? 'Wii Remote' : null) })),
+        profiles: mappings.list().map(p => ({ id: p.id, name: p.name, target: p.target, family: p.family, builtin: p.builtin })),
+        autoSetup: config.getAutoControllers(),
+        setup: lastSetup
     };
 }
 
@@ -431,6 +469,65 @@ async function handlePlayers(route, req, res) {
             await syncNow();
             return sendJson(res, 200, playersView()), true;
         }
+        if (route === 'POST /api/players/move') {
+            // A controller (or a player's Wii Remote) moves to another player; whoever was there takes its old place
+            const body = await readJson(req);
+            const to = Number(body.to);
+            const { slots } = inputconfig.describe(detectPads(), { players: config.getPlayers(), wiiRemotes: config.getWiiRemotes() }, mappings);
+            if (!Number.isInteger(to) || to < 0 || to >= playersLib.PLAYERS) return sendJson(res, 400, { error: 'bad_player', message: 'Choose player 1 to 4' }), true;
+            if (body.from !== undefined && body.from !== null) {
+                const from = Number(body.from);
+                if (!Number.isInteger(from) || from < 0 || from >= playersLib.PLAYERS) return sendJson(res, 400, { error: 'bad_player', message: 'Choose player 1 to 4' }), true;
+                config.setPlayers(playersLib.swap(config.getPlayers(), slots, from, to));
+            } else if (typeof body.key === 'string' && body.key.startsWith('pad:')) {
+                config.setPlayers(playersLib.place(config.getPlayers(), slots, body.key, to));
+            } else return sendJson(res, 400, { error: 'bad_move', message: 'Say which controller to move' }), true;
+            await syncNow();
+            return sendJson(res, 200, controllersView()), true;
+        }
+        if (route === 'POST /api/players/mapping') {
+            // One player's mapping for one console, chosen from the Controllers page
+            const body = await readJson(req);
+            const field = { wii: 'wii', gamecube: 'gc', switch: 'sw' }[body.target];
+            const player = Number(body.player);
+            if (!field || !Number.isInteger(player) || player < 0 || player >= playersLib.PLAYERS) return sendJson(res, 400, { error: 'bad_mapping', message: 'Choose a player and a console' }), true;
+            if (body.id !== 'auto') {
+                const profile = mappings.get(body.id);
+                if (!profile || profile.target !== body.target) return sendJson(res, 400, { error: 'bad_mapping', message: 'That mapping is not for this console' }), true;
+            }
+            const list = config.getPlayers();
+            list[player] = { ...list[player], [field]: body.id };
+            config.setPlayers(list);
+            await syncNow();
+            return sendJson(res, 200, controllersView()), true;
+        }
+        if (route === 'POST /api/controllers/combine' || route === 'POST /api/controllers/split') {
+            // Two Switch controllers as one gamepad (or back to two)
+            const body = await readJson(req);
+            const now = config.getJoyconPairs();
+            const same = (p, a, b) => (p[0] === a && p[1] === b) || (p[0] === b && p[1] === a);
+            const before = detectPads();
+            if (route.endsWith('/combine')) {
+                if (typeof body.a !== 'string' || typeof body.b !== 'string' || body.a === body.b) return sendJson(res, 400, { error: 'bad_pair', message: 'Choose two different controllers' }), true;
+                const touches = p => p.includes(body.a) || p.includes(body.b);
+                config.setJoyconPairs({ merges: [...now.merges.filter(p => !touches(p)), [body.a, body.b]], splits: now.splits.filter(p => !same(p, body.a, body.b)) });
+                // the player that had either of them keeps the pair
+                const pair = detectPads().find(c => c.combined && c.memberKeys.includes(body.a) && c.memberKeys.includes(body.b));
+                if (pair) config.setPlayers(playersLib.repin(config.getPlayers(), [body.a, body.b], playersLib.padKey(pair)));
+            } else {
+                const members = Array.isArray(body.members) ? body.members : [];
+                if (members.length !== 2 || members.some(m => typeof m !== 'string')) return sendJson(res, 400, { error: 'bad_pair', message: 'Say which controller to split' }), true;
+                const [a, b] = members;
+                // A pair made by hand is forgotten; one the menu made by itself is remembered as taken apart
+                const made = now.merges.some(p => same(p, a, b));
+                config.setJoyconPairs({ merges: now.merges.filter(p => !same(p, a, b)), splits: made ? now.splits : [...now.splits.filter(p => !same(p, a, b)), [a, b]] });
+                // the player that had the pair keeps its first half
+                const pair = before.find(c => c.combined && c.memberKeys.includes(a) && c.memberKeys.includes(b));
+                if (pair) config.setPlayers(playersLib.repin(config.getPlayers(), [playersLib.padKey(pair)], a));
+            }
+            await syncNow();
+            return sendJson(res, 200, controllersView()), true;
+        }
         if (route === 'POST /api/players/add-real') {
             // "Use this Wii Remote": the first player who is not already using a gamepad or remote gets it
             const list = config.getPlayers();
@@ -442,7 +539,9 @@ async function handlePlayers(route, req, res) {
             return sendJson(res, 200, { player: free + 1 }), true;
         }
         if (route === 'GET /api/mappings') {
-            return sendJson(res, 200, { profiles: mappings.list(), controls: mappingsLib.CONTROLS, settings: mappingsLib.SETTINGS, sources: mappingsLib.SOURCES, extensions: mappingsLib.EXTENSIONS, folder: config.mappingsDir }), true;
+            // The inputs a mapping can use depend on the console and on the kind of controller it is for
+            const sources = Object.fromEntries(Object.keys(mappingsLib.TARGETS).map(t => [t, Object.fromEntries(['generic', 'nintendo'].map(f => [f, mappingsLib.sourcesFor(f, t)]))]));
+            return sendJson(res, 200, { profiles: mappings.list(), controls: mappingsLib.CONTROLS, settings: mappingsLib.SETTINGS, settingDefs: mappingsLib.SETTING_DEFS, sources, targets: mappingsLib.TARGETS, families: mappingsLib.FAMILIES, extensions: mappingsLib.EXTENSIONS, folder: config.mappingsDir }), true;
         }
         if (route === 'POST /api/mappings') {
             const saved = mappings.save(await readJson(req));
@@ -638,19 +737,8 @@ function createServer(onGameState) {
                     controllers.report((await readJson(req)).pads);      // Windows: the window says which gamepads it sees
                     return sendJson(res, 200, { ok: true });
                 }
-                if (route === 'GET /api/controllers') {
-                    const list = controllers.detect({ platform: runner.platform });
-                    const view = inputconfig.describe(list, { players: config.getPlayers(), wiiRemotes: config.getWiiRemotes() }, mappings);
-                    // Real Wii Remotes a player is set to use but that are not connected yet: Dolphin connects them itself
-                    const waiting = view.waiting.map(w => ({ id: w.id, name: 'Wii Remote', kind: 'wiimote', label: 'Wii Remote', connection: 'Bluetooth', virtual: true, pad: false, player: w.player, roles: w.roles }));
-                    return sendJson(res, 200, {
-                        platform: runner.platform,
-                        controllers: [...list.map(c => ({ ...c, key: playersLib.padKey(c), roles: view.roles[c.id] })), ...waiting],
-                        autoSetup: config.getAutoControllers(),
-                        setup: lastSetup
-                    });
-                }
-                if (url.pathname.startsWith('/api/players') || url.pathname.startsWith('/api/mappings')) {
+                if (route === 'GET /api/controllers') return sendJson(res, 200, controllersView());
+                if (url.pathname.startsWith('/api/players') || url.pathname.startsWith('/api/mappings') || /^\/api\/controllers\/(combine|split)$/.test(url.pathname)) {
                     if (await handlePlayers(route, req, res)) return;
                 }
                 if (route === 'POST /api/controllers/apply') {

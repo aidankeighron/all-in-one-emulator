@@ -98,6 +98,22 @@ function setPlayers(players) {
     save({ ...load(), players: require('./players').normalize(players) });
 }
 
+// Switch controllers the person has put together (or taken apart again), see controllers.combine.
+// Pairs are lists of two controller keys.
+function pairList(list) {
+    return (Array.isArray(list) ? list : []).filter(p => Array.isArray(p) && p.length === 2 && p.every(k => typeof k === 'string' && k.length > 0 && k.length <= 450)).slice(0, 16).map(p => [p[0], p[1]]);
+}
+
+function getJoyconPairs() {
+    const cfg = load().joyconPairs || {};
+    return { merges: pairList(cfg.merges), splits: pairList(cfg.splits), auto: cfg.auto !== false };
+}
+
+function setJoyconPairs(next) {
+    const now = getJoyconPairs();
+    save({ ...load(), joyconPairs: { merges: pairList(next.merges ?? now.merges), splits: pairList(next.splits ?? now.splits), auto: typeof next.auto === 'boolean' ? next.auto : now.auto } });
+}
+
 const clamp01 = (v, fallback) => (typeof v === 'number' && v >= 0 && v <= 1 ? v : fallback);
 
 function getSound() {
@@ -196,4 +212,4 @@ const mappingsDir = path.join(path.dirname(configFile), 'mappings');
 const artworkDir = path.join(path.dirname(configFile), 'artwork');
 const soundsDir = process.env.SOUNDS_DIR || path.join(path.dirname(configFile), 'sounds');
 
-module.exports = { getRomsDir, setRomsDir, getAutoControllers, setAutoControllers, getWiiRemotes, setWiiRemotes, getTheme, setTheme, THEMES, getPauseHold, setPauseHold, PAUSE_HOLD_STEPS, getFavorites, setFavorite, getPlayers, setPlayers, getSound, setSound, getCloud, getCloudToken, getLibrary, setLibrary, libraryCacheFile, getEmulatorPaths, getEmulatorUrls, setEmulatorPath, emulatorsDir, configFile, mappingsDir, artworkDir, soundsDir };
+module.exports = { getRomsDir, setRomsDir, getAutoControllers, setAutoControllers, getWiiRemotes, setWiiRemotes, getTheme, setTheme, THEMES, getPauseHold, setPauseHold, PAUSE_HOLD_STEPS, getFavorites, setFavorite, getPlayers, setPlayers, getJoyconPairs, setJoyconPairs, getSound, setSound, getCloud, getCloudToken, getLibrary, setLibrary, libraryCacheFile, getEmulatorPaths, getEmulatorUrls, setEmulatorPath, emulatorsDir, configFile, mappingsDir, artworkDir, soundsDir };

@@ -55,7 +55,8 @@ test('Dolphin: gamepad becomes GameCube port 1 and an emulated Wii Remote with N
 
     const wm = Ini.read(path.join(dir, 'WiimoteNew.ini'));
     assert.strictEqual(wm.get('Wiimote1', 'Source'), '1');
-    assert.strictEqual(wm.get('Wiimote1', 'Extension'), 'Nunchuk');
+    assert.strictEqual(wm.get('Wiimote1', 'Extension'), 'Classic', 'an Xbox-style pad is a Classic Controller unless told otherwise');
+    assert.strictEqual(wm.get('Wiimote1', 'Classic/Buttons/A'), '`Button A`');
     assert.strictEqual(wm.get('Wiimote2', 'Source'), '0');
 });
 
@@ -92,8 +93,9 @@ test('Ryujinx is skipped until it has been opened once', () => {
 
 test('describe says where each controller plays', () => {
     const view = inputconfig.describe([pad(), wiimote(), adapter], {});
-    assert.deepStrictEqual(view.roles.js0, ['Player 1', 'Wii: Wii Remote + Nunchuk', 'GameCube: GameCube controller']);
-    assert.deepStrictEqual(view.roles.js1, ['Player 2', 'Wii Remote (real)']);
+    assert.deepStrictEqual(view.roles.js0, ['Player 1', 'Wii: Wii Classic Controller (Xbox / generic)', 'GameCube: GameCube (Xbox / generic)', 'Switch: Switch (Xbox / generic)']);
+    assert.deepStrictEqual(view.roles.js1, ['Player 2', 'Wii: Official Wii Remote']);
+    assert.deepStrictEqual(view.playerOf, { js0: 1, js1: 2 });
     assert.deepStrictEqual(view.waiting, []);
 });
 
@@ -140,4 +142,79 @@ test('Ryujinx on Windows: a pad Ryujinx already knows is put on the right player
     assert.strictEqual(out[0].right_joycon.button_a, 'B', 'the person’s layout is kept');
     const stranger = { ...known, name: 'Other pad', vendor: '1234', product: '5678' };
     assert.strictEqual(inputconfig.apply('ryujinx', [stranger], { home, platform: 'win32', env }).status, 'skipped');
+});
+
+test('Dolphin: a Joy-Con pair is one device, motion comes from its right half, and SDL is told to join them', () => {
+    const controllers = require('../ui/lib/controllers');
+    const j = (side, n) => ({ id: `js${n}`, name: `Joy-Con (${side})`, kind: 'switch', vendor: '057e', product: side === 'L' ? '2006' : '2007', bus: '0005', version: '0001', js: n, sdlIndex: n, nameIndex: 0, pad: true, connection: 'Bluetooth', player: n });
+    const pair = controllers.combine([j('L', 0), j('R', 1)]);
+    const home = tmpHome();
+    const result = inputconfig.apply('dolphin', pair, { home });
+    assert.strictEqual(result.status, 'configured');
+    const dir = dolphinDir(home);
+    const wm = Ini.read(path.join(dir, 'WiimoteNew.ini'));
+    assert.strictEqual(wm.get('Wiimote1', 'Device'), 'SDL/0/Nintendo Switch Joy-Con (L/R)');
+    assert.strictEqual(wm.get('Wiimote1', 'IMUGyroscope/Pitch Up'), '`Gyro R Pitch Up`', 'a Nintendo pad gets the gyro mapping unless told otherwise');
+    assert.strictEqual(wm.get('Wiimote1', 'Extension'), 'Nunchuk');
+    assert.strictEqual(wm.get('Wiimote1', 'Buttons/A'), '`Button B`');
+    const gc = Ini.read(path.join(dir, 'GCPadNew.ini'));
+    assert.strictEqual(gc.get('GCPad1', 'Device'), 'SDL/0/Nintendo Switch Joy-Con (L/R)');
+    assert.strictEqual(gc.get('GCPad1', 'Buttons/A'), '`Button B`');
+    assert.strictEqual(Ini.read(path.join(dir, 'Dolphin.ini')).get('SDL_Hints', 'SDL_JOYSTICK_HIDAPI_COMBINE_JOY_CONS'), '1');
+
+    // taken apart on purpose: SDL is told not to join them
+    const apart = tmpHome();
+    inputconfig.apply('dolphin', [j('L', 0), j('R', 1)], { home: apart, joyconsSplit: true });
+    assert.strictEqual(Ini.read(path.join(dolphinDir(apart), 'Dolphin.ini')).get('SDL_Hints', 'SDL_JOYSTICK_HIDAPI_COMBINE_JOY_CONS'), '0');
+    // and left alone when nobody asked
+    const plain = tmpHome();
+    inputconfig.apply('dolphin', [pad()], { home: plain });
+    assert.strictEqual(Ini.read(path.join(dolphinDir(plain), 'Dolphin.ini')).get('SDL_Hints', 'SDL_JOYSTICK_HIDAPI_COMBINE_JOY_CONS'), undefined);
+});
+
+test('Ryujinx: the Switch mapping is written, a layout made in Ryujinx is kept until one is chosen, a Joy-Con keeps its type', () => {
+    const mappings = require('../ui/lib/mappings');
+    const players = require('../ui/lib/players');
+    const profiles = mappings.createStore(tmpHome());
+    const home = tmpHome();
+    const dir = path.join(home, '.var/app/io.github.ryubing.Ryujinx/config/Ryujinx');
+    fs.mkdirSync(dir, { recursive: true });
+    const write = input_config => fs.writeFileSync(path.join(dir, 'Config.json'), JSON.stringify({ version: 70, input_config }));
+    const read = () => JSON.parse(fs.readFileSync(path.join(dir, 'Config.json'), 'utf8')).input_config;
+    const pro = pad({ name: 'Nintendo Switch Pro Controller', kind: 'switch', vendor: '057e', product: '2009', bus: '0005', version: '0001' });
+
+    write([]);
+    inputconfig.apply('ryujinx', [pro], { home, platform: 'linux', profiles });
+    assert.strictEqual(read()[0].right_joycon.button_a, 'B', 'a Nintendo pad is mapped by the labels on it');
+    assert.strictEqual(read()[0].left_joycon.button_minus, 'Back');
+
+    const mine = read();
+    mine[0].right_joycon.button_a = 'Y';
+    write(mine);
+    inputconfig.apply('ryujinx', [pro], { home, platform: 'linux', profiles });
+    assert.strictEqual(read()[0].right_joycon.button_a, 'Y', 'the layout made in Ryujinx is kept on automatic');
+    inputconfig.apply('ryujinx', [pro], { home, platform: 'linux', profiles, players: [{ sw: 'switch-generic' }] });
+    assert.strictEqual(read()[0].right_joycon.button_a, 'A', 'a mapping chosen for the player is written');
+
+    // Ryujinx writes Minus and Plus on its newer versions: keep spelling them that way
+    const newer = read();
+    newer[0].left_joycon.button_minus = 'Minus';
+    write(newer);
+    inputconfig.apply('ryujinx', [pro], { home, platform: 'linux', profiles, players: [{ sw: 'switch-generic' }] });
+    assert.strictEqual(read()[0].left_joycon.button_minus, 'Minus');
+    assert.strictEqual(read()[0].right_joycon.button_plus, 'Plus');
+
+    // a lone Joy-Con
+    write([]);
+    const jc = { ...pro, name: 'Joy-Con (R)', product: '2007' };
+    inputconfig.apply('ryujinx', [jc], { home, platform: 'linux', profiles });
+    assert.strictEqual(read()[0].controller_type, 'JoyconRight');
+
+    // a pair is read as its left half, and the setup says so
+    write([]);
+    const controllers = require('../ui/lib/controllers');
+    const l = { ...pro, id: 'js2', name: 'Joy-Con (L)', product: '2006', js: 2 }, r = { ...pro, id: 'js3', name: 'Joy-Con (R)', product: '2007', js: 3 };
+    const res = inputconfig.apply('ryujinx', controllers.combine([l, r]), { home, platform: 'linux', profiles });
+    assert.match(res.message, /Joy-Con pair is read as Joy-Con \(L\) alone/);
+    assert.strictEqual(read().length, 1);
 });

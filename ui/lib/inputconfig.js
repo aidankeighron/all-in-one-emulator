@@ -12,6 +12,7 @@ const { Ini, save } = require('./ini');
 const adapters = require('./saves/adapters');
 const mappings = require('./mappings');
 const playersLib = require('./players');
+const controllersLib = require('./controllers');
 
 // Dolphin SIDevice values
 const SI_NONE = 0;
@@ -40,25 +41,27 @@ function slotsFor(controllers, settings = {}, store = mappings.createStore('')) 
     return playersLib.resolve(controllers, settings, id => store.get(id));
 }
 
-// For the controllers page: where each controller will play, as short phrases, plus the real Wii Remotes
-// that are set up but not connected (Dolphin connects those itself when a game starts)
+// For the controllers page: where each controller will play, as short phrases, which player each one is, and the real Wii
+// Remotes that are set up but not connected (Dolphin connects those itself when a game starts)
 function describe(controllers, settings = {}, store) {
     const slots = slotsFor(controllers, settings, store);
     const roles = {};
+    const playerOf = {};
     const waiting = [];
     for (const c of controllers) roles[c.id] = c.adapter ? ['GameCube: the port each controller is plugged into'] : [];
     for (const s of slots) {
         const n = s.index + 1;
         if (s.mode === 'pad') {
-            roles[s.controller.id] = [`Player ${n}`, `Wii: ${s.wii.name}`, `GameCube: ${s.gc.name}`];
+            roles[s.controller.id] = [`Player ${n}`, `Wii: ${s.wii.name}`, `GameCube: ${s.gc.name}`, `Switch: ${s.sw.name}`];
+            playerOf[s.controller.id] = n;
         } else if (s.mode === 'real') {
             const seen = controllers.find(c => c.kind === 'wiimote' && !roles[c.id].length);
-            if (seen) roles[seen.id] = [`Player ${n}`, 'Wii Remote (real)'];
+            if (seen) { roles[seen.id] = [`Player ${n}`, `Wii: ${s.wii.name}`]; playerOf[seen.id] = n; }
             else waiting.push({ id: `real-wiimote-${n}`, player: n, roles: [`Player ${n}`, 'Real Wii Remote', 'Connects when a game starts: press 1 + 2'] });
         }
     }
     for (const c of controllers) if (!c.adapter && !roles[c.id].length) roles[c.id] = ['Not used by a player'];
-    return { slots, roles, waiting };
+    return { slots, roles, playerOf, waiting };
 }
 
 // ---------- Dolphin ----------
@@ -66,10 +69,13 @@ function describe(controllers, settings = {}, store) {
 // Xbox pads on Windows are reached through XInput; everything else through SDL
 function dolphinDevice(c, platform) {
     if (platform === 'win32' && c.xinputIndex !== null && c.xinputIndex !== undefined) return `XInput/${c.xinputIndex}/Gamepad`;
-    return `SDL/${c.nameIndex}/${c.name}`;
+    return `SDL/${c.nameIndex}/${c.sdlName || c.name}`;
 }
 
-function writeDolphin(controllers, { home, platform, env, exePath, wiiRemotes = 0, players, profiles }) {
+// Dolphin's SDL puts the two halves of a Joy-Con pair together only when told to (a recent Dolphin; older ones ignore the setting)
+const JOYCON_HINT = ['SDL_Hints', 'SDL_JOYSTICK_HIDAPI_COMBINE_JOY_CONS'];
+
+function writeDolphin(controllers, { home, platform, env, exePath, wiiRemotes = 0, players, profiles, joyconsSplit = false }) {
     const adapter = controllers.some(c => c.adapter);
     const slots = slotsFor(controllers, { players, wiiRemotes }, profiles);
     const anyone = slots.some(s => s.mode === 'pad' || s.mode === 'real');
@@ -88,8 +94,9 @@ function writeDolphin(controllers, { home, platform, env, exePath, wiiRemotes = 
         if (s.mode === 'pad') {
             const device = dolphinDevice(s.controller, platform);
             main.set('Core', `SIDevice${i}`, String(SI_GC_CONTROLLER));
-            gc.replaceSection(`GCPad${i + 1}`, mappings.dolphinSection(s.gc, device));
-            wm.replaceSection(`Wiimote${i + 1}`, mappings.dolphinSection(s.wii, device));
+            const pair = !!s.controller.combined;
+            gc.replaceSection(`GCPad${i + 1}`, mappings.dolphinSection(s.gc, device, { pair }));
+            wm.replaceSection(`Wiimote${i + 1}`, mappings.dolphinSection(s.wii, device, { pair }));
             done.push(`Player ${i + 1}: ${s.controller.name} (${s.wii.name})`);
         } else {
             if (touchPorts) main.set('Core', `SIDevice${i}`, String(adapter ? SI_GC_ADAPTER : SI_NONE));
@@ -102,6 +109,8 @@ function writeDolphin(controllers, { home, platform, env, exePath, wiiRemotes = 
         }
     }
     if (slots.some(s => s.mode === 'real')) main.set('Core', 'WiimoteContinuousScanning', 'True');
+    if (slots.some(s => s.controller && s.controller.combined)) main.set(JOYCON_HINT[0], JOYCON_HINT[1], '1');
+    else if (joyconsSplit) main.set(JOYCON_HINT[0], JOYCON_HINT[1], '0');
     if (adapter) done.push('GameCube adapter');
 
     const changed = [save(path.join(dir, 'Dolphin.ini'), main), save(path.join(dir, 'GCPadNew.ini'), gc), save(path.join(dir, 'WiimoteNew.ini'), wm)];
@@ -158,21 +167,41 @@ function writeRyujinx(controllers, { home, platform, env, exePath, players, prof
     const config = JSON.parse(original);
     const old = Array.isArray(config.input_config) ? config.input_config : [];
     const pads = controllers.filter(c => c.js !== null && c.js !== undefined);
-    const made = [], unknown = [];
+    const made = [], unknown = [], notes = [];
+    // Ryujinx's own names for Minus and Plus: whichever the person's own entries already use, since the two spellings
+    // belong to different versions of it
+    const spelling = old.some(e => e.left_joycon && e.left_joycon.button_minus === 'Minus') ? { Back: 'Minus', Start: 'Plus' } : {};
     for (const s of slots) {
         const index = `Player${s.index + 1}`;
+        // A pair is looked for under its left half: Ryujinx reads one device per player
+        const c = s.controller.combined ? { ...s.controller, name: s.controller.memberNames[0] } : s.controller;
+        if (s.controller.combined) notes.push(`${s.controller.name} is read as ${s.controller.memberNames[0]} alone by Ryujinx: it takes one device per player`);
         let id, template;
         if (win) {
-            const known = knownEntry(s.controller, old);
+            const known = knownEntry(c, old);
             if (!known) { unknown.push(s.controller.name); continue; }
             id = known.id; template = known;
         } else {
-            id = ryujinxId(s.controller, pads);
+            id = ryujinxId(c, pads);
             template = old.find(e => e.player_index === index) || old.find(e => e.backend === 'GamepadSDL2') || RYUJINX_PAD;
         }
         // Keep the person's own button layout for this player when there is one
         const mine = old.find(e => e.player_index === index && e.id === id) || template;
-        made.push({ ...JSON.parse(JSON.stringify(mine)), backend: 'GamepadSDL2', id, name: win ? mine.name : `${s.controller.name} (${id.split('-')[0]})`, player_index: index });
+        const entry = { ...JSON.parse(JSON.stringify(mine)), backend: 'GamepadSDL2', id, name: win ? mine.name : `${c.name} (${id.split('-')[0]})`, player_index: index };
+        // The player's Switch mapping: buttons, which stick is which, motion. A layout the person already made in Ryujinx
+        // is left alone until they pick a Switch mapping for this player.
+        const hasOwn = win || old.some(e => e.player_index === index && e.id === id);
+        if (!(s.request.sw === 'auto' && hasOwn)) {
+            const patch = mappings.ryujinxPatch(s.sw);
+            for (const group of Object.keys(patch)) {
+                const fields = group === 'motion' ? patch[group] : Object.fromEntries(Object.entries(patch[group]).map(([k, v]) => [k, spelling[v] || v]));
+                entry[group] = { ...(entry[group] || {}), ...fields };
+            }
+        }
+        // A single Joy-Con is a Joy-Con to Ryujinx too; anything else keeps the layout it had
+        const side = controllersLib.joyconSide(c);
+        if (side) entry.controller_type = side === 'L' ? 'JoyconLeft' : 'JoyconRight';
+        made.push(entry);
     }
     if (!made.length) return { status: 'skipped', message: `Set ${unknown[0]} up once in Ryujinx (Settings → Open → Input); the menu then keeps it on the right player` };
     const taken = new Set(made.map(e => e.player_index));
@@ -181,7 +210,7 @@ function writeRyujinx(controllers, { home, platform, env, exePath, players, prof
         .sort((a, b) => a.player_index.localeCompare(b.player_index));
     config.input_config = next;
     const text = JSON.stringify(config, null, 2);
-    const note = made.map(e => `${e.player_index}: ${e.name}`).join(', ') + (unknown.length ? ` (${unknown.join(', ')} needs a one-time setup in Ryujinx)` : '');
+    const note = made.map(e => `${e.player_index}: ${e.name}`).join(', ') + (unknown.length ? ` (${unknown.join(', ')} needs a one-time setup in Ryujinx)` : '') + (notes.length ? ` (${notes.join('; ')})` : '');
     if (text === original.replace(/\r\n/g, '\n').trimEnd()) return { status: 'configured', changed: false, message: note };
     if (!fs.existsSync(file + '.emulator-menu.bak')) fs.copyFileSync(file, file + '.emulator-menu.bak');
     fs.writeFileSync(`${file}.tmp-${process.pid}`, text);
@@ -195,7 +224,7 @@ const writers = { dolphin: writeDolphin, ryujinx: writeRyujinx };
 // context: {home, platform, env, exePath(id), wiiRemotes, players, profiles}. Defaults to this computer.
 function apply(emulatorId, controllers, context = {}) {
     const ctx = {
-        wiiRemotes: context.wiiRemotes || 0, players: context.players, profiles: context.profiles || mappings.createStore(''),
+        wiiRemotes: context.wiiRemotes || 0, joyconsSplit: !!context.joyconsSplit, players: context.players, profiles: context.profiles || mappings.createStore(''),
         home: context.home || os.homedir(), platform: context.platform || platformLib.current(), env: context.env || process.env, exePath: context.exePath || (() => null)
     };
     const write = writers[emulatorId];

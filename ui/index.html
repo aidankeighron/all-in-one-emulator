@@ -303,12 +303,15 @@
             white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis;
         }
         .pill.bt { background: linear-gradient(to bottom, #5cc6fa, #2c9fe0); }
-        .pad-roles { font-size: 11px; font-weight: 700; color: var(--tx-7b848c); text-align: center; line-height: 1.35; min-height: 4.1em; position: relative; z-index: 3; }
+        .pad-roles { font-size: 11px; font-weight: 700; color: var(--tx-7b848c); text-align: center; line-height: 1.35; min-height: 4.1em; position: relative; z-index: 3; width: 100%; }
+        .pad-roles .role { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .pad-roles .role.first { color: var(--wii-blue-deep); font-weight: 800; }
+        .pill.pair { background: linear-gradient(to bottom, #8bd48f, #4aa855); }
         @media (max-width: 1100px), (max-height: 680px) {
             .pad-card { padding: 10px 8px; gap: 4px; }
             .pad-name { font-size: 12px; }
             .pad-roles { font-size: 10px; min-height: 0; }
-            .pad-roles .role:nth-child(n+2) { display: none; }
+            .pad-roles .role:nth-child(n+3) { display: none; }
             .pad-leds i { width: 9px; height: 9px; }
         }
         .pad-hint { font-size: 12px; color: #9aa2a9; text-align: center; position: relative; z-index: 3; margin: auto 0; }
@@ -541,7 +544,7 @@
         .dd-item.on { background: var(--bg-eaf6fd); outline: 2px solid var(--wii-blue); outline-offset: -2px; }
         .dd-item.off { opacity: .4; cursor: default; }
         .sel.pad-focus, .pl-foot .btn.pad-focus, .mp-actions .btn.pad-focus, .mp-item.pad-focus { outline: 3px solid var(--wii-blue); outline-offset: 2px; box-shadow: 0 0 14px var(--wii-blue-glow); }
-        .pl-head, .pl-row { display: grid; grid-template-columns: 124px 1.3fr 1.3fr 1.3fr; gap: 10px; align-items: center; }
+        .pl-head, .pl-row { display: grid; grid-template-columns: 124px 1.3fr 1fr 1fr 1fr; gap: 10px; align-items: center; }
         .pl-head { font-size: 12px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--tx-8a9199); margin-bottom: 6px; }
         .pl-row { margin-bottom: 8px; }
         .pl-row .who { display: flex; align-items: center; gap: 8px; font-weight: 800; }
@@ -667,6 +670,16 @@
         .center-time {
             text-align: center;
         }
+
+        /* On the Controllers page the bottom bar tells what the buttons of the controller on the selected tile do */
+        .pad-hints { display: none; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px 14px; max-width: 62%; text-align: center; }
+        body.on-pads .center-time { display: none; }
+        body.on-pads .pad-hints { display: flex; }
+        .pad-hints .chip { display: inline-flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 800; color: var(--tx-4a5258); cursor: pointer; white-space: nowrap; }
+        .pad-hints .chip.dim { color: var(--tx-8a9199); font-weight: 700; cursor: default; }
+        .pad-hints kbd { display: inline-flex; align-items: center; justify-content: center; min-width: 26px; height: 26px; padding: 0 7px; box-sizing: border-box; border-radius: 13px; font: inherit; font-size: 13px; font-weight: 800; color: #fff; background: linear-gradient(to bottom, #5cc6fa, #2c9fe0); box-shadow: 0 2px 4px rgba(44, 159, 224, 0.4); }
+        .pad-hints .chip.dim kbd { background: linear-gradient(to bottom, #b9c2ca, #98a3ad); box-shadow: none; }
+        #pad-picker { position: fixed; opacity: 0; pointer-events: none; }
 
         .time-display {
             font-size: 36px;
@@ -939,6 +952,7 @@
             <div class="time-display" id="clock">12:00</div>
             <div class="date-display" id="date">Mon 10/19</div>
         </div>
+        <div class="pad-hints" id="pad-hints"></div>
         <div class="round-button" id="bb-settings" onclick="openSettings()" title="Settings">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
         </div>
@@ -1140,6 +1154,8 @@
 
         let allGames = [];
         let padList = [];
+        let padSlots = [];                    // what each of the four players has: [{index, mode, controller}]
+        let padProfiles = [];                 // the mappings: [{id, name, target, family}]
         let padJson = '';
         let page = 0;                         // CONTROLLERS_PAGE, or a games page
         let zone = 'grid';                    // 'grid' | 'arrow-left' | 'arrow-right' | 'bottom'
@@ -1412,12 +1428,16 @@
         }
 
         function renderControllers(grid) {
-            const slots = Math.min(CHANNELS_PER_PAGE, Math.max(4, padList.length + 2));
-            for (let i = 0; i < slots; i++) {
+            const tiles = padList.length + 2;                     // then two more: connect a controller, mappings
+            const free = padSlots.filter(sl => sl.mode === 'empty').map(sl => sl.index);
+            const total = Math.min(CHANNELS_PER_PAGE, Math.max(4, tiles));
+            const select = i => () => { if (zone !== 'grid' || selectedIndex !== i) Sfx.play('move'); zone = 'grid'; selectedIndex = i; renderFocus(); };
+            for (let i = 0; i < total; i++) {
                 const c = padList[i];
                 const card = document.createElement('div');
                 if (c) {
                     const leds = [1, 2, 3, 4].map(n => `<i class="${n === c.player ? 'on' : ''}"></i>`).join('');
+                    const roles = (c.roles || []).map((r, n) => `<span class="role ${n === 0 ? 'first' : ''}" title="${escapeHtml(r)}">${escapeHtml(r)}</span>`).join('');
                     card.className = 'wii-channel pad-card';
                     card.innerHTML = `
                         <div class="pad-leds">${leds}</div>
@@ -1425,26 +1445,29 @@
                         <div class="pad-name">${escapeHtml(c.adapter ? 'GameCube Adapter' : c.name)}</div>
                         <div class="pad-meta">
                             <span class="pill ${c.connection === 'Bluetooth' ? 'bt' : ''}">${escapeHtml(c.connection)}</span>
+                            ${c.combined ? '<span class="pill pair">Combined</span>' : ''}
                         </div>
-                        <div class="pad-roles">${(c.roles || []).map(r => `<span class="role">${escapeHtml(r)}</span>`).join('<br>') || 'Not used by an emulator'}</div>`;
-                    card.addEventListener('mouseenter', () => { if (zone !== 'grid' || selectedIndex !== i) Sfx.play('move'); zone = 'grid'; selectedIndex = i; renderFocus(); });
+                        <div class="pad-roles">${roles || 'Not used by an emulator'}</div>`;
+                    card.addEventListener('mouseenter', select(i));
+                    card.addEventListener('click', () => { select(i)(); padAction('a'); });
                 } else if (i === padList.length) {
                     card.className = 'wii-channel pad-card connect';
                     card.innerHTML = `<div class="plus"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div>
                         <div class="pad-name">Connect a controller</div><div class="pad-roles">Wii Remote, Switch Pro Controller or Joy-Con</div>`;
                     card.addEventListener('click', () => openPair());
-                    card.addEventListener('mouseenter', () => { if (zone !== 'grid' || selectedIndex !== i) Sfx.play('move'); zone = 'grid'; selectedIndex = i; renderFocus(); });
+                    card.addEventListener('mouseenter', select(i));
                 } else if (i === padList.length + 1) {
                     card.className = 'wii-channel pad-card connect players-card';
-                    card.innerHTML = `<div class="plus"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3 19c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5"/><circle cx="17" cy="9" r="2.4"/><path d="M16 14c3 0 5 1.7 5 4.5"/></svg></div>
-                        <div class="pad-name">Players and mappings</div><div class="pad-roles">Who plays with what, and what each button does</div>`;
-                    card.addEventListener('click', () => openPlayers());
-                    card.addEventListener('mouseenter', () => { if (zone !== 'grid' || selectedIndex !== i) Sfx.play('move'); zone = 'grid'; selectedIndex = i; renderFocus(); });
+                    card.innerHTML = `<div class="plus"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg></div>
+                        <div class="pad-name">Mappings</div><div class="pad-roles">What each button does on the Wii, GameCube and Switch. Make your own.</div>`;
+                    card.addEventListener('click', () => openMaps());
+                    card.addEventListener('mouseenter', select(i));
                 } else {
+                    const player = free[i - tiles];
                     card.className = 'wii-channel pad-card channel-empty waiting';
-                    card.innerHTML = `
-                        <div class="pad-leds">${[1, 2, 3, 4].map(n => `<i class="${n === i + 1 ? 'on' : ''}" style="${n === i + 1 ? 'opacity:.35' : ''}"></i>`).join('')}</div>
-                        <div class="pad-hint">Player ${i + 1}<br>Waiting for a controller</div>`;
+                    card.innerHTML = player === undefined ? '' : `
+                        <div class="pad-leds">${[1, 2, 3, 4].map(n => `<i class="${n === player + 1 ? 'on' : ''}" style="${n === player + 1 ? 'opacity:.35' : ''}"></i>`).join('')}</div>
+                        <div class="pad-hint">Player ${player + 1}<br>Waiting for a controller</div>`;
                 }
                 grid.appendChild(card);
             }
@@ -1456,11 +1479,142 @@
             }
         }
 
+        // ----- what the buttons of the selected controller do -----
+        // The page works on the selected tile: A moves it to another player, X changes its mappings, Y combines or splits
+        // Switch controllers. The same keys work from the keyboard, and the hints at the bottom can be clicked.
+        function padHints() {
+            const bar = document.getElementById('pad-hints');
+            const show = onControllers() && !settingsOpen;
+            document.body.classList.toggle('on-pads', show);
+            if (!show) return;
+            const c = zone === 'grid' ? padList[selectedIndex] : null;
+            const chips = [];
+            if (c) {
+                chips.push(['A', c.player ? 'Change player slot' : 'Give it a player slot', 'a']);
+                if (c.family !== 'wiimote' && !c.adapter) chips.push(['X', 'Change mapping', 'x']);
+                if (c.canCombine) chips.push(['Y', c.combined ? 'Split into two controllers' : 'Combine with another Switch controller', 'y']);
+            } else if (zone === 'grid' && selectedIndex === padList.length) chips.push(['A', 'Connect a controller', 'a']);
+            else if (zone === 'grid' && selectedIndex === padList.length + 1) chips.push(['A', 'Open the mappings: change them or make your own', 'a']);
+            else if (zone === 'bottom') chips.push(['A', 'Press the button', 'a']);
+            chips.push(['LB / RB', 'Change page', null]);
+            bar.innerHTML = chips.map(([k, t, act]) => `<span class="chip ${act ? '' : 'dim'}" ${act ? `data-act="${act}"` : ''}><kbd>${k}</kbd>${escapeHtml(t)}</span>`).join('');
+            bar.querySelectorAll('.chip[data-act]').forEach(el => el.addEventListener('click', () => padAction(el.dataset.act)));
+        }
+
+        // A list the gamepad can drive (the one the settings dropdowns use) for a choice on this page.
+        // groups: [{head?, items: [{value, label, off?}]}]; current: the value to start on
+        function pickFrom(groups, current, onPick) {
+            let sel = document.getElementById('pad-picker');
+            if (!sel) { sel = document.createElement('select'); sel.id = 'pad-picker'; sel.tabIndex = -1; sel.setAttribute('aria-hidden', 'true'); document.body.appendChild(sel); }
+            sel.innerHTML = groups.map(g => {
+                const opts = g.items.map(it => optionHtml(it.value, it.label, it.value === current, it.off)).join('');
+                return g.head ? `<optgroup label="${escapeHtml(g.head)}">${opts}</optgroup>` : opts;
+            }).join('');
+            const tile = document.querySelector('#channel-grid .wii-channel.selected') || document.getElementById('channel-grid');
+            const r = tile.getBoundingClientRect();
+            Object.assign(sel.style, { left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px` });
+            sel.onchange = () => { sel.onchange = null; onPick(sel.value); };
+            return ddOpen(sel);
+        }
+
+        async function padPost(path, body) {
+            const res = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.message || 'That did not work.');
+            return data;
+        }
+
+        // Shows a new controller list straight from a change, keeping the selection on the same controller
+        function padApply(data, follow) {
+            applyControllers(data);
+            const at = padList.findIndex(follow);
+            if (at >= 0) selectedIndex = at;
+            if (pause.open) { pause.changed = true; renderPause(); }
+            if (onControllers() && !settingsOpen) renderPage();
+        }
+
+        async function padChange(path, body, follow, message) {
+            try { padApply(await padPost(path, body), follow); if (message) showToast(message); }
+            catch (err) { Sfx.play('error'); showToast(err.message); }
+        }
+
+        function padAction(act) {
+            if (!onControllers() || zone !== 'grid' || settingsOpen || dd.open) return;
+            const c = padList[selectedIndex];
+            if (selectedIndex === padList.length) return act === 'a' ? openPair() : undefined;
+            if (selectedIndex === padList.length + 1) return act === 'a' ? openMaps() : undefined;
+            if (!c) return;
+            if (act === 'a') return padMovePicker(c);
+            if (act === 'x') return padMapPicker(c);
+            if (act === 'y') return padCombine(c);
+        }
+
+        function padMovePicker(c) {
+            if (c.adapter) return showToast('The GameCube adapter gives each controller the port it is plugged into.');
+            const who = n => { const sl = padSlots[n]; return sl && sl.controller ? sl.controller : sl && sl.mode === 'none' ? 'not playing' : 'nobody yet'; };
+            const items = [0, 1, 2, 3].map(n => ({ value: String(n), label: `Player ${n + 1} · ${n === c.slot ? 'this controller' : who(n)}` }));
+            pickFrom([{ items }], c.slot === null ? '0' : String(c.slot), value => {
+                const to = Number(value);
+                if (to === c.slot) return;
+                const body = c.slot !== null ? { from: c.slot, to } : { key: c.key, to };
+                padChange('/api/players/move', body, x => x.slot === to, `${c.name} is Player ${to + 1}.`);
+            });
+        }
+
+        const MAP_FIELD = { wii: 'wii', gamecube: 'gc', switch: 'sw' };
+        const MAP_TARGETS = [['wii', 'Wii'], ['gamecube', 'GameCube'], ['switch', 'Switch']];
+
+        function padMapPicker(c) {
+            if (c.adapter) return showToast('The GameCube adapter is set up in Dolphin itself.');
+            if (c.family === 'wiimote') return showToast('A real Wii Remote is used as it is: there is nothing to map.');
+            if (c.slot === null) return showToast('Give it a player slot first (A), then choose its mappings.');
+            const nameOf = id => (padProfiles.find(p => p.id === id) || {}).name || id;
+            const groups = MAP_TARGETS.map(([target, title]) => {
+                const field = MAP_FIELD[target];
+                const chosen = c.choice[field];
+                const suits = padProfiles.filter(p => p.target === target && (p.family === c.family || p.id === chosen));
+                return {
+                    head: title,
+                    items: [{ value: `${target}|auto`, label: `Automatic · ${nameOf(c.auto[field])}` },
+                        ...suits.map(p => ({ value: `${target}|${p.id}`, label: p.name }))]
+                        .map(it => ({ ...it, label: it.value === `${target}|${chosen}` ? `${it.label}  (now)` : it.label }))
+                };
+            });
+            pickFrom(groups, `wii|${c.choice.wii}`, value => {
+                const [target, id] = value.split('|');
+                if (id === c.choice[MAP_FIELD[target]]) return;
+                padChange('/api/players/mapping', { player: c.slot, target, id }, x => x.slot === c.slot, `${MAP_TARGETS.find(t => t[0] === target)[1]} mapping changed for ${c.name}`);
+            });
+        }
+
+        function padCombine(c) {
+            if (!c.canCombine) return showToast('Only Switch controllers can be combined.');
+            if (c.combined) return padChange('/api/controllers/split', { members: c.memberKeys }, x => x.key === c.memberKeys[0], `${c.name} is two controllers again`);
+            const others = padList.filter(o => o !== c && o.canCombine && !o.combined);
+            if (!others.length) return showToast('No other Switch controller to combine with. Connect one first.');
+            pickFrom([{ items: others.map(o => ({ value: o.key, label: `${o.name} · ${o.connection}` })) }], others[0].key, key => {
+                const other = padList.find(o => o.key === key);
+                padChange('/api/controllers/combine', { a: c.key, b: key }, x => x.combined && x.memberKeys.includes(c.key), `${c.name} and ${other ? other.name : 'the other one'} are one controller now`);
+            });
+        }
+
         // Windows has no way for the server to see controllers, so this window says which it can see
         let padPlatform = null;
         async function reportPads() {
             const pads = (navigator.getGamepads ? [...navigator.getGamepads()] : []).filter(Boolean).map(g => ({ index: g.index, id: g.id, mapping: g.mapping }));
             await fetch('/api/controllers/report', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pads }) });
+        }
+
+        // Takes the server's controller list; true when it differs from what was showing
+        function applyControllers(data) {
+            const json = JSON.stringify([data.controllers, data.slots]);
+            const changed = json !== padJson;
+            padJson = json;
+            padList = data.controllers;
+            padSlots = data.slots || [];
+            padProfiles = data.profiles || [];
+            updateControllerChip();
+            return changed;
         }
 
         async function refreshControllers() {
@@ -1471,11 +1625,7 @@
                     padPlatform = data.platform;
                     if (padPlatform === 'win32') { await reportPads(); data = await (await fetch('/api/controllers')).json(); }
                 }
-                const json = JSON.stringify(data.controllers);
-                const changed = json !== padJson;
-                padJson = json;
-                padList = data.controllers;
-                updateControllerChip();
+                const changed = applyControllers(data);
                 if (changed && onControllers() && !settingsOpen) renderPage();
                 if (changed && pause.open) renderPause();
             } catch { /* server hiccup: try again next time */ }
@@ -1507,6 +1657,7 @@
             if (zone === 'arrow-left') document.getElementById('prev-page').classList.add('pad-focus');
             if (zone === 'arrow-right') document.getElementById('next-page').classList.add('pad-focus');
             if (zone === 'bottom') document.getElementById(BOTTOM_BUTTONS[bottomIndex]).classList.add('pad-focus');
+            padHints();
         }
 
         // Where a move from the grid goes: another tile, an arrow, or the bottom buttons
@@ -1563,7 +1714,7 @@
             if (zone === 'arrow-left') return goPage(page - 1);
             if (zone === 'arrow-right') return goPage(page + 1);
             if (zone === 'bottom') return document.getElementById(BOTTOM_BUTTONS[bottomIndex]).click();
-            if (onControllers()) return selectedIndex === padList.length ? openPair() : selectedIndex === padList.length + 1 ? openPlayers() : undefined;
+            if (onControllers()) return padAction('a');
             const game = currentGame();
             if (game) openSaveSheet(game);
         }
@@ -2644,8 +2795,9 @@
             const foot = document.getElementById('players-foot');
             if (!d) { body.innerHTML = '<div class="sheet-busy" style="min-height:160px"><span class="spinner"></span><span>Loading…</span></div>'; foot.innerHTML = ''; return; }
 
-            const wiiProfiles = d.profiles.filter(p => p.target === 'wii'), gcProfiles = d.profiles.filter(p => p.target === 'gamecube');
             const std = id => (d.profiles.find(p => p.id === id) || {}).name || id;
+            // Only the mappings made for the kind of controller the player has (and the one already chosen, whatever it is)
+            const choices = (target, sl, current) => d.profiles.filter(p => p.target === target && (p.family === sl.family || p.id === current));
             const rows = d.players.map((p, r) => {
                 const sl = d.slots[r];
                 const known = d.controllers.some(c => c.key === p.device);
@@ -2657,17 +2809,19 @@
                     ...(p.device.startsWith('pad:') && !known ? [optionHtml(p.device, `${p.device.replace(/^pad:[^:]*:[^:]*:/, '').replace(/#\d+$/, '')} (not connected)`, true)] : [])
                 ].join('');
                 const off = p.device === 'none';
-                const wiiOpts = [optionHtml('auto', `Automatic (${std('wii-nunchuk')})`, p.wii === 'auto', false, 'Automatic'), ...wiiProfiles.map(m => optionHtml(m.id, m.name, p.wii === m.id))].join('');
-                const gcOpts = [optionHtml('auto', `Automatic (${std('gc-default')})`, p.gc === 'auto', false, 'Automatic'), ...gcProfiles.map(m => optionHtml(m.id, m.name, p.gc === m.id))].join('');
+                const opts = (target, field) => [optionHtml('auto', `Automatic (${std(sl.auto[field])})`, p[field] === 'auto', false, 'Automatic'), ...choices(target, sl, p[field]).map(m => optionHtml(m.id, m.name, p[field] === m.id))].join('');
+                const wiiOpts = opts('wii', 'wii'), gcOpts = opts('gamecube', 'gc'), swOpts = opts('switch', 'sw');
+                const real = p.device === 'real' || sl.mode === 'real';
                 const focus = (c) => plr.r === r && plr.c === c ? 'pad-focus' : '';
                 return `<div class="pl-row">
                     <div class="who"><span class="leds">${[0, 1, 2, 3].map(n => `<i class="${n === r ? 'on' : ''}"></i>`).join('')}</span>Player ${r + 1}</div>
                     <select class="sel ${focus(0)}" data-r="${r}" data-c="0" data-f="device" aria-label="Player ${r + 1} controller">${devOpts}</select>
                     <select class="sel ${focus(1)}" data-r="${r}" data-c="1" data-f="wii" ${off ? 'disabled' : ''} aria-label="Player ${r + 1} Wii mapping">${wiiOpts}</select>
-                    <select class="sel ${focus(2)}" data-r="${r}" data-c="2" data-f="gc" ${off || p.device === 'real' ? 'disabled' : ''} aria-label="Player ${r + 1} GameCube mapping">${gcOpts}</select>
+                    <select class="sel ${focus(2)}" data-r="${r}" data-c="2" data-f="gc" ${off || real ? 'disabled' : ''} aria-label="Player ${r + 1} GameCube mapping">${gcOpts}</select>
+                    <select class="sel ${focus(3)}" data-r="${r}" data-c="3" data-f="sw" ${off || real ? 'disabled' : ''} aria-label="Player ${r + 1} Switch mapping">${swOpts}</select>
                     <div class="pl-state">${escapeHtml(slotText(sl))}</div></div>`;
             }).join('');
-            body.innerHTML = `<div class="pl-head"><span></span><span>Controller</span><span>Wii mapping</span><span>GameCube mapping</span></div>${rows}`;
+            body.innerHTML = `<div class="pl-head"><span></span><span>Controller</span><span>Wii mapping</span><span>GameCube mapping</span><span>Switch mapping</span></div>${rows}`;
 
             const synced = d.synced;
             const hint = plr.syncing ? 'Writing to the emulators…' : plr.error ? plr.error
@@ -2687,7 +2841,7 @@
             foot.querySelectorAll('button').forEach(el => el.addEventListener('click', () => { plr.r = 4; plr.c = Number(el.dataset.i); plrPress(); }));
         }
 
-        function plrCols(r) { return r < 4 ? 3 : 4; }
+        function plrCols() { return 4; }
 
         function plrMove(dir) {
             const before = `${plr.r}/${plr.c}`;
@@ -2754,53 +2908,100 @@
             mps.sel = id; mps.dirty = false; mps.notice = '';
         }
 
-        const sourceSelect = (ctl, value, ro) => {
+        // The inputs this mapping can use: they depend on the console and on the kind of controller it is for
+        const mpsSources = p => ((mps.data.sources[p.target] || {})[p.family === 'nintendo' ? 'nintendo' : 'generic']) || [];
+
+        const sourceSelect = (ctl, value, ro, p) => {
+            const sources = mpsSources(p);
+            const known = v => sources.some(x => x.value === v);
+            const labelOf = v => (sources.find(x => x.value === v) || {}).label || v;
+            const parts = value ? value.split(' | ') : [];
+            const combo = parts.length > 1 && parts.every(known);
+            const stray = value && !combo && !known(value);       // an input this kind of controller does not have
             const groups = {};
-            for (const src of mps.data.sources) (groups[src.group] = groups[src.group] || []).push(src);
-            const combo = value && !mps.data.sources.some(x => x.value === value);
-            const comboLabel = combo ? value.split(' | ').map(v => (mps.data.sources.find(x => x.value === v) || {}).label || v).join('  or  ') : '';
+            for (const src of sources) (groups[src.group] = groups[src.group] || []).push(src);
             return `<select class="sel" data-key="${escapeHtml(ctl.key)}" ${ro ? 'disabled' : ''}>
                 ${optionHtml('', 'Not mapped', !value)}
-                ${combo ? optionHtml(value, comboLabel, true) : ''}
+                ${combo ? optionHtml(value, parts.map(labelOf).join('  or  '), true) : ''}
+                ${stray ? optionHtml(value, `${labelOf(value)} (not on this controller)`, true) : ''}
                 ${Object.entries(groups).map(([g, list]) => `<optgroup label="${escapeHtml(g)}">${list.map(x => optionHtml(x.value, x.label, x.value === value)).join('')}</optgroup>`).join('')}</select>`;
         };
+
+        // A new mapping starts as a copy of the standard one for its console and controller, so there is something to change
+        function mpsStarter(target, family) {
+            const hit = mps.data.profiles.find(x => x.builtin && x.target === target && x.family === family);
+            return hit ? { extension: hit.extension, settings: { ...hit.settings }, entries: { ...hit.entries } } : { extension: 'none', settings: {}, entries: {} };
+        }
+
+        function mpsNew() {
+            const starter = mpsStarter('gamecube', 'generic');
+            mps.draft = { id: undefined, name: 'My mapping', description: '', builtin: false, isNew: true, prefilled: true, target: 'gamecube', family: 'generic', ...starter };
+            mps.sel = null; mps.dirty = true; mps.notice = 'Choose the console and the controller it is for, then change the inputs. Save when done.';
+        }
+
+        // The console or the kind of controller changed: what the mapping can hold changes with it
+        function mpsRetype(change) {
+            const d = mps.data, p = mps.draft;
+            const next = { ...p, ...change };
+            if (p.prefilled) Object.assign(next, mpsStarter(next.target, next.family));
+            else {
+                const keys = new Set(d.controls[next.target].map(x => x.key));
+                const ok = v => v.split(' | ').every(part => mpsSources(next).some(x => x.value === part));
+                next.entries = Object.fromEntries(Object.entries(p.entries).filter(([k, v]) => keys.has(k) && ok(v)));
+                next.settings = Object.fromEntries(Object.entries(p.settings || {}).filter(([k, v]) => (d.settingDefs[next.target] || []).some(def => def.key === k && def.values.some(([x]) => x === v))));
+            }
+            if (next.target !== 'wii') next.extension = 'none';
+            else if (!p.prefilled && p.target !== 'wii') next.extension = 'nunchuk';
+            mps.draft = next; mps.dirty = true;
+        }
 
         function renderMaps() {
             const d = mps.data;
             const list = document.getElementById('maps-list'), edit = document.getElementById('maps-edit'), actions = document.getElementById('maps-actions');
             if (!d || !mps.draft) { list.innerHTML = ''; edit.innerHTML = '<div class="sheet-busy" style="min-height:160px"><span class="spinner"></span><span>Loading…</span></div>'; actions.innerHTML = ''; return; }
-            const p = mps.draft, ro = mpsReadOnly();
+            const p = mps.draft, ro = mpsReadOnly(), real = p.family === 'wiimote';
 
-            const group = (title, target) => `<h4>${title}</h4>` + d.profiles.filter(x => x.target === target).map(x =>
-                `<button type="button" class="mp-item ${x.id === mps.sel ? 'active' : ''}" data-id="${escapeHtml(x.id)}">${escapeHtml(x.name)}<small>${x.builtin ? 'Built in' : 'Yours'}</small></button>`).join('');
-            list.innerHTML = group('Wii', 'wii') + group('GameCube', 'gamecube');
+            const item = (x, active) => `<button type="button" class="mp-item ${active ? 'active' : ''}" data-id="${escapeHtml(x.id || '')}">${escapeHtml(x.name)}<small>${x.isNew ? 'New, not saved yet' : x.builtin ? 'Built in' : 'Yours'} · ${escapeHtml(d.families[x.family])}</small></button>`;
+            list.innerHTML = Object.entries(d.targets).map(([target, title]) => `<h4>${escapeHtml(title)}</h4>`
+                + (p.isNew && p.target === target ? item(p, true) : '')
+                + d.profiles.filter(x => x.target === target).map(x => item(x, x.id === mps.sel)).join('')).join('');
 
-            const controls = d.controls[p.target].filter(c => !c.ext || c.ext === p.extension);
+            const controls = real ? [] : d.controls[p.target].filter(c => !c.ext || c.ext === p.extension);
             const byGroup = [];
             for (const c of controls) { let g = byGroup.find(x => x.name === c.group); if (!g) byGroup.push(g = { name: c.group, items: [] }); g.items.push(c); }
-            const sideways = (p.settings || {})['Options/Sideways Wiimote'] === 'True';
+            const choose = (id, current, options) => `<select class="sel" id="${id}" ${ro ? 'disabled' : ''}>${options.map(([v, t]) => optionHtml(v, t, v === current)).join('')}</select>`;
+            const defs = real ? [] : (d.settingDefs[p.target] || []);
             edit.innerHTML = `
                 <div class="row"><input type="text" id="mp-name" value="${escapeHtml(p.name)}" maxlength="40" ${ro ? 'disabled' : ''} aria-label="Mapping name"></div>
-                <div class="desc">${escapeHtml(p.description || '')}${ro ? ' <b>Built in: press Duplicate to make your own copy you can change.</b>' : ''}</div>
-                ${p.target === 'wii' ? `<div class="mp-row"><span>Plugged into the Wii Remote</span><select class="sel" id="mp-ext" ${ro ? 'disabled' : ''}>
-                    ${d.extensions.map(e => optionHtml(e, { nunchuk: 'Nunchuk', classic: 'Classic Controller', none: 'Nothing' }[e], p.extension === e)).join('')}</select></div>
-                  <div class="mp-row"><span>Hold the remote sideways</span><select class="sel" id="mp-side" ${ro ? 'disabled' : ''}>${optionHtml('False', 'No', !sideways)}${optionHtml('True', 'Yes', sideways)}</select></div>` : ''}
-                ${byGroup.map(g => `<div class="mp-grp">${escapeHtml(g.name)}</div>${g.items.map(c => `<div class="mp-row"><span>${escapeHtml(c.label)}</span>${sourceSelect(c, p.entries[c.key] || '', ro)}</div>`).join('')}`).join('')}`;
+                <div class="desc">${escapeHtml(p.description || '')}${ro && !real ? ' <b>Built in: press Duplicate to make your own copy you can change.</b>' : ''}</div>
+                ${ro ? `<div class="mp-row"><span>Made for</span><span>${escapeHtml(d.targets[p.target])} · ${escapeHtml(d.families[p.family])}</span></div>`
+                    : `<div class="mp-row"><span>Console</span>${choose('mp-target', p.target, Object.entries(d.targets))}</div>
+                       <div class="mp-row"><span>Controller</span>${choose('mp-family', p.family, Object.entries(d.families).filter(([f]) => f !== 'wiimote'))}</div>`}
+                ${!real && p.target === 'wii' ? `<div class="mp-row"><span>Plugged into the Wii Remote</span>${choose('mp-ext', p.extension, d.extensions.map(e => [e, { nunchuk: 'Nunchuk', classic: 'Classic Controller', none: 'Nothing' }[e]]))}</div>` : ''}
+                ${defs.map(def => `<div class="mp-row"><span>${escapeHtml(def.label)}</span><select class="sel" data-setting="${escapeHtml(def.key)}" ${ro ? 'disabled' : ''}>${def.values.map(([v, t]) => optionHtml(v, t, ((p.settings || {})[def.key] ?? def.values[0][0]) === v)).join('')}</select></div>`).join('')}
+                ${p.target === 'switch' && !real ? '<div class="desc">The Switch takes one input per button, and the sticks go as they are (the settings above swap them). Ryujinx reads the whole mapping each time a game starts.</div>' : ''}
+                ${byGroup.map(g => `<div class="mp-grp">${escapeHtml(g.name)}</div>${g.items.map(c => `<div class="mp-row"><span>${escapeHtml(c.label)}</span>${sourceSelect(c, p.entries[c.key] || '', ro, p)}</div>`).join('')}`).join('')}`;
 
             const btn = (t, a, primary) => `<button type="button" class="btn ${primary ? 'primary' : ''}" data-act="${a}">${t}</button>`;
             actions.innerHTML = `<span class="hint">${escapeHtml(mps.error || mps.notice || (mps.dirty ? 'Unsaved changes' : ''))}</span>`
-                + (ro ? btn('Duplicate to edit', 'dup', true) : btn('Save', 'save', mps.dirty) + btn('Duplicate', 'dup') + btn('Delete', 'del'))
+                + (p.isNew ? btn('Save', 'save', true) + btn('Discard', 'discard')
+                    : ro ? (real ? '' : btn('Duplicate to edit', 'dup', true)) + btn('New mapping', 'new')
+                    : btn('Save', 'save', mps.dirty) + btn('Duplicate', 'dup') + btn('New mapping', 'new') + btn('Delete', 'del'))
                 + btn('Close (B)', 'close');
 
             // events
-            list.querySelectorAll('.mp-item').forEach(el => el.addEventListener('click', () => { mps.zone = 'list'; mps.i = [...list.querySelectorAll('.mp-item')].indexOf(el); mpsSelect(el.dataset.id); renderMaps(); }));
-            edit.querySelectorAll('select[data-key]').forEach(el => el.addEventListener('change', () => { if (el.value) p.entries[el.dataset.key] = el.value; else delete p.entries[el.dataset.key]; mps.dirty = true; renderMaps(); }));
+            list.querySelectorAll('.mp-item').forEach(el => el.addEventListener('click', () => {
+                if (!el.dataset.id) return;
+                mps.zone = 'list'; mps.i = [...list.querySelectorAll('.mp-item')].indexOf(el); mpsSelect(el.dataset.id); renderMaps();
+            }));
+            edit.querySelectorAll('select[data-key]').forEach(el => el.addEventListener('change', () => { if (el.value) p.entries[el.dataset.key] = el.value; else delete p.entries[el.dataset.key]; p.prefilled = false; mps.dirty = true; renderMaps(); }));
+            edit.querySelectorAll('select[data-setting]').forEach(el => el.addEventListener('change', () => { p.settings = { ...(p.settings || {}), [el.dataset.setting]: el.value }; p.prefilled = false; mps.dirty = true; renderMaps(); }));
             const nameEl = document.getElementById('mp-name');
             if (nameEl) nameEl.addEventListener('input', () => { p.name = nameEl.value; mps.dirty = true; const h = document.querySelector('#maps-actions .hint'); if (h) h.textContent = 'Unsaved changes'; });
-            const ext = document.getElementById('mp-ext');
-            if (ext) ext.addEventListener('change', () => { p.extension = ext.value; mps.dirty = true; renderMaps(); });
-            const side = document.getElementById('mp-side');
-            if (side) side.addEventListener('change', () => { p.settings = { ...(p.settings || {}), 'Options/Sideways Wiimote': side.value }; mps.dirty = true; renderMaps(); });
+            const on = (id, fn) => { const el = document.getElementById(id); if (el) el.addEventListener('change', () => fn(el.value)); };
+            on('mp-ext', v => { p.extension = v; p.prefilled = false; mps.dirty = true; renderMaps(); });
+            on('mp-target', v => { mpsRetype({ target: v }); renderMaps(); });
+            on('mp-family', v => { mpsRetype({ family: v }); renderMaps(); });
             actions.querySelectorAll('button').forEach(el => el.addEventListener('click', () => mpsAct(el.dataset.act)));
             mpsHighlight();
         }
@@ -2850,8 +3051,10 @@
             try {
                 if (act === 'close') return closeMaps();
                 Sfx.play('select');
-                if (act === 'save') { const { profile } = await mpsPost('/api/mappings', mps.draft); mps.notice = 'Saved and written to the emulators'; if (pause.open) { pause.changed = true; pause.i = PAUSE_ITEMS.findIndex(x => x[1] === 'restart'); renderPause(); } await mpsLoad(profile.id); }
-                else if (act === 'dup') { const { profile } = await mpsPost('/api/mappings/duplicate', { id: mps.sel }); mps.notice = 'Copied. Change it as you like, then Save.'; await mpsLoad(profile.id); mps.zone = 'edit'; mps.i = 0; }
+                if (act === 'save') { const { profile } = await mpsPost('/api/mappings', mps.draft); if (pause.open) { pause.changed = true; pause.i = PAUSE_ITEMS.findIndex(x => x[1] === 'restart'); renderPause(); } await mpsLoad(profile.id); mps.notice = 'Saved and written to the emulators'; }
+                else if (act === 'new') { mpsNew(); mps.zone = 'edit'; mps.i = 0; }
+                else if (act === 'discard') { mps.draft = null; mps.notice = ''; await mpsLoad(); mps.zone = 'list'; mps.i = 0; }
+                else if (act === 'dup') { const { profile } = await mpsPost('/api/mappings/duplicate', { id: mps.sel }); await mpsLoad(profile.id); mps.notice = 'Copied. Change it as you like, then Save.'; mps.zone = 'edit'; mps.i = 0; }
                 else if (act === 'del') {
                     if (!mps.confirmDel) { mps.confirmDel = true; mps.notice = `Press Delete again to delete “${mps.draft.name}”. Players using it go back to the standard mapping.`; return renderMaps(); }
                     mps.confirmDel = false;
@@ -2880,6 +3083,7 @@
             lastInputTime = Date.now() + 300;
             Sfx.play('close');
             if (plr.open) plrLoad();
+            refreshControllers();
         }
 
         // ================= CONNECT A CONTROLLER =================
@@ -3519,6 +3723,7 @@
                     if (st.rb) { pagePress(1); lastInputTime = now; }
                     else if (st.lb) { pagePress(-1); lastInputTime = now; }
                     else if ((st.x || st.y) && zone === 'grid' && !onControllers()) { toggleFavorite(currentGame()); lastInputTime = now + 400; }
+                    else if ((st.x || st.y) && zone === 'grid') { padAction(st.x ? 'x' : 'y'); lastInputTime = now + 400; }
                     else if (st.a) { activate(); lastInputTime = now + 500; }
                     else if (dir) { navigate(dir); lastInputTime = now; }
                 }
@@ -3570,6 +3775,7 @@
             else if (e.key === 'PageDown') pagePress(1);
             else if (e.key === 'PageUp') pagePress(-1);
             else if (['f', 'x', 'y'].includes(e.key.toLowerCase()) && zone === 'grid' && !onControllers()) toggleFavorite(currentGame());
+            else if (['x', 'y'].includes(e.key.toLowerCase()) && onControllers()) padAction(e.key.toLowerCase());
         });
 
         // Browsers block sound until the first input; the Electron window allows it from the start
