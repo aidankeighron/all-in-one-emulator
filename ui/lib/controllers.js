@@ -21,6 +21,19 @@ const PAD_KINDS = new Set(['xbox', 'switch', 'generic']);
 // Input devices that sit next to a gamepad but are not one (the Wii Remote exposes several)
 const NOT_A_PAD = /keyboard|mouse|touchpad|trackpad|consumer control|system control|power button|sleep button|video bus|lid switch|hdmi|speaker|headphone|headset|webcam|camera|\bir\b|accelerometer|motion ?plus|motion sensors|gyro|imu|nunchuk|classic controller|balance board|touchscreen|pen\b|stylus/i;
 
+// The button codes a device has, from the "B: KEY=" line of /proc/bus/input/devices (hex words, the highest first, 64 bits each).
+// Only the button range (0x100 and up): browsers number a pad's buttons in the order of these codes.
+function keyCodes(text) {
+    const words = String(text).trim().split(/\s+/).filter(Boolean).reverse();
+    const codes = [];
+    words.forEach((w, i) => {
+        let bits;
+        try { bits = BigInt('0x' + w); } catch { return; }
+        for (let b = 0; b < 64; b++) if ((bits >> BigInt(b)) & 1n) { const code = i * 64 + b; if (code >= 0x100 && code < 0x300) codes.push(code); }
+    });
+    return codes;
+}
+
 // Parses the text of /proc/bus/input/devices into [{name, vendor, product, bus, handlers, js, event}]
 function parseProc(text) {
     const devices = [];
@@ -29,6 +42,7 @@ function parseProc(text) {
         const name = block.match(/^N: Name="(.*)"$/m);
         const handlers = block.match(/^H: Handlers=(.*)$/m);
         const uniq = block.match(/^U: Uniq=([0-9a-f]{2}(?::[0-9a-f]{2}){5})\s*$/im);
+        const keyLine = block.match(/^B: KEY=(.*)$/m);
         if (!id || !name || !handlers) continue;
         const list = handlers[1].trim().split(/\s+/);
         const js = list.find(h => /^js\d+$/.test(h));
@@ -40,6 +54,7 @@ function parseProc(text) {
             product: id[3].toLowerCase(),
             version: (id[4] || '0000').toLowerCase(),
             address: uniq ? uniq[1].toUpperCase() : null,      // a Bluetooth controller's address (what "forget" needs)
+            keys: keyLine ? keyCodes(keyLine[1]) : [],
             js: js ? Number(js.slice(2)) : null,
             event: event ? Number(event.slice(5)) : null
         });
@@ -116,6 +131,7 @@ function build(procDevices, usbIds = []) {
             bus: d.bus,
             version: d.version,
             address: d.bus === '0005' ? d.address || null : null,
+            keys: d.keys || [],
             js: d.js,
             sdlIndex: d.js !== null ? sdlOrder.indexOf(d) : null,
             nameIndex: nth,

@@ -118,3 +118,12 @@ test('detect applies the combining to what it found', () => {
     assert.strictEqual(merged.length, 1);
     assert.strictEqual(merged[0].name, 'Joy-Con pair');
 });
+
+test('the buttons a controller has are read from /proc, in the order a browser numbers them', () => {
+    const text = 'I: Bus=0005 Vendor=057e Product=2007 Version=0001\nN: Name="Nintendo Switch Right Joy-Con"\nH: Handlers=event5 js1\nB: PROP=0\nB: EV=1b\nB: KEY=5a9b000000000000 0 0 0 0\n';
+    const [dev] = controllers.parseProc(text);
+    // south, east, north, west, TR, TR2, start, mode, thumb-right
+    assert.deepStrictEqual(dev.keys, [0x130, 0x131, 0x133, 0x134, 0x137, 0x139, 0x13b, 0x13c, 0x13e]);
+    const [pad] = controllers.build([dev]);
+    assert.deepStrictEqual(pad.keys, dev.keys);
+});

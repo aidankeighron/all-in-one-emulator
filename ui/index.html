@@ -1803,6 +1803,7 @@
             padJson = json;
             padList = data.controllers;
             padSlots = data.slots || [];
+            padKeyMap = data.keyMap || {};
             padProfiles = data.profiles || [];
             updateControllerChip();
             return changed;
@@ -4040,17 +4041,33 @@
         // Switch controllers (vendor 057e) in the browser's raw layout: the button order is the Linux one, which differs from the
         // standard layout in a few places. standard index -> raw index
         const isNintendoPad = gp => /057e/i.test(gp.id || '');
-        // The browser lists a pad's buttons in Linux key-code order, and only those the pad has, so each kind differs.
-        // standard index -> raw index. Pro Controller: its d-pad is a hat on axes 4 and 5. Left Joy-Con: no face buttons, its
-        // arrows are buttons. Right Joy-Con: no d-pad.
+        // The browser lists a pad's buttons in Linux key-code order, only those the pad has. The server tells which buttons each kind
+        // of controller has (padKeyMap, by vendor:product), so the numbers can be turned into the standard layout exactly.
+        let padKeyMap = {};
+        const STD_OF_CODE = { 0x130: 0, 0x131: 1, 0x134: 2, 0x133: 3, 0x136: 4, 0x137: 5, 0x138: 6, 0x139: 7, 0x13a: 8, 0x13b: 9, 0x13d: 10, 0x13e: 11, 0x220: 12, 0x221: 13, 0x222: 14, 0x223: 15, 0x13c: 16 };
+        // The same guess as before, used only until the server's list of buttons has arrived: standard index -> raw index
         const NIN_PRO = { 0: 0, 1: 1, 2: 3, 3: 2, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8, 9: 9, 10: 11, 11: 12, 16: 10 };
         const NIN_L = { 4: 1, 6: 2, 8: 3, 10: 4, 12: 5, 13: 6, 14: 7, 15: 8 };
         const NIN_R = { 0: 0, 1: 1, 2: 3, 3: 2, 5: 4, 7: 5, 9: 6, 11: 8, 16: 7 };
         function stdPressed(gp, i) {
-            if (gp.mapping === 'standard' || !isNintendoPad(gp)) return !!gp.buttons[i]?.pressed;
-            const product = padIds(gp)[1];
+            if (!isNintendoPad(gp)) return !!gp.buttons[i]?.pressed;
+            const [vendor, product] = padIds(gp);
+            const keys = padKeyMap[`${vendor}:${product}`];
+            if (keys && keys.length === gp.buttons.length) {
+                const raw = keys.findIndex(code => STD_OF_CODE[code] === i);
+                return raw >= 0 && !!gp.buttons[raw]?.pressed;
+            }
+            if (gp.mapping === 'standard') return !!gp.buttons[i]?.pressed;
             const table = product === '2006' ? NIN_L : product === '2007' ? NIN_R : NIN_PRO;
             return table[i] !== undefined && !!gp.buttons[table[i]]?.pressed;
+        }
+        // Which Joy-Con a pad is: 'L', 'R', or null for anything else
+        function nintendoSide(gp) {
+            if (!isNintendoPad(gp)) return null;
+            const product = padIds(gp)[1];
+            if (product === '2006' || /\(l\)|left joy-?con/i.test(gp.id)) return 'L';
+            if (product === '2007' || /\(r\)|right joy-?con/i.test(gp.id)) return 'R';
+            return null;
         }
 
         function readPads() {
@@ -4084,7 +4101,10 @@
             st.down  = btn(13) || hatY > 0.5  || stickY > 0.5;
             st.a = btn(0);  st.b = btn(1);
             st.x = btn(2);  st.y = btn(3);
-            st.lb = btn(4); st.rb = btn(5);
+            // A single Joy-Con has one shoulder side: the left one pages back, the right one pages forward
+            const side = nintendoSide(gp);
+            st.lb = side === 'L' ? btn(4) || btn(5) : side === 'R' ? false : btn(4);
+            st.rb = side === 'R' ? btn(4) || btn(5) : side === 'L' ? false : btn(5);
             st.start = btn(9);
             // Scrolling: the right stick up/down, or ZL / ZR for a controller with only one stick (a single Joy-Con)
             const rs = gp.axes.length > 3 ? ax(3) : 0;

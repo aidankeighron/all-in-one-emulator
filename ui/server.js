@@ -576,9 +576,13 @@ function controllersView() {
         return { id: w.id, name: 'Wii Remote', kind: 'wiimote', label: 'Wii Remote', family: 'wiimote', connection: 'Bluetooth', virtual: true, pad: false, slot: w.player - 1, player: w.player, roles: w.roles, maps: mapOf(s), ...choicesOf(s), key: 'real' };
     });
     const ordered = [...shown, ...waiting].sort((a, b) => (a.slot ?? 99) - (b.slot ?? 99));
+    // Which buttons each kind of controller has (by vendor:product), so the menu window can tell what the browser's button numbers mean
+    const keyMap = {};
+    for (const c of controllers.detect({ platform: runner.platform })) if (c.keys && c.keys.length) keyMap[`${c.vendor}:${c.product}`] = c.keys;
     return {
         platform: runner.platform,
         controllers: ordered,
+        keyMap,
         slots: view.slots.map(s => ({ index: s.index, mode: s.mode, controller: s.controller ? s.controller.name : (s.mode === 'real' ? 'Wii Remote' : null) })),
         profiles: mappings.list().map(p => ({ id: p.id, name: p.name, target: p.target, family: p.family, builtin: p.builtin })),
         autoSetup: config.getAutoControllers(),

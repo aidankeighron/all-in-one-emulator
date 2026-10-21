@@ -8,22 +8,19 @@
     const defs = `<defs><linearGradient id="gl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient></defs>`;
     const svg = (box, inner) => `<svg viewBox="${box}" xmlns="http://www.w3.org/2000/svg">${defs}${inner}</svg>`;
 
-    // The body shared by the Xbox and Switch Pro Controller: wide shoulders, two rounded grips that reach down
-    const GAMEPAD = 'M96 74 C140 56 260 56 304 74 C336 84 358 132 372 190 C382 232 362 252 338 244 C318 236 308 210 284 198 L116 198 C92 210 82 236 62 244 C38 252 18 232 28 190 C42 132 64 84 96 74 Z';
-    // Bumpers hug the shoulders: a thick curved bar that follows the top edge and shows above it
+    // Two different bodies: the Xbox is wider with grips that angle out, the Switch Pro Controller is rounder with short thick grips
+    const XBOX_BODY = 'M98 80 C140 66 260 66 302 80 C330 90 348 130 358 182 C365 222 350 244 331 238 C314 232 306 208 284 198 L116 198 C94 208 86 232 69 238 C50 244 35 222 42 182 C52 130 70 90 98 80 Z';
+    const PRO_BODY = 'M106 82 C144 70 256 70 294 82 C322 90 342 128 350 176 C356 214 346 238 326 234 C308 230 304 210 282 202 L118 202 C96 210 92 230 74 234 C54 238 44 214 50 176 C58 128 78 90 106 82 Z';
+    // One bumper per shoulder: a slim curved bar that follows the top edge, partly under the body
     const bumper = (side, fill) => side === 'L'
-        ? `<path d="M74 100 C86 74 124 58 172 56" stroke="${fill}" stroke-width="13" fill="none" stroke-linecap="round"/>`
-        : `<path d="M326 100 C314 74 276 58 228 56" stroke="${fill}" stroke-width="13" fill="none" stroke-linecap="round"/>`;
-    // Triggers sit behind the bumpers
-    const trigger = (side, fill) => side === 'L'
-        ? `<path d="M88 78 C98 52 128 40 160 40" stroke="${fill}" stroke-width="15" fill="none" stroke-linecap="round"/>`
-        : `<path d="M312 78 C302 52 272 40 240 40" stroke="${fill}" stroke-width="15" fill="none" stroke-linecap="round"/>`;
+        ? `<path d="M68 112 C80 86 116 70 160 68" stroke="${fill}" stroke-width="13" fill="none" stroke-linecap="round"/>`
+        : `<path d="M332 112 C320 86 284 70 240 68" stroke="${fill}" stroke-width="13" fill="none" stroke-linecap="round"/>`;
 
     function xbox() {
         const w = '#f1f3f5', edge = '#b4bcc4', dark = '#4b545d';
         return svg('0 20 400 250', `
-            ${trigger('L', '#8d98a5')}${trigger('R', '#8d98a5')}${bumper('L', '#aab4be')}${bumper('R', '#aab4be')}
-            <path d="${GAMEPAD}" fill="${w}" stroke="${edge}" stroke-width="5"/>${gloss(GAMEPAD)}
+            ${bumper('L', '#9aa5b0')}${bumper('R', '#9aa5b0')}
+            <path d="${XBOX_BODY}" fill="${w}" stroke="${edge}" stroke-width="5"/>${gloss(XBOX_BODY)}
             ${dot(112, 112, 27, '#cfd5db')}${dot(112, 112, 20, dark)}${dot(112, 112, 12, '#2e353c')}
             ${cross(158, 168, 24, 17, dark)}
             ${dot(244, 168, 27, '#cfd5db')}${dot(244, 168, 20, dark)}${dot(244, 168, 12, '#2e353c')}
@@ -35,9 +32,8 @@
     function proController() {
         const body = '#585f66', edge = '#363c42', dark = '#2a2f34';
         return svg('0 20 400 250', `
-            ${trigger('L', '#3b4147')}${trigger('R', '#3b4147')}${bumper('L', '#454c53')}${bumper('R', '#454c53')}
-            <path d="${GAMEPAD}" fill="${body}" stroke="${edge}" stroke-width="5"/>${gloss(GAMEPAD, 0.16)}
-            <path d="M52 200 C42 236 40 244 62 244 C82 236 92 212 112 200 Z" fill="#4a5158" opacity=".0"/>
+            ${bumper('L', '#3b4147')}${bumper('R', '#3b4147')}
+            <path d="${PRO_BODY}" fill="${body}" stroke="${edge}" stroke-width="5"/>${gloss(PRO_BODY, 0.16)}
             ${dot(112, 112, 27, '#40464c')}${dot(112, 112, 19, '#1f2327')}${dot(112, 112, 11, '#7b838b')}
             ${cross(158, 170, 22, 15, dark)}
             ${dot(244, 170, 27, '#40464c')}${dot(244, 170, 19, '#1f2327')}${dot(244, 170, 11, '#7b838b')}
@@ -52,7 +48,6 @@
         return svg('0 20 400 250', `
             <path d="M84 84 C90 56 120 42 154 42" stroke="#8c8fa0" stroke-width="15" fill="none" stroke-linecap="round"/>
             <path d="M316 84 C310 56 280 42 246 42" stroke="#8c8fa0" stroke-width="15" fill="none" stroke-linecap="round"/>
-            <path d="M334 84 C336 64 318 52 296 50" stroke="#4d73d6" stroke-width="10" fill="none" stroke-linecap="round" opacity=".0"/>
             <path d="${shape}" fill="${body}" stroke="${edge}" stroke-width="5"/>${gloss(shape, 0.2)}
             ${dot(104, 120, 27, '#c9ccd6')}${dot(104, 120, 20, '#9a9eab')}${dot(104, 120, 12, '#c9ccd6')}
             ${cross(150, 180, 20, 13, '#c9ccd6')}
@@ -61,8 +56,7 @@
             ${dot(262, 150, 11, '#e0453a')}
             <ellipse cx="346" cy="134" rx="9" ry="19" transform="rotate(-30 346 134)" fill="#c9ccd6"/>
             <ellipse cx="300" cy="86" rx="19" ry="9" transform="rotate(-14 300 86)" fill="#c9ccd6"/>
-            ${dot(244, 178, 18, '#e9d24a')}${dot(244, 178, 11, '#c9b02e')}
-            <rect x="326" y="48" width="38" height="14" rx="7" fill="#4d73d6" opacity=".0"/>`);
+            ${dot(244, 178, 18, '#e9d24a')}${dot(244, 178, 11, '#c9b02e')}`);
     }
 
     function wiimote() {
@@ -113,16 +107,17 @@
     function joyconSingle(side) { return svg('0 10 100 240', joycon(side, 0)); }
     function joyconPair() { return svg('10 10 200 240', joycon('L', 0) + joycon('R', 100)); }
 
+    // Any other gamepad: the classic symmetric layout, d-pad and buttons high, two sticks side by side below the middle
     const generic = () => {
-        const body = '#d6dde4', edge = '#aab4be', dark = '#5b6671';
+        const body = '#dfe4e9', edge = '#a9b3bd', dark = '#59636d';
+        const shape = 'M92 84 C140 70 260 70 308 84 C338 92 356 132 366 184 C373 224 356 246 334 240 C318 235 312 214 292 206 C272 198 252 214 200 214 C148 214 128 198 108 206 C88 214 82 235 66 240 C44 246 27 224 34 184 C44 132 62 92 92 84 Z';
         return svg('0 20 400 250', `
-            ${bumper('L', '#aab4be')}${bumper('R', '#aab4be')}
-            <path d="${GAMEPAD}" fill="${body}" stroke="${edge}" stroke-width="5"/>${gloss(GAMEPAD)}
-            ${cross(116, 118, 24, 17, dark)}
-            ${dot(244, 168, 24, '#aab4be')}${dot(244, 168, 16, dark)}
-            ${dot(158, 168, 24, '#aab4be')}${dot(158, 168, 16, dark)}
-            ${pill(180, 104, 20, 8, dark)}${pill(220, 104, 20, 8, dark)}
-            ${dot(290, 140, 10, dark)}${dot(312, 116, 10, dark)}${dot(268, 116, 10, dark)}${dot(290, 92, 10, dark)}`);
+            ${bumper('L', '#a9b3bd')}${bumper('R', '#a9b3bd')}
+            <path d="${shape}" fill="${body}" stroke="${edge}" stroke-width="5"/>${gloss(shape)}
+            ${cross(104, 128, 24, 17, dark)}
+            ${dot(296, 130, 9, dark)}${dot(318, 108, 9, dark)}${dot(274, 108, 9, dark)}${dot(296, 86, 9, dark)}
+            ${dot(162, 168, 22, '#b8c1ca')}${dot(162, 168, 15, dark)}${dot(238, 168, 22, '#b8c1ca')}${dot(238, 168, 15, dark)}
+            ${pill(184, 118, 18, 8, dark)}${pill(216, 118, 18, 8, dark)}`);
     };
 
     function kindOf(c) {
@@ -130,7 +125,7 @@
         const name = typeof c === 'string' ? '' : String(c.name || '');
         if (kind === 'switch') {
             if (typeof c !== 'string' && c.combined) return 'joycon-pair';
-            if (/joy-?con pair|\(l\/r\)/i.test(name)) return 'joycon-pair';
+            if (/combined|joy-?con pair|\(l\/r\)/i.test(name)) return 'joycon-pair';
             if (/\(l\)|left joy-?con/i.test(name)) return 'joycon-l';
             if (/\(r\)|right joy-?con/i.test(name)) return 'joycon-r';
             return 'switch';
