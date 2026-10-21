@@ -245,17 +245,26 @@ function apply(emulatorId, controllers, context = {}) {
     }
 }
 
-// Puts an emulator's controller config back the way it was before the menu's latest change. True when something was restored.
+// Puts an emulator's controller settings back the way they were before the menu worked on them: the copy from just before its
+// latest change, else the one from before it ever touched the file. Only the controller list is put back; the person's other
+// settings stay as they are. True when something was restored.
 function restore(emulatorId, context = {}) {
     if (emulatorId !== 'ryujinx') return false;
     try {
         const platform = context.platform || platformLib.current();
         const root = adapters.create({ platform, home: context.home || os.homedir(), env: context.env || process.env, exePath: context.exePath || (() => null) }).get('ryujinx').dataRoot();
         const file = path.join(root, 'Config.json');
-        const last = `${file}.emulator-menu.last`;
-        if (!fs.existsSync(last)) return false;
-        fs.copyFileSync(last, file);
+        const last = `${file}.emulator-menu.last`, first = `${file}.emulator-menu.bak`;
+        const from = [last, first].find(f => fs.existsSync(f));
+        if (!from) return false;
+        const before = JSON.parse(fs.readFileSync(from, 'utf8'));
+        const now = JSON.parse(fs.readFileSync(file, 'utf8'));
         fs.rmSync(last, { force: true });
+        const wanted = JSON.stringify(Array.isArray(before.input_config) ? before.input_config : []);
+        if (JSON.stringify(Array.isArray(now.input_config) ? now.input_config : []) === wanted) return false;
+        now.input_config = JSON.parse(wanted);
+        fs.writeFileSync(`${file}.tmp-${process.pid}`, JSON.stringify(now, null, 2));
+        fs.renameSync(`${file}.tmp-${process.pid}`, file);
         return true;
     } catch { return false; }
 }

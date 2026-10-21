@@ -55,6 +55,7 @@
         "nro",
         "nso"
       ],
+      "env": { "SDL_JOYSTICK_HIDAPI_JOY_CONS": "0" },
       "args": [
         "{rom}"
       ],

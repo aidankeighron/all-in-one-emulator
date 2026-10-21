@@ -1209,6 +1209,15 @@
         </div>
     </div>
 
+    <div class="overlay" id="confirm-overlay" style="z-index:80" onclick="if (event.target === this) confirmClose()">
+        <div class="panel guide" style="min-height:0">
+            <div class="eyebrow">Controllers</div>
+            <h2 id="confirm-title" style="margin-top:4px">Are you sure?</h2>
+            <p id="confirm-text" style="font-size:15px"></p>
+            <div class="pair-buttons" id="confirm-buttons"></div>
+        </div>
+    </div>
+
     <div class="overlay" id="pause-overlay" style="z-index:55">
         <div class="wp">
             <div class="wp-top">
@@ -1572,7 +1581,7 @@
             if (c) {
                 chips.push(['A', c.player ? 'Change player slot' : 'Give it a player slot', 'a']);
                 if (c.family !== 'wiimote' && !c.adapter) chips.push(['X', 'Change mapping', 'x']);
-                if (c.address || (c.addresses && c.addresses.length)) chips.push(['Start', 'Forget this Bluetooth controller', 'forget']);
+                chips.push(['B', 'Remove this controller', 'b']);
                 if (nintendoUnits().length >= 2) chips.push(['L + R', 'Press both bumpers on two Joy-Cons: join them, or split them again', null]);
             } else if (zone === 'bottom') chips.push(['A', 'Press the button', 'a']);
             chips.push(['Y', 'Connect a controller', 'y']);
@@ -1620,33 +1629,56 @@
         }
 
         function padAction(act) {
-            if (!onControllers() || settingsOpen || dd.open || pm.open) return;
+            if (!onControllers() || settingsOpen || dd.open || pm.open || cf.open) return;
             if (act === 'y') return openPair();
             if (zone !== 'grid') return;
             const c = padList[selectedIndex];
             if (!c) return;
             if (act === 'a') return padMovePicker(c);
             if (act === 'x') return padMapPicker(c);
-            if (act === 'forget') return padForget(c);
+            if (act === 'b') return padRemove(c);
         }
 
-        // Start (or Delete): remove a Bluetooth controller from this computer. Asks for the same press twice.
-        let forgetArm = null;
-        async function padForget(c) {
+        // B (or Delete) on a controller: asks, then removes a Bluetooth controller from this computer
+        function padRemove(c) {
             const addresses = c.addresses && c.addresses.length ? c.addresses : c.address ? [c.address] : [];
-            if (!addresses.length) return showToast('Only Bluetooth controllers can be forgotten here.');
-            if (!forgetArm || forgetArm.key !== c.key || Date.now() - forgetArm.at > 4000) {
-                forgetArm = { key: c.key, at: Date.now() };
-                Sfx.play('select');
-                return showToast(`Press Start again to forget ${c.name}`);
-            }
-            forgetArm = null;
-            try {
-                for (const address of addresses) await padPost('/api/bluetooth/forget', { address });
-                Sfx.play('back');
-                showToast(`${c.name} forgotten. Pair it again to use it.`);
-                refreshControllers();
-            } catch (err) { Sfx.play('error'); showToast(err.message); }
+            if (!addresses.length) return showToast(`${c.name} is plugged in. Unplug it to remove it.`);
+            askConfirm(`Remove ${c.name}?`, 'You can pair it again at any time.', 'Remove', async () => {
+                try {
+                    for (const address of addresses) await padPost('/api/bluetooth/forget', { address });
+                    Sfx.play('back');
+                    showToast(`${c.name} removed`);
+                    refreshControllers();
+                } catch (err) { Sfx.play('error'); showToast(err.message); }
+            });
+        }
+
+        // A yes/no question in the style of the menu. A (or Enter) says yes, B (or Escape) says no.
+        const cf = { open: false, yes: null, i: 1 };
+        function askConfirm(title, text, yesLabel, onYes) {
+            Object.assign(cf, { open: true, yes: onYes, i: 1 });
+            document.getElementById('confirm-title').textContent = title;
+            document.getElementById('confirm-text').textContent = text;
+            document.getElementById('confirm-buttons').innerHTML = `<button type="button" class="btn ${cf.i === 0 ? 'pad-focus' : ''}" data-i="0">${escapeHtml(yesLabel)}</button><button type="button" class="btn ${cf.i === 1 ? 'pad-focus' : ''}" data-i="1">Cancel (B)</button>`;
+            document.querySelectorAll('#confirm-buttons .btn').forEach(el => el.addEventListener('click', () => { cf.i = Number(el.dataset.i); confirmPress(); }));
+            document.getElementById('confirm-overlay').classList.add('open');
+            Sfx.play('open');
+        }
+        function confirmMove(delta) {
+            cf.i = (cf.i + delta + 2) % 2;
+            Sfx.play('move');
+            document.querySelectorAll('#confirm-buttons .btn').forEach((el, n) => el.classList.toggle('pad-focus', n === cf.i));
+        }
+        function confirmClose(quiet) {
+            cf.open = false;
+            document.getElementById('confirm-overlay').classList.remove('open');
+            lastInputTime = Date.now() + 400;
+            if (!quiet) Sfx.play('back');
+        }
+        function confirmPress() {
+            const yes = cf.i === 0 ? cf.yes : null;
+            confirmClose(!!yes);
+            if (yes) yes();
         }
 
         function padMovePicker(c) {
@@ -4099,8 +4131,10 @@
             st.right = btn(15) || hatX > 0.5  || stickX > 0.5;
             st.up    = btn(12) || hatY < -0.5 || stickY < -0.5;
             st.down  = btn(13) || hatY > 0.5  || stickY > 0.5;
-            st.a = btn(0);  st.b = btn(1);
-            st.x = btn(2);  st.y = btn(3);
+            // Xbox layout: A is the bottom button. On a Switch controller A is the right one, B the bottom, X the top, Y the left
+            const swapped = isNintendoPad(gp);
+            st.a = swapped ? btn(1) : btn(0);  st.b = swapped ? btn(0) : btn(1);
+            st.x = swapped ? btn(3) : btn(2);  st.y = swapped ? btn(2) : btn(3);
             // A single Joy-Con has one shoulder side: the left one pages back, the right one pages forward
             const side = nintendoSide(gp);
             st.lb = side === 'L' ? btn(4) || btn(5) : side === 'R' ? false : btn(4);
@@ -4166,7 +4200,13 @@
 
             if (st.pressed.length) Sfx.unlock();
             if (st.count > 0 && (!gameRunning || pause.open)) {
-                if (pm.open) {
+                if (cf.open) {
+                    if (now - lastInputTime > 180) {
+                        if (st.a) { confirmPress(); lastInputTime = now + 300; }
+                        else if (st.b) { confirmClose(); lastInputTime = now + 400; }
+                        else if (st.left || st.right || st.up || st.down) { confirmMove(1); lastInputTime = now; }
+                    }
+                } else if (pm.open) {
                     if (now - lastInputTime > 150) {
                         const dir = st.down ? 'down' : st.up ? 'up' : st.right ? 'right' : st.left ? 'left' : null;
                         if (st.a) { pmPress(); lastInputTime = now + 250; }
@@ -4234,7 +4274,7 @@
                     if (twoSwitchPads && (st.rb || st.lb)) { /* the bumpers join or split Joy-Cons here */ }
                     else if (st.rb) { pagePress(1); lastInputTime = now; }
                     else if (st.lb) { pagePress(-1); lastInputTime = now; }
-                    else if (onControllers() && (st.x || st.y || st.start)) { padAction(st.y ? 'y' : st.start ? 'forget' : 'x'); lastInputTime = now + 400; }
+                    else if (onControllers() && (st.x || st.y || (st.b && zone === 'grid'))) { padAction(st.y ? 'y' : st.b ? 'b' : 'x'); lastInputTime = now + 400; }
                     else if ((st.x || st.y) && zone === 'grid') { toggleFavorite(currentGame()); lastInputTime = now + 400; }
                     else if (st.a) { activate(); lastInputTime = now + 500; }
                     else if (dir) { navigate(dir); lastInputTime = now; }
@@ -4245,6 +4285,12 @@
 
         // Keyboard works too (handy without a controller, or to check that the menu itself is fine)
         window.addEventListener('keydown', e => {
+            if (cf.open) {
+                if (e.key === 'Escape') confirmClose();
+                else if (e.key === 'Enter' || e.key === ' ') confirmPress();
+                else if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Tab'].includes(e.key)) confirmMove(1);
+                return e.preventDefault();
+            }
             if (pm.open) {
                 const dirs = { ArrowRight: 'right', ArrowLeft: 'left', ArrowDown: 'down', ArrowUp: 'up' };
                 if (e.key === 'Escape') closePadMap();
@@ -4295,7 +4341,7 @@
             else if (e.key === 'PageUp') pagePress(-1);
             else if (['f', 'x', 'y'].includes(e.key.toLowerCase()) && zone === 'grid' && !onControllers()) toggleFavorite(currentGame());
             else if (['x', 'y'].includes(e.key.toLowerCase()) && onControllers()) padAction(e.key.toLowerCase());
-            else if (e.key === 'Delete' && onControllers()) padAction('forget');
+            else if ((e.key === 'Delete' || e.key === 'Backspace') && onControllers()) padAction('b');
         });
 
         // Browsers block sound until the first input; the Electron window allows it from the start

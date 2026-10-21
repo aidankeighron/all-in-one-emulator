@@ -167,6 +167,20 @@ async function ensureBetterJoy() {
 const detectPads = () => controllers.detect({ platform: runner.platform, merge: config.getJoyconPairs(), hideNintendo: betterjoyOn() });
 
 // Writes the controller settings of one emulator (or all installed ones) from what is plugged in now
+// The last problem lines in the emulator's own log file (Ryujinx keeps one per run), for a game that closed right away
+function emulatorLogTail(emu) {
+    try {
+        if (emu.id !== 'ryujinx') return [];
+        const dir = path.join(slotAdapters.get('ryujinx').dataRoot(), 'Logs');
+        const newest = fs.readdirSync(dir).filter(n => /\.log$/i.test(n)).map(n => ({ n, t: fs.statSync(path.join(dir, n)).mtimeMs })).sort((a, b) => b.t - a.t)[0];
+        if (!newest || Date.now() - newest.t > 60000) return [];
+        const lines = fs.readFileSync(path.join(dir, newest.n), 'utf8').split('\n').map(l => l.trim()).filter(Boolean);
+        const bad = lines.filter(l => /error|exception|fatal|crash|fail/i.test(l));
+        return (bad.length ? bad : lines).slice(-12);
+    } catch { return []; }
+}
+
+let autoRetried = null;          // the game the menu already started a second time after a quick close (never loops)
 const skipSetup = new Set();      // emulators whose controller settings are left alone for the next start (see the quick-exit check)
 function setupControllers(emulatorIds) {
     const connected = detectPads();
@@ -275,17 +289,24 @@ async function startGame(relPath, slotId, onGameState) {
         const wasPaused = !!(current && current.paused);
         const asked = !!(current && current.stopping);
         current = null;
+        let quickUndone = false;
         if (!asked && Date.now() - started < 8000) {
             // It ended by itself right after starting. If the menu had just changed its controller settings, put them back
             // (and leave them alone next time) in case they are what it could not start with.
-            const tail = (stderr || '').trim().split('\n').slice(-3).join(' | ');
+            const logTail = emulatorLogTail(emu);
+            const tail = ((logTail.length ? logTail : (stderr || '').trim().split('\n')).slice(-3)).join(' | ');
+            if (logTail.length) console.error(`[LAUNCH] ${emu.name} log:\n${logTail.join('\n')}`);
             const undone = inputconfig.restore(emu.id, platformCtx);
-            if (undone) skipSetup.add(emu.id);
-            lastError = `${emu.name} closed right after starting (exit code ${code}${tail ? `: ${tail}` : ''}).${undone ? ' The menu had changed its controller settings, so it put them back the way they were. Start the game again.' : ''}`;
+            if (undone) { skipSetup.add(emu.id); quickUndone = true; }
+            lastError = `${emu.name} closed right after starting (exit code ${code}${tail ? `: ${tail}` : ''}).${undone ? ' The menu had changed its controller settings, so it put them back the way they were and is starting the game again.' : ''}`;
             console.error(`[LAUNCH] ${lastError}`);
             if (stderr) console.error(`[LAUNCH] ${emu.name} stderr:\n${stderr}`);
         }
-        const again = restartTarget;
+        // Closed right after starting with settings the menu had written: they are back as they were, so start it once more
+        const retry = quickUndone && autoRetried !== relPath;
+        if (retry) autoRetried = relPath;
+        const again = restartTarget || (retry ? { path: relPath, slotId: slot ? slot.id : null } : null);
+        if (retry) restarting = true;
         restartTarget = null;
         if (wasPaused) pauseHook(false);
         if (onGameState) onGameState(false);
@@ -952,6 +973,7 @@ function createServer(onGameState) {
                 }
                 if (route === 'POST /api/launch') {
                     const body = await readJson(req);
+                    autoRetried = null;
                     const result = await launchGame(body.path, body.slot, onGameState);
                     return sendJson(res, result.status, result.body);
                 }

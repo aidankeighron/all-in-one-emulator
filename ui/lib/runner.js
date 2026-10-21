@@ -61,7 +61,7 @@ function createRunner({ platform = platformLib.current(), env = process.env, get
 
         // Starts the emulator; onExit(code, stderrTail) when it ends. Returns the child process.
         launch(emu, args, onExit) {
-            if (!win) return flatpakImpl.launch(emu.flatpak, args, onExit);
+            if (!win) return flatpakImpl.launch(emu.flatpak, args, onExit, emu.env);
             const exe = exePath(emu);
             if (!exe) { setImmediate(() => onExit(1, `${emu.name} was not found`)); return { kill() {}, pid: null }; }
             const child = spawnImpl(exe, args, { cwd: path.dirname(exe), stdio: ['ignore', 'ignore', 'pipe'] });

@@ -54,10 +54,14 @@ function kill(id) {
 }
 
 // Starts the emulator; resolves once it has exited
-function launch(id, args, onExit) {
-    const child = spawn('flatpak', ['run', id, ...args], { stdio: ['ignore', 'ignore', 'pipe'] });
+// env: extra environment variables for the app inside its sandbox. What the app prints (both streams) is kept, last part only.
+function launch(id, args, onExit, env = {}) {
+    const envArgs = Object.entries(env || {}).map(([k, v]) => `--env=${k}=${v}`);
+    const child = spawn('flatpak', ['run', ...envArgs, id, ...args], { stdio: ['ignore', 'pipe', 'pipe'] });
     let stderr = '';
-    child.stderr.on('data', d => { stderr = (stderr + d).slice(-2000); });
+    const keep = d => { stderr = (stderr + d).slice(-4000); };
+    child.stdout.on('data', keep);
+    child.stderr.on('data', keep);
     child.on('error', err => onExit(1, err.message));
     child.on('close', code => onExit(code, stderr));
     return child;
