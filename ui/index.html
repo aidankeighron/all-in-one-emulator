@@ -444,6 +444,7 @@
         .tab:hover { border-color: var(--wii-blue); color: var(--wii-blue-deep); }
         .tab.active { background: linear-gradient(to bottom, #5cc6fa, #2c9fe0); border-color: #2c9fe0; color: #fff; }
         .tab-pane[hidden] { display: none; }
+        .wifi-details { margin: 6px 0 10px; padding: 10px 12px; max-height: 150px; overflow: auto; font-size: 11px; line-height: 1.45; white-space: pre-wrap; word-break: break-all; border-radius: 10px; background: var(--bg-f3f6f8); color: var(--tx-6b747c); }
         .panel { min-height: 440px; }
         .settings-foot { justify-content: space-between; margin-top: 22px; }
         .panel.guide { width: min(640px, 92vw); min-height: 0; }
@@ -1062,6 +1063,27 @@
                     <button class="btn" id="kiosk-button" onclick="sysKiosk()" disabled>…</button>
                 </div>
                 <div id="kiosk-job" class="notice" style="display:none"></div>
+
+                <div id="wifi-section">
+                    <h3>Wi-Fi</h3>
+                    <div class="emu-row" style="border-top:none">
+                        <div class="info">
+                            <div class="name">Wi-Fi status</div>
+                            <div class="desc" id="wifi-verdict">Checking…</div>
+                        </div>
+                        <button class="btn" id="wifi-check" onclick="wifiRefresh(true)">Check again</button>
+                        <button class="btn primary" id="wifi-repair" onclick="wifiRepair()">Repair Wi-Fi</button>
+                    </div>
+                    <pre id="wifi-details" class="wifi-details"></pre>
+                    <div class="emu-row">
+                        <div class="info">
+                            <div class="name">Keep Wi-Fi alive through sleep <span id="wifi-fix-state"></span></div>
+                            <div class="desc">Unloads the Wi-Fi driver before the computer sleeps, brings it back (and runs the repair if it is missing) when it wakes, and switches Wi-Fi power saving off. Asks for the administrator password once.</div>
+                        </div>
+                        <button class="btn" id="wifi-fix" onclick="wifiSleepFix()" disabled>…</button>
+                    </div>
+                    <div id="wifi-job" class="notice" style="display:none"></div>
+                </div>
             </div>
 
             <div class="tab-pane" data-pane="library" hidden>
@@ -2492,7 +2514,7 @@
             settingsTab = name;
             document.querySelectorAll('#settings-overlay .tab-pane').forEach(p => { p.hidden = p.dataset.pane !== name; });
             document.querySelectorAll('#settings-overlay .tab').forEach(t => { t.classList.toggle('active', t.dataset.tab === name); t.setAttribute('aria-selected', String(t.dataset.tab === name)); });
-            if (name === 'system') sysRefresh();
+            if (name === 'system') { sysRefresh().then(() => wifiRefresh(false)); }
             if (!quiet) { Sfx.play('page'); setPadFocus(document.querySelector('#settings-overlay .tab.active')); }
         }
 
@@ -2546,6 +2568,63 @@
             renderSystem();
             sysRefresh();
         }
+
+        // ---- Wi-Fi: what the system sees, a repair that escalates, and a fix for Wi-Fi that dies in sleep (Linux) ----
+        const wifiState = { data: null, poll: null };
+
+        async function wifiRefresh(sound) {
+            if (sound) Sfx.play('select');
+            try { wifiState.data = await (await fetch('/api/system/wifi')).json(); } catch { wifiState.data = null; }
+            renderWifi();
+            clearInterval(wifiState.poll);
+            const job = wifiState.data && wifiState.data.job;
+            if (job && job.phase === 'running' && settingsOpen) wifiState.poll = setInterval(() => wifiRefresh(false), 1200);
+        }
+
+        function renderWifi() {
+            const d = wifiState.data;
+            const section = document.getElementById('wifi-section');
+            if (sys.data && sys.data.platform === 'win32') { section.style.display = 'none'; return; }
+            section.style.display = '';
+            const verdict = document.getElementById('wifi-verdict'), details = document.getElementById('wifi-details');
+            const repair = document.getElementById('wifi-repair'), fix = document.getElementById('wifi-fix'), job = document.getElementById('wifi-job');
+            if (!d || d.supported === false) { verdict.textContent = d && d.reason ? d.reason : 'The menu could not check.'; details.style.display = 'none'; repair.disabled = fix.disabled = true; return; }
+            const busy = d.job && d.job.phase === 'running';
+            verdict.textContent = d.verdict.text;
+            verdict.style.color = d.verdict.level === 'bad' ? '#b3261e' : d.verdict.level === 'warn' ? '#9a6700' : '';
+            const lines = [`Kernel ${d.kernelRelease}`];
+            if (d.adapters.length) d.adapters.forEach(a => lines.push(`Interface ${a.name}: driver ${a.driver || '?'}, ${a.bus} ${a.address}, ${a.state || 'state unknown'}`));
+            else lines.push('No Wi-Fi interface');
+            d.cards.forEach(c => lines.push(`Card ${c.address} (${c.vendor}:${c.device}): driver ${c.driver || 'none loaded'}`));
+            lines.push(`NetworkManager: ${d.networkManager}; rfkill: ${d.rfkill.hard ? 'hard blocked' : d.rfkill.soft ? 'soft blocked' : 'not blocked'}`);
+            if (d.kernel.length) lines.push('', 'Recent kernel messages about Wi-Fi:', ...d.kernel);
+            if (d.history.length) lines.push('', 'What the sleep fix did:', ...d.history);
+            details.style.display = '';
+            details.textContent = lines.join('\n');
+            repair.disabled = !!busy;
+            repair.textContent = busy && d.job.kind === 'repair' ? 'Repairing…' : 'Repair Wi-Fi';
+            fix.disabled = !!busy;
+            fix.textContent = d.sleepFix ? 'Remove' : 'Turn on';
+            document.getElementById('wifi-fix-state').textContent = d.sleepFix ? '· on' : '· off';
+            const j = d.job;
+            const text = j ? (j.phase === 'running' ? (j.lines.slice(-3).join('\n') || 'Working…') : j.message) : '';
+            job.style.display = text ? '' : 'none';
+            job.style.whiteSpace = 'pre-line';
+            job.textContent = text;
+            job.classList.toggle('off', !!(j && j.phase === 'failed'));
+        }
+
+        async function wifiPost(path, body) {
+            Sfx.play('select');
+            try {
+                const res = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
+                if (!res.ok) showToast((await res.json()).message || 'That did not work');
+            } catch { showToast('The menu could not be reached.'); }
+            wifiRefresh(false);
+        }
+
+        const wifiRepair = () => wifiPost('/api/system/wifi/repair');
+        const wifiSleepFix = () => wifiPost('/api/system/wifi/sleepfix', { enabled: !(wifiState.data && wifiState.data.sleepFix) });
 
         // Restart, shut down and close ask for a second press, since they cannot be taken back
         function sysConfirm(id, label, sure, action) {

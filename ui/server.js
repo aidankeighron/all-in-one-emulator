@@ -22,6 +22,7 @@ const playersLib = require('./lib/players');
 const betterjoyLib = require('./lib/betterjoy');
 const joycondLib = require('./lib/joycond');
 const systemLib = require('./lib/system');
+const wifiLib = require('./lib/wifi');
 
 const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'emulators.json'), 'utf8'));
 const emulatorsById = new Map(manifest.emulators.map(e => [e.id, e]));
@@ -420,6 +421,8 @@ async function handleBluetooth(route, req, res) {
 // The computer: restart, shut down, kiosk mode (Ubuntu), leave the menu
 const system = systemLib.createSystem({ platform: runner.platform, configDir: path.dirname(config.configFile) });
 let systemJob = null;
+const wifi = wifiLib.createWifi({ platform: runner.platform });
+let wifiJob = null;
 
 function systemView() {
     return { platform: runner.platform, kiosk: system.status(), job: systemJob && { kind: systemJob.kind, phase: systemJob.phase, message: systemJob.message, lines: systemJob.lines.slice(-4) } };
@@ -428,6 +431,20 @@ function systemView() {
 async function handleSystem(route, req, res) {
     try {
         if (route === 'GET /api/system') return sendJson(res, 200, systemView()), true;
+        if (route === 'GET /api/system/wifi') return sendJson(res, 200, { ...(await wifi.diagnose()), job: wifiJob && { kind: wifiJob.kind, phase: wifiJob.phase, message: wifiJob.message, lines: wifiJob.lines.slice(-8) } }), true;
+        if (route === 'POST /api/system/wifi/repair' || route === 'POST /api/system/wifi/sleepfix') {
+            if (!wifi.supported) return sendJson(res, 409, { error: 'unsupported', message: 'This is for Linux' }), true;
+            if (wifiJob && wifiJob.phase === 'running') return sendJson(res, 409, { error: 'busy', message: 'Something is already in progress' }), true;
+            const repair = route.endsWith('/repair');
+            let on = true;
+            if (!repair) { on = (await readJson(req)).enabled; if (typeof on !== 'boolean') return sendJson(res, 400, { error: 'bad_request', message: 'Say whether to turn it on' }), true; }
+            const job = wifiJob = { kind: repair ? 'repair' : on ? 'sleepfix-on' : 'sleepfix-off', phase: 'running', message: '', lines: [] };
+            const onLine = line => { job.message = line; job.lines.push(line); console.log(`[WIFI] ${line}`); };
+            (repair ? wifi.repair({ onLine }) : wifi.setSleepFix(on, { onLine }))
+                .then(() => { job.phase = 'done'; if (repair) job.message = 'Wi-Fi is back'; })
+                .catch(err => { job.phase = 'failed'; job.message = err.message; console.error(`[WIFI] ${err.message}`); });
+            return sendJson(res, 200, { ok: true }), true;
+        }
         if (route === 'POST /api/system/power') {
             const { action } = await readJson(req);
             if (!['restart', 'shutdown'].includes(action)) return sendJson(res, 400, { error: 'bad_action', message: 'Choose restart or shut down' }), true;

@@ -69,6 +69,19 @@ The fourth tab of Settings (LB / RB reach it with the others), for Windows and L
   (`systemctl reboot` / `poweroff` on Ubuntu, `shutdown /r` / `/s` on Windows).
 - **Close menu**: quits the menu (to the desktop). In kiosk mode the menu starts again at the next start.
 - **Kiosk mode** (Ubuntu): shows whether it is on, and turns it on or off as above.
+- **Wi-Fi** (Linux): for Wi-Fi that stops working after sleep.
+  - *Status* shows what the system can see: the kernel version, the Wi-Fi interface and its driver (`ath10k_pci`, ...), the card on
+    the PCI bus, rfkill and NetworkManager, the kernel's recent Wi-Fi messages (`failed to wake up device`, firmware errors) and one
+    plain sentence: card gone from the bus, driver lost the interface, radio blocked, NetworkManager stopped, or working.
+  - **Repair Wi-Fi** asks for the password once, then climbs a ladder and stops at the first step that works: unblock and radio on;
+    restart NetworkManager; unload and reload the driver (including `ath10k_core` for ath10k); reset the card on its bus (function
+    reset, then remove it from the PCI bus and rescan, which powers it back up and is what works when reloading the driver does not).
+    If none works it says so: shut down (not restart), unplug for 30 seconds, start again.
+  - **Keep Wi-Fi alive through sleep** installs a small systemd sleep hook
+    (`/usr/lib/systemd/system-sleep/emulator-menu-wifi`) that unloads the driver before sleep and runs the repair after waking, plus a
+    NetworkManager setting that switches Wi-Fi power saving off. What it does is in the journal (`journalctl -t emulator-menu-wifi`) and
+    shows in the Wi-Fi status. Remove it from the same button. Not tested on a real ath10k card (the scripts are tested against stand-ins).
+    If it still fails after waking, the kernel messages in the status are what to look at (and the kernel version).
 
 # Setup (Ubuntu)
 
