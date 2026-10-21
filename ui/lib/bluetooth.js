@@ -219,8 +219,14 @@ function createBluetooth({ platform = process.platform, execImpl = execFile, spa
                         return finish('failed', line.replace(/^.*Failed to \w+:?\s*/i, 'Failed: '));
                     }
                 }
+                // The answer to `devices`: controllers BlueZ already knows from an earlier scan (it announces those
+                // with property changes, not "[NEW]", so they would never be noticed otherwise)
+                const known = line.match(/^Device\s+((?:[0-9A-F]{2}:){5}[0-9A-F]{2})\s+(.*)$/i);
+                if (known) { names.set(known[1].toUpperCase(), known[2].trim()); continue; }
                 const ev = parseLine(line);
                 if (!ev) continue;
+                // A known device that is advertising again: it is in range right now
+                if (ev.event === 'prop' && /RSSI:/i.test(ev.text) && names.has(ev.address)) { found(ev.address, names.get(ev.address)); continue; }
                 if (ev.event === 'new') { names.set(ev.address, ev.name); found(ev.address, ev.name); }
                 else if (ev.event === 'name') { names.set(ev.address, ev.name); found(ev.address, ev.name); }
             }
@@ -234,6 +240,7 @@ function createBluetooth({ platform = process.platform, execImpl = execFile, spa
         send('agent NoInputNoOutput');
         send('default-agent');
         send('scan on');
+        send('devices');
         arm(scanSeconds, kind === 'wiimote'
             ? 'No Wii Remote found. Press 1 + 2 together (not the red sync button) and keep them held, then try again.'
             : 'No controller found. Hold the small sync button on the controller until its lights sweep back and forth, then try again.');

@@ -3895,6 +3895,10 @@
             st.x = btn(2);  st.y = btn(3);
             st.lb = btn(4); st.rb = btn(5);
             st.start = btn(9);
+            // Scrolling: the right stick up/down, or ZL / ZR for a controller with only one stick (a single Joy-Con)
+            const rs = gp.axes.length > 3 ? ax(3) : 0;
+            const trig = (gp.buttons[7]?.value || 0) - (gp.buttons[6]?.value || 0);
+            st.scroll = Math.abs(rs) > 0.2 ? rs : Math.abs(trig) > 0.2 ? trig : 0;
             st.ids = pads.map(p => `${p.id} [${p.mapping || 'non-standard'}]`);
             gp.buttons.forEach((b, i) => { if (b.pressed) st.pressed.push(i); });
             return st;
@@ -3921,10 +3925,32 @@
             }
         }
 
+        // The right stick (or ZL / ZR) scrolls whatever is open, so text with nothing to focus can still be read.
+        // It scrolls the panel that holds the focus, otherwise the first one in the open overlay that has more to show.
+        function padScroll(amount) {
+            const overlays = ['maps-overlay', 'players-overlay', 'pair-overlay', 'guide-overlay', 'pause-overlay', 'settings-overlay'];
+            let root = null;
+            if (dd.open) root = document.querySelector('.dd');
+            else if (sheet.open && !settingsOpen) root = document.getElementById('sheet');
+            else root = overlays.map(id => document.getElementById(id)).find(el => el && el.classList.contains('open')) || null;
+            if (!root) return;
+            const scrollable = el => el.scrollHeight > el.clientHeight + 2 && /(auto|scroll)/.test(getComputedStyle(el).overflowY);
+            const all = [root, ...root.querySelectorAll('*')].filter(scrollable);
+            if (!all.length) return;
+            const focus = root.querySelector('.pad-focus, .focus');
+            // The innermost scrollable around the focus first (a list inside the panel), then outwards, then the rest
+            const around = focus ? all.filter(el => el.contains(focus)).reverse() : [];
+            const order = [...around, ...all.filter(el => !around.includes(el))];
+            const canMove = el => amount > 0 ? el.scrollTop + el.clientHeight < el.scrollHeight - 1 : el.scrollTop > 0;
+            const target = order.find(canMove);
+            if (target) target.scrollTop += amount * 24;
+        }
+
         function pollGamepad() {
             const st = readPads();
             const now = Date.now();
             updatePadStatus(st, now);
+            if (st.scroll && st.count > 0 && (!gameRunning || pause.open)) padScroll(st.scroll);
 
             if (st.pressed.length) Sfx.unlock();
             if (st.count > 0 && (!gameRunning || pause.open)) {
