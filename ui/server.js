@@ -773,7 +773,7 @@ async function handleSaves(route, url, req, res) {
             const game = needGame({});
             const supported = slotAdapters.has(game.emulator);
             if (!supported) return sendJson(res, 200, { supported: false, slots: [] }), true;
-            return sendJson(res, 200, { supported: true, ...await saves.listSlots(game) }), true;
+            return sendJson(res, 200, { supported: true, ...await saves.listSlots(game, roms.scanGames(config.getRomsDir(), manifest)) }), true;
         }
         const body = req.method === 'POST' ? await readJson(req) : {};
         if (route === 'POST /api/saves/create') return sendJson(res, 200, await saves.createSlot(needGame(body), body.name)), true;

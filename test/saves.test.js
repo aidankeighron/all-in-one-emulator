@@ -289,3 +289,39 @@ test('when nothing can sign in, the message says which ways were tried and why, 
     const { AUTH_FAILURE } = require('../ui/lib/saves/store');
     assert.ok(AUTH_FAILURE.test('fatal: could not read Username for \'https://github.com\': terminal prompts disabled'));
 });
+
+test('a game whose file was renamed finds its saves again, here and on another computer', async () => {
+    const url = remoteRepo();
+    const a = computer('a', url), b = computer('b', url);
+    const slot = (await a.manager.listSlots(game)).slots[0];
+    await playSession(a, slot.id, { 'progress.dat': 'level 9' });
+
+    // the file is renamed: the game's name changes, the library has only the new name
+    const renamed = { ...game, title: 'Super Mario Odyssey Deluxe', path: 'switch/Odyssey Deluxe.nsp' };
+    const library = [renamed];
+    const again = await a.manager.listSlots(renamed, library);
+    assert.deepStrictEqual(again.slots.map(x => x.id), [slot.id], 'the old save shows under the new name');
+    assert.strictEqual(again.slots.length, 1, 'and no empty Default save is made next to it');
+    assert.ok((await a.manager.prepare(renamed, slot.id)).ok);
+    a.play(slot.id, { 'progress.dat': 'level 10' });
+    await a.manager.finish(renamed, slot.id);
+
+    // another computer that never knew the old name picks up the same saves from the cloud
+    const there = await b.manager.listSlots(renamed, library);
+    assert.deepStrictEqual(there.slots.map(x => x.id), [slot.id]);
+    await b.manager.prepare(renamed, slot.id);
+    assert.strictEqual(b.read(slot.id, 'progress.dat'), 'level 10');
+});
+
+test('a different game is not mistaken for a renamed one', async () => {
+    const url = remoteRepo();
+    const a = computer('a', url);
+    await a.manager.listSlots(game);
+    const other = { ...game, title: 'Kill It With Fire 2', path: 'switch/Kill It With Fire 2.nsp' };
+    const r = await a.manager.listSlots(other, [other]);
+    assert.strictEqual(r.slots.length, 1);
+    assert.strictEqual(r.slots[0].name, 'Default');
+    assert.notStrictEqual(r.slots[0].name, undefined);
+    // the old game's own saves are still its own
+    assert.strictEqual((await a.manager.listSlots(game, [game, other])).slots.length, 1);
+});

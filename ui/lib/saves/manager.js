@@ -25,13 +25,26 @@ class SaveError extends Error {
 const slug = text => String(text).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'game';
 const gameKeyOf = game => `${game.console}/${slug(game.title)}`;
 
+// How alike two game names are (0 to 1): the longest run of letters and digits they share, against the longer name
+function nameLikeness(a, b) {
+    const x = String(a).replace(/[^a-z0-9]/gi, '').toLowerCase(), y = String(b).replace(/[^a-z0-9]/gi, '').toLowerCase();
+    if (!x || !y) return 0;
+    let best = 0, prev = new Array(y.length + 1).fill(0);
+    for (let i = 1; i <= x.length; i++) {
+        const row = new Array(y.length + 1).fill(0);
+        for (let j = 1; j <= y.length; j++) if (x[i - 1] === y[j - 1]) { row[j] = prev[j - 1] + 1; if (row[j] > best) best = row[j]; }
+        prev = row;
+    }
+    return best / Math.max(x.length, y.length);
+}
+
 function createManager({ dir, adapters, getCloud, getToken = async () => null, deviceName = os.hostname(), log = () => {} }) {
     const stateFile = path.join(dir, 'state.json');
     const tmpDir = path.join(dir, 'tmp');
     const backupDir = path.join(dir, 'backups');
 
-    let state = { device: { id: crypto.randomBytes(4).toString('hex') }, slots: {}, imported: {}, defaulted: {} };
-    try { state = { ...state, ...JSON.parse(fs.readFileSync(stateFile, 'utf8')) }; if (!state.imported) state.imported = {}; if (!state.defaulted) state.defaulted = {}; } catch { /* first run */ }
+    let state = { device: { id: crypto.randomBytes(4).toString('hex') }, slots: {}, imported: {}, defaulted: {}, aliases: {} };
+    try { state = { ...state, ...JSON.parse(fs.readFileSync(stateFile, 'utf8')) }; if (!state.imported) state.imported = {}; if (!state.defaulted) state.defaulted = {}; if (!state.aliases) state.aliases = {}; } catch { /* first run */ }
     const saveState = () => {
         fs.mkdirSync(dir, { recursive: true });
         fs.writeFileSync(stateFile, JSON.stringify(state, null, 2));
@@ -60,6 +73,33 @@ function createManager({ dir, adapters, getCloud, getToken = async () => null, d
         return store;
     }
 
+    // A game's saves are filed under its console and name. When the file is renamed they stay under the old name: this is the
+    // name they are filed under now (see findRenamed for how a renamed game finds them again)
+    const keyOf = game => state.aliases[gameKeyOf(game)] || gameKeyOf(game);
+
+    // A game with no saves of its own may be an old game that was renamed. Looks (on this computer and in the cloud) for saves
+    // filed under a name no game in the library has any more, on the same console, and takes them if one name is clearly it.
+    function findRenamed(game, s, library) {
+        const key = gameKeyOf(game);
+        if (state.aliases[key]) return;
+        const has = Object.values(state.slots).some(x => x.gameKey === key) || (s && s.listSlots(key).length > 0);
+        if (has || !library || !library.length) return;
+        const live = new Set(library.map(gameKeyOf));
+        const taken = new Set(Object.values(state.aliases));
+        const found = new Map();      // key -> the game's name when it was saved
+        for (const x of Object.values(state.slots)) if (x.gameKey) found.set(x.gameKey, x.game);
+        if (s) for (const m of s.listSlots()) if (m.gameKey) found.set(m.gameKey, m.game);
+        const candidates = [...found].filter(([k]) => k.startsWith(`${game.console}/`) && !live.has(k) && !taken.has(k))
+            .map(([k, name]) => ({ k, score: nameLikeness(name || k.split('/')[1], game.title) }))
+            .sort((a, b) => b.score - a.score);
+        const [first, second] = candidates;
+        if (first && first.score >= 0.6 && (!second || first.score - second.score >= 0.1)) {
+            state.aliases[key] = first.k;
+            saveState();
+            log(`[SAVES] “${game.title}” takes the saves of ${first.k} (the file was renamed)`);
+        }
+    }
+
     const adapterFor = game => {
         const a = adapters.get(game.emulator);
         if (!a) throw new SaveError('UNSUPPORTED', 'Save slots are not available for this emulator');
@@ -86,7 +126,7 @@ function createManager({ dir, adapters, getCloud, getToken = async () => null, d
             id: meta ? meta.id : crypto.randomBytes(6).toString('hex'),
             name: name || meta.name,
             game: game.title,
-            gameKey: gameKeyOf(game),
+            gameKey: keyOf(game),
             console: game.console,
             emulator: game.emulator,
             rev: 0,
@@ -107,7 +147,7 @@ function createManager({ dir, adapters, getCloud, getToken = async () => null, d
         st.baseHash = await archive.hashDirs(root, adapter.perSlot);   // empty: anything copied in below counts as a change to upload
         const found = useOld ? adapter.existing() : [];
         for (const { rel, abs } of found) fs.cpSync(abs, path.join(root, rel), { recursive: true, dereference: true });
-        if (found.length) { st.pending = true; state.imported[gameKeyOf(game)] = st.id; }
+        if (found.length) { st.pending = true; state.imported[keyOf(game)] = st.id; }
         state.slots[st.id] = st;
         saveState();
         return st;
@@ -178,13 +218,14 @@ function createManager({ dir, adapters, getCloud, getToken = async () => null, d
         device,
 
         // The slots of a game, newest first, from the cloud when reachable and from this computer otherwise
-        listSlots(game) {
+        listSlots(game, library = []) {
             return locked(async () => {
                 adapterFor(game);
-                const key = gameKeyOf(game);
                 setActivity('checking', 'Checking for newer saves…');
                 let s = null, online = false, problem = null;
                 try { s = await refreshRemote(); online = !!s; } catch (err) { problem = { code: err.code, message: err.message }; }
+                findRenamed(game, online ? s : null, library);
+                const key = keyOf(game);
                 const remote = new Map(online ? s.listSlots(key).map(m => [m.id, m]) : []);
                 const local = Object.values(state.slots).filter(x => x.gameKey === key);
                 const ids = new Set([...remote.keys(), ...local.map(x => x.id)]);
@@ -228,7 +269,7 @@ function createManager({ dir, adapters, getCloud, getToken = async () => null, d
             return locked(async () => {
                 const clean = String(name || '').trim().slice(0, 24);
                 if (!clean) throw new SaveError('BAD_NAME', 'Give the save a name');
-                const key = gameKeyOf(game);
+                const key = keyOf(game);
                 const st = state.slots[slotId];
                 if (st) { st.name = clean; saveState(); }
                 const s = await refreshRemote().catch(() => null);
@@ -241,7 +282,7 @@ function createManager({ dir, adapters, getCloud, getToken = async () => null, d
         deleteSlot(game, slotId) {
             return locked(async () => {
                 const adapter = adapterFor(game);
-                const key = gameKeyOf(game);
+                const key = keyOf(game);
                 const s = await refreshRemote().catch(() => null);
                 if (s && s.readMeta(key, slotId)) { await s.remove(key, slotId); }
                 else if (getCloud().enabled && state.slots[slotId] && state.slots[slotId].rev > 0 && !s) {
@@ -258,7 +299,7 @@ function createManager({ dir, adapters, getCloud, getToken = async () => null, d
         prepare(game, slotId) {
             return locked(async () => {
                 const adapter = adapterFor(game);
-                const key = gameKeyOf(game);
+                const key = keyOf(game);
                 let s = null;
                 setActivity('checking', 'Checking for newer saves…');
                 try { s = await refreshRemote(); } catch (err) { setActivity('error', err.message); throw err; }
@@ -296,7 +337,7 @@ function createManager({ dir, adapters, getCloud, getToken = async () => null, d
         resolve(game, slotId, choice) {
             return locked(async () => {
                 const adapter = adapterFor(game);
-                const key = gameKeyOf(game);
+                const key = keyOf(game);
                 const s = await refreshRemote();
                 if (!s) throw new SaveError('OFFLINE', 'Connect to the internet to choose between the two saves');
                 const st = state.slots[slotId];
@@ -408,7 +449,7 @@ function createManager({ dir, adapters, getCloud, getToken = async () => null, d
             return locked(async () => {
                 const s = await refreshRemote();
                 if (!s) throw new SaveError('OFFLINE', 'Connect to the internet to see older versions');
-                return (await s.history(gameKeyOf(game), slotId)).map(v => ({ sha: v.sha, date: v.date, rev: v.meta.rev, device: v.meta.device, sizeBytes: v.meta.sizeBytes }));
+                return (await s.history(keyOf(game), slotId)).map(v => ({ sha: v.sha, date: v.date, rev: v.meta.rev, device: v.meta.device, sizeBytes: v.meta.sizeBytes }));
             });
         },
 
@@ -416,7 +457,7 @@ function createManager({ dir, adapters, getCloud, getToken = async () => null, d
         restore(game, slotId, sha) {
             return locked(async () => {
                 const adapter = adapterFor(game);
-                const key = gameKeyOf(game);
+                const key = keyOf(game);
                 const s = await refreshRemote();
                 if (!s) throw new SaveError('OFFLINE', 'Connect to the internet to restore an older version');
                 const st = state.slots[slotId];
