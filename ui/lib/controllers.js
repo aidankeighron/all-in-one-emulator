@@ -28,6 +28,7 @@ function parseProc(text) {
         const id = block.match(/^I: Bus=(\w+) Vendor=(\w+) Product=(\w+)(?: Version=(\w+))?/m);
         const name = block.match(/^N: Name="(.*)"$/m);
         const handlers = block.match(/^H: Handlers=(.*)$/m);
+        const uniq = block.match(/^U: Uniq=([0-9a-f]{2}(?::[0-9a-f]{2}){5})\s*$/im);
         if (!id || !name || !handlers) continue;
         const list = handlers[1].trim().split(/\s+/);
         const js = list.find(h => /^js\d+$/.test(h));
@@ -38,6 +39,7 @@ function parseProc(text) {
             vendor: id[2].toLowerCase(),
             product: id[3].toLowerCase(),
             version: (id[4] || '0000').toLowerCase(),
+            address: uniq ? uniq[1].toUpperCase() : null,      // a Bluetooth controller's address (what "forget" needs)
             js: js ? Number(js.slice(2)) : null,
             event: event ? Number(event.slice(5)) : null
         });
@@ -113,6 +115,7 @@ function build(procDevices, usbIds = []) {
             product: d.product,
             bus: d.bus,
             version: d.version,
+            address: d.bus === '0005' ? d.address || null : null,
             js: d.js,
             sdlIndex: d.js !== null ? sdlOrder.indexOf(d) : null,
             nameIndex: nth,
@@ -274,6 +277,7 @@ function combine(list, { merges = [], splits = [], auto = true } = {}) {
             members: [a.id, b.id],
             memberKeys: [keyOf(a), keyOf(b)],
             memberNames: [a.name, b.name],
+            addresses: [a.address, b.address].filter(Boolean),
             player: Math.min(a.player, b.player)
         });
     }

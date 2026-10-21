@@ -31,7 +31,9 @@ function classifyDevice(name = '') {
 
 const KIND_TYPES = {
     wiimote: ['wiimote'],
-    switch: ['pro', 'joycon-l', 'joycon-r']
+    switch: ['pro', 'joycon-l', 'joycon-r'],
+    pro: ['pro'],
+    joycon: ['joycon-l', 'joycon-r']
 };
 
 const TYPE_LABELS = { wiimote: 'Wii Remote', pro: 'Switch Pro Controller', 'joycon-l': 'Joy-Con (L)', 'joycon-r': 'Joy-Con (R)', 'balance-board': 'Balance Board' };
@@ -169,6 +171,7 @@ function createBluetooth({ platform = process.platform, execImpl = execFile, spa
         const send = cmd => { try { child.stdin.write(`${cmd}\n`); } catch { /* already gone */ } };
         const names = new Map();
         let timer = null, pending = null, finished = false, infoFor = null;
+        const connected = new Set();      // controllers that are connected already: not the one being looked for
 
         const finish = (phase, message) => {
             if (finished) return;
@@ -188,7 +191,7 @@ function createBluetooth({ platform = process.platform, execImpl = execFile, spa
 
         function found(address, name) {
             const type = classifyDevice(name);
-            if (!type || !wanted.includes(type) || mine.device) return;
+            if (!type || !wanted.includes(type) || mine.device || connected.has(address)) return;
             mine.device = { address, name, type, label: TYPE_LABELS[type] };
             if (kind === 'wiimote') {
                 add(`Found ${name}`);
@@ -242,7 +245,8 @@ function createBluetooth({ platform = process.platform, execImpl = execFile, spa
                     continue;
                 }
                 if (known) { infoFor = known[1].toUpperCase(); continue; }       // the header of an `info` answer
-                if (infoFor && /^(Connected:\s*yes|RSSI:\s*-?\d+)/i.test(line) && names.has(infoFor)) {
+                if (infoFor && /^Connected:\s*yes/i.test(line)) { connected.add(infoFor); infoFor = null; continue; }
+                if (infoFor && /^RSSI:\s*-?\d+/i.test(line) && names.has(infoFor)) {
                     const addr = infoFor; infoFor = null;
                     found(addr, names.get(addr));
                     continue;
@@ -250,7 +254,9 @@ function createBluetooth({ platform = process.platform, execImpl = execFile, spa
                 const ev = parseLine(line);
                 if (!ev) continue;
                 // Anything a known controller reports means it is in range right now
-                if (ev.event === 'prop' && names.has(ev.address) && /RSSI:|Connected: yes/i.test(ev.text)) { found(ev.address, names.get(ev.address)); continue; }
+                if (ev.event === 'prop' && /Connected: yes/i.test(ev.text)) { connected.add(ev.address); continue; }
+                if (ev.event === 'prop' && /Connected: no/i.test(ev.text)) connected.delete(ev.address);
+                if (ev.event === 'prop' && names.has(ev.address) && /RSSI:/i.test(ev.text)) { found(ev.address, names.get(ev.address)); continue; }
                 if (ev.event === 'new') { names.set(ev.address, ev.name); found(ev.address, ev.name); }
                 else if (ev.event === 'name') { names.set(ev.address, ev.name); found(ev.address, ev.name); }
             }
@@ -263,8 +269,9 @@ function createBluetooth({ platform = process.platform, execImpl = execFile, spa
         send('power on');
         send('agent NoInputNoOutput');
         send('default-agent');
-        send('scan on');
+        // First find out which controllers are connected already (so the same one is not picked again), then search
         send('devices');
+        setTimeout(() => { if (!finished) send('scan on'); }, 800);
         arm(scanSeconds, kind === 'wiimote'
             ? 'No Wii Remote found. Press 1 + 2 together (not the red sync button) and keep them held, then try again.'
             : 'No controller found. Hold the small sync button on the controller until its lights sweep back and forth, then try again.');

@@ -133,6 +133,28 @@ test('lines with the bluetoothctl prompt in front are still understood', async (
     assert.match(job.message, /Joy-Con \(L\) connected/);
 });
 
+// The right Joy-Con is connected already; the next search must pick the left one
+const SECOND = `
+const rl = require('readline').createInterface({ input: process.stdin });
+rl.on('line', l => {
+  const [cmd, addr] = l.trim().split(' ');
+  if (cmd === 'devices') console.log('Device AA:AA:AA:AA:AA:AA Joy-Con (R)');
+  if (cmd === 'info') console.log('Device ' + addr + ' (public)\\n\\tName: Joy-Con (R)\\n\\tPaired: yes\\n\\tConnected: yes');
+  if (cmd === 'scan' && addr === 'on') { setTimeout(() => console.log('[NEW] Device AA:AA:AA:AA:AA:AA Joy-Con (R)'), 20); setTimeout(() => console.log('[NEW] Device BB:BB:BB:BB:BB:BB Joy-Con (L)'), 60); }
+  if (cmd === 'pair') setTimeout(() => console.log('Pairing successful'), 20);
+  if (cmd === 'trust') console.log('Changing ' + addr + ' trust succeeded');
+  if (cmd === 'connect') setTimeout(() => console.log('Connection successful'), 20);
+  if (cmd === 'quit') process.exit(0);
+});`;
+
+test('a controller that is connected already is skipped, so the other Joy-Con is found', async () => {
+    const b = bt.createBluetooth({ platform: 'linux', spawnImpl: fakeBluetoothctl(SECOND) });
+    b.startPairing('switch');
+    const job = await waitFor(b);
+    assert.strictEqual(job.phase, 'done', job.message);
+    assert.strictEqual(job.device.address, 'BB:BB:BB:BB:BB:BB');
+});
+
 test('a Wii Remote is only found, never paired with the computer', async () => {
     process.env.FAKE_NAME = 'Nintendo RVL-CNT-01';
     const lines = [];

@@ -1605,6 +1605,7 @@
             if (c) {
                 chips.push(['A', c.player ? 'Change player slot' : 'Give it a player slot', 'a']);
                 if (c.family !== 'wiimote' && !c.adapter) chips.push(['X', 'Change mapping', 'x']);
+                if (c.address || (c.addresses && c.addresses.length)) chips.push(['Start', 'Forget this Bluetooth controller', 'forget']);
                 if (c.canCombine) chips.push(['Back', c.combined ? 'Split into two controllers' : 'Combine with another Switch controller', 'back']);
             } else if (zone === 'bottom') chips.push(['A', 'Press the button', 'a']);
             chips.push(['Y', 'Connect a controller', 'y']);
@@ -1660,6 +1661,26 @@
             if (act === 'a') return padMovePicker(c);
             if (act === 'x') return padMapPicker(c);
             if (act === 'back') return padCombine(c);
+            if (act === 'forget') return padForget(c);
+        }
+
+        // Start (or Delete): remove a Bluetooth controller from this computer. Asks for the same press twice.
+        let forgetArm = null;
+        async function padForget(c) {
+            const addresses = c.addresses && c.addresses.length ? c.addresses : c.address ? [c.address] : [];
+            if (!addresses.length) return showToast('Only Bluetooth controllers can be forgotten here.');
+            if (!forgetArm || forgetArm.key !== c.key || Date.now() - forgetArm.at > 4000) {
+                forgetArm = { key: c.key, at: Date.now() };
+                Sfx.play('select');
+                return showToast(`Press Start again to forget ${c.name}`);
+            }
+            forgetArm = null;
+            try {
+                for (const address of addresses) await padPost('/api/bluetooth/forget', { address });
+                Sfx.play('back');
+                showToast(`${c.name} forgotten. Pair it again to use it.`);
+                refreshControllers();
+            } catch (err) { Sfx.play('error'); showToast(err.message); }
         }
 
         function padMovePicker(c) {
@@ -3397,6 +3418,8 @@
         const pair = { open: false, info: null, job: null, focus: 0, buttons: [], poll: null, found: null, error: '', screen: null, helper: null, helperPoll: null };
 
         const PAIR_HELP = {
+            pro: ['Hold the small round <b>sync button</b> on the top edge of the controller until its four lights sweep back and forth.'],
+            joycon: ['Hold the small round <b>sync button</b> on the Joy-Con’s rail side until its four lights sweep back and forth.', 'Connect one Joy-Con at a time: run this again for the other one.'],
             switch: ['Hold the small round <b>sync button</b> on the controller until its four lights sweep back and forth.', 'Pro Controller: the button on the top edge. Joy-Con: the button on the rail side.'],
             wiimote: ['Press <b>1</b> and <b>2</b> on the Wii Remote together and keep them held.', 'Do not use the red sync button under the battery cover.']
         };
@@ -3448,7 +3471,7 @@
                 add('Close (B)', 'close');
             } else if (job && job.phase === 'running') {
                 const setup = job.kind === 'setup';
-                title = setup ? 'Setting up Bluetooth' : job.kind === 'wiimote' ? 'Looking for a Wii Remote' : 'Looking for a Switch controller';
+                title = setup ? 'Setting up Bluetooth' : job.kind === 'wiimote' ? 'Looking for a Wii Remote' : job.kind === 'joycon' ? 'Looking for a Joy-Con' : job.kind === 'pro' ? 'Looking for a Switch Pro Controller' : 'Looking for a Switch controller';
                 const help = PAIR_HELP[job.kind] || [];
                 body = `<div class="guide-box"><span class="spinner" style="vertical-align:-3px;margin-right:8px"></span>${escapeHtml(job.message)}</div>
                     ${help.map(h => `<p>${h}</p>`).join('')}
@@ -3489,18 +3512,14 @@
                 add('Close (B)', 'close');
             } else {
                 body = `<p style="text-align:center">Choose what you want to connect.</p>`;
-                add('Switch Pro Controller or Joy-Con', 'pair-switch', true);
+                add('Switch Pro Controller', 'pair-pro', true);
+                add('Joy-Con', 'pair-joycon');
                 add('Wii Remote', 'pair-wiimote');
-                if (pair.helper && pair.helper.supported) add('Use two Joy-Cons as one controller', 'helper-open');
                 if (!info.nintendoDriver) body += `<div class="guide-box off">This system’s Linux kernel (${escapeHtml(info.kernel)}) is older than 5.16, so Switch controllers will not work. Update the system to a newer kernel.</div>`;
             }
 
             // Controllers the computer already knows, and the real Wii Remote count
             if (info && (info.ready || info.manual) && !(job && job.phase === 'running') && !(pair.showResult && job && ['done', 'failed'].includes(job.phase))) {
-                if (info.paired && info.paired.length) {
-                    body += `<h3 style="margin:14px 0 6px">Paired controllers</h3><div class="pair-list">${info.paired.map((d, i) => `<div class="pair-device"><span>${escapeHtml(d.label)}<small>${escapeHtml(d.name)} · ${d.connected ? 'connected' : 'not connected'}</small></span></div>`).join('')}</div>`;
-                    info.paired.forEach(d => add(`Forget ${d.label}${info.paired.filter(x => x.label === d.label).length > 1 ? ' ' + d.address.slice(-5) : ''}`, 'forget:' + d.address));
-                }
                 add('Close (B)', 'close');
             }
             if (pair.notice) body += `<div class="guide-box">${escapeHtml(pair.notice)}</div>`;
@@ -3624,7 +3643,7 @@
             if (act === 'result-ok') { pair.showResult = false; pair.focus = 0; return pairRefresh(); }
             if (act === 'refresh') return pairRefresh();
             if (act === 'setup') { pair.showResult = true; return pairCall('/api/bluetooth/setup'); }
-            if (act === 'pair-switch' || act === 'pair-wiimote') { pair.screen = null; pair.showResult = true; pair.lastKind = act.slice(5); pair.focus = 0; return pairCall('/api/bluetooth/pair', { kind: pair.lastKind }); }
+            if (['pair-switch', 'pair-pro', 'pair-joycon', 'pair-wiimote'].includes(act)) { pair.screen = null; pair.showResult = true; pair.lastKind = act.slice(5); pair.focus = 0; return pairCall('/api/bluetooth/pair', { kind: pair.lastKind }); }
             if (act === 'retry') { pair.focus = 0; return pairCall('/api/bluetooth/pair', { kind: pair.lastKind || 'switch' }); }
             if (act === 'open-settings') return pairCall('/api/bluetooth/open-settings');
             if (act === 'forget') { await pairCall('/api/bluetooth/forget', { address: b.act.slice(7) }); return pairRefresh(); }
@@ -4136,7 +4155,7 @@
                     const dir = st.down ? 'down' : st.up ? 'up' : st.right ? 'right' : st.left ? 'left' : null;
                     if (st.rb) { pagePress(1); lastInputTime = now; }
                     else if (st.lb) { pagePress(-1); lastInputTime = now; }
-                    else if (onControllers() && (st.x || st.y || st.back)) { padAction(st.y ? 'y' : st.back ? 'back' : 'x'); lastInputTime = now + 400; }
+                    else if (onControllers() && (st.x || st.y || st.back || st.start)) { padAction(st.y ? 'y' : st.back ? 'back' : st.start ? 'forget' : 'x'); lastInputTime = now + 400; }
                     else if ((st.x || st.y) && zone === 'grid') { toggleFavorite(currentGame()); lastInputTime = now + 400; }
                     else if (st.a) { activate(); lastInputTime = now + 500; }
                     else if (dir) { navigate(dir); lastInputTime = now; }
@@ -4198,6 +4217,7 @@
             else if (['f', 'x', 'y'].includes(e.key.toLowerCase()) && zone === 'grid' && !onControllers()) toggleFavorite(currentGame());
             else if (['x', 'y'].includes(e.key.toLowerCase()) && onControllers()) padAction(e.key.toLowerCase());
             else if (e.key.toLowerCase() === 'c' && onControllers()) padAction('back');
+            else if (e.key === 'Delete' && onControllers()) padAction('forget');
         });
 
         // Browsers block sound until the first input; the Electron window allows it from the start
