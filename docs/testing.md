@@ -16,9 +16,10 @@ next to the menu: lines starting `[SAVES]`, `[PADS]`, `[PAUSE]`, `[LIBRARY]` and
 
 ## 2. Pause menu
 
-1. Start any game. Hold **Back + Start** for 1.5 seconds. Expect `[PAUSE]` in the terminal, the game freezing (sound stops) and
-   the menu's Paused screen in front. If the screen appears but ignores the controller, the window did not get focus
-   (some Wayland setups): click it once, and tell me which desktop you use.
+1. Start any game. Hold **Back + Start** for the time set in Settings -> Sound & controls (1.5 seconds by default; try 0 and 2 too). Expect `[PAUSE]` in the terminal, the game freezing (sound stops) and
+   a dark, see-through layer over the game with the Paused screen on it. If it does not appear over the game, or appears but
+   ignores the controller, the desktop is not putting the new window in front or giving it focus (some Wayland setups):
+   note which desktop you use and what you see.
 2. **Resume** (or B): the game continues exactly where it was.
 3. **Change controllers**: change Player 1's controller or a mapping, close the screen: it now says *Controllers changed*
    and highlights **Restart game**. Choose it: the game closes, the save uploads (`[SAVES]`), and the same game

@@ -45,6 +45,29 @@ function setAutoControllers(on) {
     save({ ...load(), autoControllers: !!on });
 }
 
+// How long Back + Start is held in a game to open the pause menu: 0 to 2 seconds in half-second steps
+const PAUSE_HOLD_STEPS = [0, 0.5, 1, 1.5, 2];
+function getPauseHold() {
+    const v = Number(load().pauseHold);
+    return load().pauseHold !== undefined && PAUSE_HOLD_STEPS.includes(v) ? v : 1.5;
+}
+
+function setPauseHold(seconds) {
+    if (PAUSE_HOLD_STEPS.includes(Number(seconds))) save({ ...load(), pauseHold: Number(seconds) });
+}
+
+// Favourite games, by their path under the ROMs folder (so a game keeps its star when its picture or title changes)
+function getFavorites() {
+    const list = load().favorites;
+    return Array.isArray(list) ? list.filter(x => typeof x === 'string') : [];
+}
+
+function setFavorite(gamePath, on) {
+    if (typeof gamePath !== 'string' || !gamePath || gamePath.length > 500) return;
+    const rest = getFavorites().filter(x => x !== gamePath);
+    save({ ...load(), favorites: on ? [...rest, gamePath] : rest });
+}
+
 // How many Wii Remotes to use as real remotes in Dolphin (0-4); they take the first Wii Remote slots
 function getWiiRemotes() {
     const n = Number(load().wiiRemotes);
@@ -162,4 +185,4 @@ const mappingsDir = path.join(path.dirname(configFile), 'mappings');
 const artworkDir = path.join(path.dirname(configFile), 'artwork');
 const soundsDir = process.env.SOUNDS_DIR || path.join(path.dirname(configFile), 'sounds');
 
-module.exports = { getRomsDir, setRomsDir, getAutoControllers, setAutoControllers, getWiiRemotes, setWiiRemotes, getPlayers, setPlayers, getSound, setSound, getCloud, getCloudToken, getLibrary, setLibrary, libraryCacheFile, getEmulatorPaths, getEmulatorUrls, setEmulatorPath, emulatorsDir, configFile, mappingsDir, artworkDir, soundsDir };
+module.exports = { getRomsDir, setRomsDir, getAutoControllers, setAutoControllers, getWiiRemotes, setWiiRemotes, getPauseHold, setPauseHold, PAUSE_HOLD_STEPS, getFavorites, setFavorite, getPlayers, setPlayers, getSound, setSound, getCloud, getCloudToken, getLibrary, setLibrary, libraryCacheFile, getEmulatorPaths, getEmulatorUrls, setEmulatorPath, emulatorsDir, configFile, mappingsDir, artworkDir, soundsDir };

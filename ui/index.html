@@ -201,6 +201,13 @@
         .badge-switch { background: linear-gradient(to bottom, #f0525c, #d0222e); }
         .badge-empty { background: transparent; }
 
+        /* Favourite star, top right of a tile: always shown when set, otherwise only on the selected tile */
+        .fav-star { position: absolute; top: 9px; right: 10px; z-index: 6; width: 28px; height: 28px; border: 0; padding: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; background: rgba(255, 255, 255, 0.85); color: #b7c0c8; opacity: 0; transition: opacity 0.15s ease, transform 0.15s ease; }
+        .fav-star svg { fill: none; stroke: currentColor; }
+        .wii-channel:hover .fav-star, .wii-channel.selected .fav-star { opacity: 1; }
+        .fav-star:hover { transform: scale(1.15); color: #e0a820; }
+        .fav-star.on { opacity: 1; color: #f2b01e; box-shadow: 0 0 8px rgba(242, 176, 30, 0.6); }
+        .fav-star.on svg { fill: currentColor; stroke: #c98a00; }
         .channel-title {
             font-size: 15px;
             font-weight: 700;
@@ -246,8 +253,8 @@
         /* On a picture tile the note moves up beside the console pill so it never covers the name */
         .has-art .channel-note {
             position: absolute;
-            top: 12px;
-            right: 12px;
+            top: 44px;
+            right: 10px;
             padding: 3px 8px;
             border-radius: 9px;
             background: rgba(255, 255, 255, 0.92);
@@ -444,6 +451,17 @@
         .wiihead h2 { margin: 2px 0 0 !important; color: #fff !important; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2); }
         .pl-row .who .leds { display: inline-flex; gap: 4px; }
         .pl-row .who .leds i { width: 9px; height: 9px; }
+        .slider-box { display: flex; flex-direction: column; gap: 2px; width: 230px; flex: none; }
+        .slider-box input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 10px; margin: 8px 0 4px; border-radius: 6px; cursor: pointer;
+            background: linear-gradient(to right, var(--wii-blue) var(--fill, 75%), #dde4ea var(--fill, 75%)); box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.18); }
+        .slider-box input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 24px; height: 24px; border-radius: 50%; border: 3px solid #fff;
+            background: radial-gradient(circle at 35% 30%, #bfeaff, var(--wii-blue)); box-shadow: 0 1px 5px rgba(0, 0, 0, 0.35); }
+        .slider-box input[type=range]::-moz-range-thumb { width: 18px; height: 18px; border-radius: 50%; border: 3px solid #fff; background: var(--wii-blue); box-shadow: 0 1px 5px rgba(0, 0, 0, 0.35); }
+        .slider-box input[type=range].pad-focus { outline: 3px solid var(--wii-blue); outline-offset: 4px; border-radius: 6px; }
+        .slider-ticks { display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; color: #8a9199; }
+        html.pause-window, html.pause-window body { background: transparent !important; }
+        body.pause-window > *:not(.overlay):not(.toast):not(script) { display: none !important; }
+        body.pause-window .overlay { background: rgba(10, 20, 32, 0.55); }
         .panel.pause { width: min(460px, 92vw); min-height: 0; }
         .pause-list { display: flex; flex-direction: column; gap: 10px; }
         .pause-list .btn { width: 100%; font-size: 17px; padding: 12px 18px; text-align: left; }
@@ -793,6 +811,16 @@
                     </div>
                     <button class="btn" id="auto-controllers-button" onclick="toggleAutoControllers()">On</button>
                 </div>
+                <div class="emu-row">
+                    <div class="info">
+                        <div class="name">Pause menu: hold Back + Start for <span id="pause-hold-value">1.5 s</span></div>
+                        <div class="desc">In a game (Linux), holding both buttons this long freezes it and opens the pause menu. 0 opens it at once.</div>
+                    </div>
+                    <div class="slider-box">
+                        <input type="range" id="pause-hold" min="0" max="2" step="0.5" value="1.5" aria-label="Seconds to hold Back and Start">
+                        <div class="slider-ticks"><span>0</span><span>0.5</span><span>1</span><span>1.5</span><span>2 s</span></div>
+                    </div>
+                </div>
             </div>
 
             <div class="tab-pane" data-pane="library" hidden>
@@ -1067,6 +1095,7 @@
                 if (game && game.remote) {
                     channel.className = 'wii-channel channel-remote';
                     channel.innerHTML = `
+                        ${starHtml(game)}
                         <span class="channel-badge badge-${escapeHtml(game.console)}">${escapeHtml(game.console)}</span>
                         <span class="remote-dl" title="Download from the server"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="6 10 12 16 18 10"/><line x1="5" y1="20" x2="19" y2="20"/></svg></span>
                         <div class="channel-title">${escapeHtml(game.title)}</div>
@@ -1083,6 +1112,7 @@
                     const badgeClass = `badge-${game.console}`;
                     channel.className = `wii-channel ${game.installed ? '' : 'channel-uninstalled'} ${game.art ? 'has-art' : ''}`;
                     channel.innerHTML = `
+                        ${starHtml(game)}
                         ${game.art ? `<img class="channel-art" src="${game.art}" alt="" draggable="false">` : ''}
                         <span class="channel-badge ${badgeClass}">${escapeHtml(game.console)}</span>
                         <div class="channel-title">${escapeHtml(game.title)}</div>
@@ -1104,8 +1134,27 @@
                     channel.innerHTML = `<span class="channel-badge badge-empty"></span><div class="channel-title"></div>`;
                 }
 
+                const star = channel.querySelector('.fav-star');
+                if (star) star.addEventListener('click', e => { e.stopPropagation(); toggleFavorite(game); });
                 grid.appendChild(channel);
             }
+        }
+
+        const starHtml = game => `<button type="button" class="fav-star ${game.favorite ? 'on' : ''}" title="${game.favorite ? 'Remove from favorites' : 'Add to favorites'} (Start)" aria-label="${game.favorite ? 'Remove from favorites' : 'Add to favorites'}" aria-pressed="${!!game.favorite}"><svg viewBox="0 0 24 24" width="18" height="18" stroke-linejoin="round" stroke-width="2"><path d="M12 3.2l2.6 5.6 6.1.7-4.5 4.2 1.2 6-5.4-3-5.4 3 1.2-6-4.5-4.2 6.1-.7z"/></svg></button>`;
+
+        // Favourites come first. The game stays selected wherever it lands.
+        async function toggleFavorite(game) {
+            if (!game) return;
+            const on = !game.favorite;
+            game.favorite = on;
+            Sfx.play(on ? 'select' : 'back');
+            allGames.sort((a, b) => (!!b.favorite - !!a.favorite) || a.title.localeCompare(b.title));
+            const at = allGames.indexOf(game);
+            if (!onControllers()) { page = Math.floor(at / CHANNELS_PER_PAGE); selectedIndex = at % CHANNELS_PER_PAGE; zone = 'grid'; }
+            renderPage();
+            showToast(on ? `${game.title} added to favorites` : `${game.title} removed from favorites`);
+            try { await fetch('/api/favorites', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: game.path, favorite: on }) }); }
+            catch { showToast('Could not save the favorite'); }
         }
 
         // ================= CONTROLLERS PAGE =================
@@ -1375,8 +1424,7 @@
                 try {
                     const status = await (await fetch('/api/status')).json();
                     if (status.error) { Sfx.play('error'); showToast(status.error); }
-                    if (status.paused && !pause.open) openPauseMenu(status);
-                    else if (!status.paused && pause.open && !pause.busy) closePauseMenu(true);
+                    syncPauseMenu(status);
                     if (!status.running) { gameRunning = false; closePauseMenu(true); }
                 } catch { /* server hiccup: keep waiting */ }
             }
@@ -2114,6 +2162,10 @@
 
         // ================= PAUSE MENU =================
         // Back + Start held in a game (Linux): the game is frozen and the menu window comes to the front with this screen.
+        // The pause menu has its own transparent window in the app (see electron/main.js), so it shows over the game;
+        // that window loads this page with ?pause=1. In a plain browser the menu shows inside the page.
+        const isPauseWindow = new URLSearchParams(location.search).get('pause') === '1';
+        if (isPauseWindow) { document.body.classList.add('pause-window'); document.documentElement.classList.add('pause-window'); }
         const pause = { open: false, i: 0, changed: false, frozen: true, busy: false, title: '' };
         const PAUSE_ITEMS = [['Resume', 'resume'], ['Change controllers', 'players'], ['Connect a controller', 'pair'], ['Restart game', 'restart'], ['Quit to menu', 'quit']];
 
@@ -2135,6 +2187,13 @@
             Sfx.play('open');
             document.getElementById('pause-overlay').classList.add('open');
             renderPause();
+        }
+
+        function syncPauseMenu(status) {
+            const mine = isPauseWindow || !(window.electronAPI && window.electronAPI.separatePause);
+            if (!mine) return;
+            if (status.paused && !pause.open) openPauseMenu(status);
+            else if (!status.paused && pause.open && !pause.busy) closePauseMenu(true);
         }
 
         function closePauseMenu(quiet) {
@@ -2729,6 +2788,22 @@
             loadGames();
         }
 
+        const holdText = v => (Number(v) === 0 ? 'no wait' : `${Number(v)} s`);
+        function showPauseHold(v) {
+            const el = document.getElementById('pause-hold');
+            el.value = v;
+            el.style.setProperty('--fill', `${(Number(v) / 2) * 100}%`);
+            document.getElementById('pause-hold-value').textContent = holdText(v);
+        }
+        (() => {
+            const el = document.getElementById('pause-hold');
+            el.addEventListener('input', () => showPauseHold(el.value));
+            el.addEventListener('change', async () => {
+                const r = await saveApi('/api/settings', { pauseHold: Number(el.value) });
+                if (r.ok) Sfx.play('select'); else { Sfx.play('error'); showToast(r.body.message || 'Could not save that'); }
+            });
+        })();
+
         function renderAutoButton(on) {
             document.getElementById('auto-controllers-button').textContent = on ? 'On' : 'Off';
         }
@@ -2743,6 +2818,7 @@
             const folders = [...new Set(data.emulators.flatMap(e => e.folders))];
             document.getElementById('folder-list').innerHTML = folders.map(f => `<code>${escapeHtml(f)}</code>`).join(' ');
             renderAutoButton(data.autoControllers);
+            showPauseHold(data.pauseHold === undefined ? 1.5 : data.pauseHold);
             renderSound(await Sfx.load());
             refreshLibrarySettings();
 
@@ -2865,6 +2941,12 @@
             const items = focusables();
             const cur = document.querySelector('#settings-overlay .pad-focus');
             if (!cur || !items.includes(cur)) return setPadFocus(items[0]);
+            if (cur.type === 'range' && (dir === 'left' || dir === 'right')) {   // a slider: left and right change it
+                const before = cur.value;
+                if (dir === 'right') cur.stepUp(); else cur.stepDown();
+                if (cur.value !== before) { cur.dispatchEvent(new Event('input')); cur.dispatchEvent(new Event('change')); Sfx.play('move'); }
+                return;
+            }
             const c = cur.getBoundingClientRect();
             const cx = c.left + c.width / 2, cy = c.top + c.height / 2;
             let best = null, bestScore = Infinity;
@@ -2886,6 +2968,7 @@
             const el = document.querySelector('#settings-overlay .pad-focus');
             if (!el) return;
             Sfx.play('select');
+            if (el.type === 'range') return;   // left and right change it
             if (el.tagName === 'INPUT') el.focus(); else el.click();
         }
 
@@ -3125,6 +3208,7 @@
                     else if (st.lb) { pagePress(-1); lastInputTime = now; }
                     else if (st.x) { openSettings(); lastInputTime = now + 500; }
                     else if (st.y) { importRoms(); lastInputTime = now + 500; }
+                    else if (st.start && zone === 'grid' && !onControllers()) { toggleFavorite(allGames[page * CHANNELS_PER_PAGE + selectedIndex]); lastInputTime = now + 400; }
                     else if (st.a) { activate(); lastInputTime = now + 500; }
                     else if (dir) { navigate(dir); lastInputTime = now; }
                 }
@@ -3174,15 +3258,23 @@
             else if (e.key === 'PageDown') pagePress(1);
             else if (e.key === 'PageUp') pagePress(-1);
             else if (e.key.toLowerCase() === 's') openSettings();
+            else if (e.key.toLowerCase() === 'f' && zone === 'grid' && !onControllers()) toggleFavorite(allGames[page * CHANNELS_PER_PAGE + selectedIndex]);
         });
 
         // Browsers block sound until the first input; the Electron window allows it from the start
         ['keydown', 'pointerdown'].forEach(ev => window.addEventListener(ev, () => Sfx.unlock(), { capture: true }));
 
         // Start Loop & Load
-        Sfx.load().then(() => { Sfx.play('boot'); Sfx.startMusic(); }).catch(() => {});
-        fitGrid();
-        loadGames().then(() => syncAtStart(true));
+        if (isPauseWindow) {
+            // Only the pause screen lives here: no music, no save sync, just watch whether the game is paused
+            Sfx.load().catch(() => {});
+            loadGames();
+            setInterval(async () => { try { syncPauseMenu(await (await fetch('/api/status')).json()); } catch { /* the server is busy */ } }, 400);
+        } else {
+            Sfx.load().then(() => { Sfx.play('boot'); Sfx.startMusic(); }).catch(() => {});
+            fitGrid();
+            loadGames().then(() => syncAtStart(true));
+        }
         refreshControllers();
         requestAnimationFrame(pollGamepad);
     </script>

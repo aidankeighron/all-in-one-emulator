@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain, Menu, shell } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, Menu, screen, shell } = require('electron');
 const path = require('path');
 const server = require('../ui/server');
 
@@ -7,6 +7,8 @@ const server = require('../ui/server');
 
 const startFullscreen = process.argv.includes('--fullscreen') || process.env.FULLSCREEN === '1';
 let win = null;
+let pauseWin = null;       // the pause menu: a transparent window over everything, so it shows on top of the game
+let serverPort = 0;
 let hiddenForGame = false;
 
 // A fullscreen menu would cover the emulator window, so get out of the way while a game runs
@@ -22,23 +24,49 @@ function onGameState(running) {
     }
 }
 
-// The pause menu (Back + Start held in a game): bring the menu in front of the frozen game, and back out of the way
+// The pause menu (Back + Start held in a game) is its own frameless, transparent window that covers the screen and sits above
+// everything, so the frozen game stays visible behind it. The menu window is left alone.
+function createPauseWindow() {
+    if (pauseWin) return pauseWin;
+    pauseWin = new BrowserWindow({
+        show: false,
+        frame: false,
+        transparent: true,
+        backgroundColor: '#00000000',
+        hasShadow: false,
+        skipTaskbar: true,
+        resizable: false,
+        alwaysOnTop: true,
+        title: 'Emulator Menu: paused',
+        webPreferences: {
+            preload: path.join(__dirname, 'preload.js'),
+            contextIsolation: true,
+            nodeIntegration: false,
+            autoplayPolicy: 'no-user-gesture-required'
+        }
+    });
+    pauseWin.on('closed', () => { pauseWin = null; });
+    pauseWin.loadURL(`http://127.0.0.1:${serverPort}/?pause=1`);
+    return pauseWin;
+}
+
 function onPause(paused) {
-    if (!win) return;
     if (paused) {
-        win.setAlwaysOnTop(true);
-        if (win.isMinimized()) win.restore();
-        win.show();
-        win.focus();
-    } else {
-        win.setAlwaysOnTop(false);
-        hiddenForGame = true;     // restored again when the game ends
-        win.minimize();
+        const w = createPauseWindow();
+        const { bounds } = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+        w.setBounds(bounds);
+        w.setAlwaysOnTop(true, 'screen-saver');
+        w.show();
+        w.moveTop();
+        w.focus();
+    } else if (pauseWin) {
+        pauseWin.hide();
     }
 }
 
 async function createWindow() {
     const { port } = await server.start({ port: 0, onGameState, onPause });
+    serverPort = port;
 
     win = new BrowserWindow({
         width: 1280,
@@ -61,8 +89,9 @@ async function createWindow() {
             event.preventDefault();
         }
     });
-    win.on('closed', () => { win = null; });
+    win.on('closed', () => { win = null; if (pauseWin) pauseWin.destroy(); });   // the hidden pause window must not keep the app open
     win.loadURL(`http://127.0.0.1:${port}`);
+    win.webContents.once('did-finish-load', createPauseWindow);   // ready (hidden) before it is needed
 }
 
 // Windows: choose an emulator's program

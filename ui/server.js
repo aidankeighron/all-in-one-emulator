@@ -239,7 +239,7 @@ async function startGame(relPath, slotId, onGameState) {
     current = { emulator: emu.id, path: relPath, emu, slotId: slot ? slot.id : null, paused: false, frozenPids: [] };
     lastError = null;
     const started = Date.now();
-    const stopWatching = process.env.EMU_NO_HOTKEY ? () => {} : hotkey.start(togglePause);
+    const stopWatching = process.env.EMU_NO_HOTKEY ? () => {} : hotkey.start(togglePause, { holdMs: config.getPauseHold() * 1000 });
     current.child = runner.launch(emu, args, (code, stderr) => {
         stopWatching();
         const wasPaused = !!(current && current.paused);
@@ -584,8 +584,17 @@ function createServer(onGameState) {
                     const have = new Set(scanned.map(g => g.path));
                     const onServer = theirs ? theirs.games.filter(g => !have.has(g.path)).map(g => ({ ...g, remote: true, installed: installed.has(g.emulator), art: null })) : [];
                     games.push(...onServer);
-                    games.sort((a, b) => a.title.localeCompare(b.title));
+                    // Favourites first, then by title
+                    const stars = new Set(config.getFavorites());
+                    for (const g of games) g.favorite = stars.has(g.path);
+                    games.sort((a, b) => (b.favorite - a.favorite) || a.title.localeCompare(b.title));
                     return sendJson(res, 200, { games, romsDir, artPending: covers.pending(), server: theirs ? { name: theirs.name, offline: !!remote.error } : null });
+                }
+                if (route === 'POST /api/favorites') {
+                    const body = await readJson(req);
+                    if (typeof body.path !== 'string' || typeof body.favorite !== 'boolean') return sendJson(res, 400, { error: 'invalid', message: 'Send a game path and true or false' });
+                    config.setFavorite(body.path, body.favorite);
+                    return sendJson(res, 200, { path: body.path, favorite: body.favorite });
                 }
                 if (route === 'POST /api/art/retry') {
                     const covers = artworkFor(config.getRomsDir());
@@ -647,7 +656,7 @@ function createServer(onGameState) {
                     return sendJson(res, 200, { setup: setupControllers(ids) });
                 }
                 if (route === 'GET /api/settings') {
-                    return sendJson(res, 200, { romsDir: config.getRomsDir(), autoControllers: config.getAutoControllers(), sound: config.getSound(), ...await emulatorStates() });
+                    return sendJson(res, 200, { romsDir: config.getRomsDir(), autoControllers: config.getAutoControllers(), sound: config.getSound(), pauseHold: config.getPauseHold(), ...await emulatorStates() });
                 }
                 if (route === 'POST /api/settings') {
                     const body = await readJson(req);
@@ -660,6 +669,10 @@ function createServer(onGameState) {
                         roms.createDefaultFolders(config.getRomsDir(), manifest);
                     }
                     if (typeof body.autoControllers === 'boolean') config.setAutoControllers(body.autoControllers);
+                    if (body.pauseHold !== undefined) {
+                        if (!config.PAUSE_HOLD_STEPS.includes(Number(body.pauseHold))) return sendJson(res, 400, { error: 'invalid', message: 'The hold time is 0 to 2 seconds in half-second steps' });
+                        config.setPauseHold(body.pauseHold);
+                    }
                     if (body.sound && typeof body.sound === 'object') config.setSound(body.sound);
                     return sendJson(res, 200, { romsDir: config.getRomsDir(), autoControllers: config.getAutoControllers() });
                 }

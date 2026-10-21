@@ -54,3 +54,26 @@ test('ignores axis events and counts initial button state', () => {
     d.feed(Buffer.concat([ev(6, 1, true), ev(7, 1, true)]));
     assert.ok(t.armed);
 });
+
+test('holding on after it went off does not set it off again until the buttons are let go', () => {
+    const t = fakeTimers();
+    let fired = 0;
+    const d = createDetector({ buttons: [6, 7], onTrigger: () => fired++, setTimer: t.setTimer, clearTimer: t.clearTimer });
+    d.feed(Buffer.concat([ev(6, 1), ev(7, 1)]));
+    t.fire();
+    assert.strictEqual(fired, 1);
+    d.feed(ev(0, 1));                       // another event while both are still down
+    assert.ok(!t.armed, 'not armed again while still held');
+    d.feed(Buffer.concat([ev(6, 0), ev(7, 0)]));
+    d.feed(Buffer.concat([ev(6, 1), ev(7, 1)]));
+    assert.ok(t.armed, 'armed again after a release');
+});
+
+test('a hold time of zero goes off as soon as both buttons are down', () => {
+    let fired = 0;
+    let delay = null;
+    const d = createDetector({ buttons: [6, 7], holdMs: 0, onTrigger: () => fired++, setTimer: (fn, ms) => { delay = ms; fn(); return 1; }, clearTimer: () => {} });
+    d.feed(Buffer.concat([ev(6, 1), ev(7, 1)]));
+    assert.strictEqual(delay, 0);
+    assert.strictEqual(fired, 1);
+});

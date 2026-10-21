@@ -16,11 +16,13 @@ const COMBO = [6, 7];
 function createDetector({ buttons, holdMs = HOLD_MS, onTrigger, setTimer = setTimeout, clearTimer = clearTimeout }) {
     const down = new Set();
     let timer = null;
+    let fired = false;   // once it has gone off, the buttons must be let go before it can go off again
 
     function update() {
         const all = buttons.every(b => down.has(b));
-        if (all && !timer) {
-            timer = setTimer(() => { timer = null; onTrigger(); }, holdMs);
+        if (!all) fired = false;
+        if (all && !timer && !fired) {
+            timer = setTimer(() => { timer = null; fired = true; onTrigger(); }, holdMs);
         } else if (!all && timer) {
             clearTimer(timer);
             timer = null;

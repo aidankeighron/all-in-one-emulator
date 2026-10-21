@@ -74,14 +74,17 @@ Nothing else to install: the AppImage already contains the menu and its runtime.
    | `wii`, `gamecube` | Dolphin | iso, rvz, wbfs, gcm, ciso, gcz, wia, wad |
    | `switch` | Ryujinx (Ryubing) | nsp, xci, nca, nro, nso |
 
-4. Click a game (or press **A**) to play. Closing the emulator brings you back to the menu.
+4. Click a game (or press **A**) to play. To favorite a game press **Start** on it (or **F**, or click the star on its tile):
+   favorites are listed first and keep their star between runs. Closing the emulator brings you back to the menu.
 
-   **Pause menu:** hold **Back + Start** for about 1.5 seconds. The game is frozen (its processes are stopped, so
+   **Pause menu:** hold **Back + Start** (1.5 seconds by default; Settings -> Sound & controls has a slider from 0 to 2
+   seconds in half-second steps, 0 opens it at once). The game is frozen (its processes are stopped, so
    sound and input stand still) and the menu comes to the front with **Resume**, **Change controllers** (the Players
    screen), **Connect a controller**, **Restart game** and **Quit to menu**. Holding the buttons again, or **B**,
    resumes. Emulators read their controller settings only when a game starts, so after changing controllers the
    screen suggests **Restart game**: it ends the game (the save is uploaded as usual) and starts it again on the
-   same save. **Quit to menu** ends the game like closing the emulator, so save first. The menu reads the controller
+   same save. **Quit to menu** ends the game like closing the emulator, so save first. In the app the pause menu is its own
+   transparent window above everything, so the frozen game stays visible behind it; in a plain browser it shows inside the page. The menu reads the controller
    through `/dev/input/js*`; if that isn't readable on your system, the combo does nothing, and you can still
    quit with each emulator's own Stop/Exit (Dolphin's Stop, for example, also returns to the menu).
    If the game cannot be frozen, the screen says it keeps running behind the menu.
