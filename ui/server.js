@@ -19,6 +19,8 @@ const library = require('./lib/library');
 const bluetoothLib = require('./lib/bluetooth');
 const mappingsLib = require('./lib/mappings');
 const playersLib = require('./lib/players');
+const betterjoyLib = require('./lib/betterjoy');
+const joycondLib = require('./lib/joycond');
 
 const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'emulators.json'), 'utf8'));
 const emulatorsById = new Map(manifest.emulators.map(e => [e.id, e]));
@@ -141,14 +143,32 @@ function artworkFor(romsDir) {
 
 const mappings = mappingsLib.createStore(config.mappingsDir);
 
+// BetterJoy (Windows) turns Switch controllers into virtual Xbox pads. While it runs, those stand in for the real ones.
+// Linux has the same thing in joycond: it joins the two Joy-Cons into one controller in the system, so no pad is swapped here
+const helper = runner.platform === 'win32'
+    ? betterjoyLib.createBetterJoy({ platform: runner.platform, emulatorsDir: config.emulatorsDir, getUrls: config.getEmulatorUrls })
+    : joycondLib.createJoycond({ log: console.log });
+const bj = { running: false, job: null };
+const betterjoyOn = () => helper.name === 'BetterJoy' && config.getBetterJoy().enabled && bj.running;
+async function refreshBetterJoy() {
+    if (!helper.supported) return;
+    try { bj.running = await helper.running(); } catch { bj.running = false; }
+}
+// Starts BetterJoy when the person turned it on and it is installed; never stops a game or the menu from starting
+async function ensureBetterJoy() {
+    if (helper.name !== 'BetterJoy' || !helper.supported || !config.getBetterJoy().enabled || !helper.installed()) return;
+    try { await helper.start(); } catch (err) { console.error(`[BETTERJOY] ${err.message}`); }
+    await refreshBetterJoy();
+}
+
 // What is plugged in now, with any Switch controllers the person put together shown as one
-const detectPads = () => controllers.detect({ platform: runner.platform, merge: config.getJoyconPairs() });
+const detectPads = () => controllers.detect({ platform: runner.platform, merge: config.getJoyconPairs(), hideNintendo: betterjoyOn() });
 
 // Writes the controller settings of one emulator (or all installed ones) from what is plugged in now
 function setupControllers(emulatorIds) {
     const connected = detectPads();
     const results = emulatorIds.map(id => {
-        const result = inputconfig.apply(id, connected, { ...platformCtx, wiiRemotes: config.getWiiRemotes(), players: config.getPlayers(), profiles: mappings, joyconsSplit: config.getJoyconPairs().splits.length > 0 });
+        const result = inputconfig.apply(id, connected, { ...platformCtx, wiiRemotes: config.getWiiRemotes(), players: config.getPlayers(), profiles: mappings, betterjoyMotion: betterjoyOn() ? betterjoyLib.MOTION_PORT : 0, joyconsSplit: config.getJoyconPairs().splits.length > 0 });
         console.log(`[PADS] ${id}: ${result.status}${result.message ? ` (${result.message})` : ''}`);
         return result;
     });
@@ -220,6 +240,7 @@ async function startGame(relPath, slotId, onGameState) {
     }
 
     await runner.grantAccess(emu, romsDir);
+    await ensureBetterJoy();
     if (config.getAutoControllers()) setupControllers([emu.id]);
     let args = emu.args.map(a => a === '{rom}' ? abs : a);
 
@@ -393,6 +414,51 @@ async function handleBluetooth(route, req, res) {
         return sendJson(res, known ? 409 : 500, { error: err.code || 'failed', message: err.message }), true;
     }
     return false;
+}
+
+// BetterJoy: what the setup screen shows, and the steps it runs (one at a time, polled while running)
+async function betterjoyView() {
+    const st = await helper.status();
+    bj.running = st.running;
+    return { ...st, name: helper.name, enabled: config.getBetterJoy().enabled, job: bj.job && { kind: bj.job.kind, phase: bj.job.phase, message: bj.job.message, lines: bj.job.lines.slice(-4) } };
+}
+
+function runBetterJoyStep(kind, work) {
+    if (bj.job && bj.job.phase === 'running') return false;
+    const job = bj.job = { kind, phase: 'running', message: '', lines: [] };
+    const onLine = line => { job.message = line; job.lines.push(line); };
+    work(onLine).then(() => { job.phase = 'done'; if (!job.message) job.message = 'Done'; })
+        .catch(err => { job.phase = 'failed'; job.message = err.message; console.error(`[BETTERJOY] ${kind}: ${err.message}`); });
+    return true;
+}
+
+async function handleBetterJoy(route, req, res) {
+    try {
+        if (route === 'GET /api/betterjoy') return sendJson(res, 200, await betterjoyView()), true;
+        if (!route.startsWith('POST ')) return false;
+        if (!helper.supported) return sendJson(res, 409, { error: 'unsupported', message: 'This system has no Joy-Con helper' }), true;
+        const step = route.slice('POST /api/betterjoy/'.length);
+        if (step === 'driver') runBetterJoyStep('driver', onLine => helper.installDriver({ onLine }));
+        else if (step === 'install') runBetterJoyStep('install', onLine => helper.install({ onLine }));
+        else if (step === 'enable') {
+            if (!helper.installed()) return sendJson(res, 409, { error: 'not_installed', message: 'Install BetterJoy first' }), true;
+            if (!helper.driverInstalled()) return sendJson(res, 409, { error: 'no_driver', message: helper.name === 'BetterJoy' ? 'Install the controller driver first' : 'This kernel cannot use Switch controllers' }), true;
+            config.setBetterJoy({ enabled: true });
+            runBetterJoyStep('enable', async onLine => { onLine(`Starting ${helper.name}…`); if (helper.name === 'BetterJoy') await ensureBetterJoy(); else { await helper.start({ onLine }); await refreshBetterJoy(); } onLine(bj.running ? `${helper.name} is running` : `${helper.name} was started, give it a few seconds`); await syncNow(); });
+        } else if (step === 'disable') {
+            config.setBetterJoy({ enabled: false });
+            await helper.stop(); bj.running = false;
+            await syncNow();
+        } else if (step === 'uninstall') {
+            config.setBetterJoy({ enabled: false });
+            await helper.uninstall(); bj.running = false;
+            await syncNow();
+        } else return false;
+        return sendJson(res, 200, await betterjoyView()), true;
+    } catch (err) {
+        console.error(`[BETTERJOY] ${route}: ${err.message}`);
+        return sendJson(res, 500, { error: 'failed', message: err.message }), true;
+    }
 }
 
 // What the Players screen shows
@@ -730,6 +796,9 @@ function createServer(onGameState) {
                     const handled = await handleSaves(route, url, req, res);
                     if (handled) return;
                 }
+                if (url.pathname.startsWith('/api/betterjoy')) {
+                    if (await handleBetterJoy(route, req, res)) return;
+                }
                 if (url.pathname.startsWith('/api/bluetooth')) {
                     if (await handleBluetooth(route, req, res)) return;
                 }
@@ -864,6 +933,8 @@ function start({ port = 3000, onGameState, onPause } = {}) {
             console.log(`Menu running at: http://localhost:${actual}`);
             console.log(`ROMs folder: ${config.getRomsDir()}`);
             processRoms(); // pick up any zips dropped in while the app was closed
+            ensureBetterJoy();
+            if (helper.supported) setInterval(refreshBetterJoy, 3000).unref();
             applyShareSettings().then(err => err && console.error(`[LIBRARY] ${err}`));
             resolve({ server, port: actual });
         });

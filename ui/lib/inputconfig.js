@@ -155,7 +155,7 @@ function knownEntry(c, old) {
     return byIds || old.find(e => String(e.name || '').replace(/\s*\(\d+\)$/, '').toLowerCase() === c.name.toLowerCase());
 }
 
-function writeRyujinx(controllers, { home, platform, env, exePath, players, profiles }) {
+function writeRyujinx(controllers, { home, platform, env, exePath, players, profiles, betterjoyMotion = 0 }) {
     const win = platform === 'win32';
     const root = adapters.create({ platform, home, env, exePath }).get('ryujinx').dataRoot();
     const file = path.join(root, 'Config.json');
@@ -194,9 +194,15 @@ function writeRyujinx(controllers, { home, platform, env, exePath, players, prof
         if (!(s.request.sw === 'auto' && hasOwn)) {
             const patch = mappings.ryujinxPatch(s.sw);
             for (const group of Object.keys(patch)) {
-                const fields = group === 'motion' ? patch[group] : Object.fromEntries(Object.entries(patch[group]).map(([k, v]) => [k, spelling[v] || v]));
+                const fields = (group === 'motion' || group === 'rumble') ? patch[group] : Object.fromEntries(Object.entries(patch[group]).map(([k, v]) => [k, spelling[v] || v]));
                 entry[group] = { ...(entry[group] || {}), ...fields };
             }
+        }
+        // Rumble is not part of a layout: it is on out of the box (the player's Switch mapping can turn it off)
+        entry.rumble = { ...(entry.rumble || {}), enable_rumble: mappings.ryujinxPatch(s.sw).rumble.enable_rumble };
+        // Motion from BetterJoy's server: a virtual Xbox pad has no sensors of its own
+        if (betterjoyMotion && entry.motion && entry.motion.enable_motion !== false) {
+            entry.motion = { ...entry.motion, motion_backend: 'CemuHook', dsu_server_host: '127.0.0.1', dsu_server_port: betterjoyMotion, slot: s.index, alt_slot: 0, mirror_input: false, sensitivity: entry.motion.sensitivity || 100, gyro_deadzone: entry.motion.gyro_deadzone || 1 };
         }
         // A single Joy-Con is a Joy-Con to Ryujinx too; anything else keeps the layout it had
         const side = controllersLib.joyconSide(c);
@@ -224,7 +230,7 @@ const writers = { dolphin: writeDolphin, ryujinx: writeRyujinx };
 // context: {home, platform, env, exePath(id), wiiRemotes, players, profiles}. Defaults to this computer.
 function apply(emulatorId, controllers, context = {}) {
     const ctx = {
-        wiiRemotes: context.wiiRemotes || 0, joyconsSplit: !!context.joyconsSplit, players: context.players, profiles: context.profiles || mappings.createStore(''),
+        wiiRemotes: context.wiiRemotes || 0, joyconsSplit: !!context.joyconsSplit, betterjoyMotion: context.betterjoyMotion || 0, players: context.players, profiles: context.profiles || mappings.createStore(''),
         home: context.home || os.homedir(), platform: context.platform || platformLib.current(), env: context.env || process.env, exePath: context.exePath || (() => null)
     };
     const write = writers[emulatorId];

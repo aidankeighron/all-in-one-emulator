@@ -298,3 +298,17 @@ test('with nobody on a gamepad, a real Wii Remote leaves the GameCube ports alon
     assert.strictEqual(main.get('Core', 'SIDevice0'), undefined);
     assert.strictEqual(Ini.read(path.join(dolphinDir(home), 'WiimoteNew.ini')).get('Wiimote1', 'Source'), '2');
 });
+
+test('rumble is on out of the box: both motors in Dolphin, and in Ryujinx', () => {
+    const store = mappings.createStore(tmp());
+    for (const id of ['gc-default', 'wii-classic', 'wii-nunchuk-gyro']) {
+        const section = Object.fromEntries(mappings.dolphinSection(store.get(id), 'XInput/0/Gamepad'));
+        assert.strictEqual(section['Rumble/Motor'], '`Motor L`|`Motor R`', id);
+        assert.ok(!('Rumble/Enabled' in section), 'the setting itself is not a Dolphin option');
+    }
+    assert.strictEqual(mappings.ryujinxPatch(store.get('switch-generic')).rumble.enable_rumble, true);
+    const quiet = store.save({ name: 'Quiet', target: 'gamecube', family: 'generic', settings: { 'Rumble/Enabled': 'False' }, entries: { 'Buttons/A': 'Button A' } });
+    assert.ok(!Object.fromEntries(mappings.dolphinSection(quiet, 'SDL/0/Pad'))['Rumble/Motor']);
+    const quietSwitch = store.save({ name: 'Quiet Switch', target: 'switch', family: 'generic', settings: { 'Rumble/Enabled': 'False' } });
+    assert.strictEqual(mappings.ryujinxPatch(quietSwitch).rumble.enable_rumble, false);
+});

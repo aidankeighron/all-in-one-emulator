@@ -289,17 +289,41 @@ Pro Controller or Joy-Con over Bluetooth). It has no pointer either.
 
 ## Two Switch controllers as one
 
-Windows (and Bluetooth in general) shows a pair of Joy-Cons as two controllers. The menu puts a left and a right
-Joy-Con together by itself, so they show as one **Joy-Con pair** card, take one player slot and use one mapping.
-**Y** on a Switch controller combines it with any other Switch controller, or splits a pair again (a pair you split
-stays split).
+Bluetooth shows a pair of Joy-Cons as two controllers. There are two ways to get one, and the menu does both:
+
+**Inside the menu (always on).** The menu puts a left and a right Joy-Con together by itself: they show as one **Joy-Con
+pair** card, take one player slot and use one mapping. **Y** on a Switch controller combines it with any other Switch
+controller, or splits a pair again (a pair you split stays split).
 
 - **Dolphin** does the joining: the menu writes `SDL_JOYSTICK_HIDAPI_COMBINE_JOY_CONS` into the `[SDL_Hints]` section of
   `Dolphin.ini` and uses the device SDL then reports, `Nintendo Switch Joy-Con (L/R)`. This needs a recent Dolphin
   (one that has the SDL Hints settings); on an older one the two halves stay separate. For motion the right Joy-Con's
   sensors are used. Not tested on real Joy-Cons.
-- **Ryujinx** reads one device per player, so a pair is written as its left Joy-Con alone, and the setup message says
-  so. To play Switch games with two Joy-Cons as one in Ryujinx, join them in Windows or with Steam Input or BetterJoy first.
+- **Ryujinx** reads one device per player, so a pair is written as its left Joy-Con alone, and the setup message says so.
+
+**One real controller for every emulator (a helper, set up once from the menu).** Pairing → **Connect a controller** →
+**Use two Joy-Cons as one controller** walks through it; after that it runs by itself.
+
+| | Windows: BetterJoy | Linux: joycond |
+|---|---|---|
+| What it does | Makes Joy-Cons and the Pro Controller look like Xbox 360 controllers and joins a left and a right Joy-Con into one, with rumble and motion (served on port 26760) | Joins a left and a right Joy-Con into one "Nintendo Switch Combined Joy-Cons" controller (press **L** and **R** together; **SL + SR** makes one a sideways controller) |
+| Setup steps | 1. the ViGEmBus driver (its installer asks Windows' permission once, the menu downloads and runs it) 2. BetterJoy (downloaded and unpacked into the menu's emulators folder, its settings set for Xbox pads and the motion server) 3. pair the Joy-Cons in Windows 4. **Turn on** | 1. checks the kernel is 5.16 or newer 2. installs the `joycond` package (`apt`, `dnf` or `zypper`, password once; on other systems the screen links to the build instructions) 3. pair with **Pair a Joy-Con** 4. **Turn on** (`systemctl enable --now joycond`, password once) |
+| Afterwards | The menu starts BetterJoy with itself and before every game, shows its virtual Xbox pads instead of the real Joy-Cons, and uses the Xbox mappings. Ryujinx's motion is pointed at BetterJoy's server | joycond is a system service that starts at boot. The menu shows the combined controller instead of the two halves it joined |
+| Needs | Windows 10/11. Download addresses come from GitHub; set `emulatorUrls.betterjoy` or `emulatorUrls.vigembus` in `config.json` (a web address, or a file on this computer) if they cannot be reached | A distribution that has the `joycond` package |
+
+Not tested on real Windows or Joy-Cons. The addresses for the downloads (`Davidobot/BetterJoy`, `nefarius/ViGEmBus` on
+GitHub) could not be checked from where this was built, so if **Download BetterJoy** reports a missing zip, download
+BetterJoy yourself and point `emulatorUrls.betterjoy` at it. BetterJoy's own settings file differs between versions, so
+the menu only edits keys that exist; if buttons are swapped, change that in BetterJoy's settings.
+
+## Rumble
+
+Rumble is on out of the box for gamepads that have it (a wired Xbox controller such as the PowerA 1510523-01 is a standard
+XInput pad and needs nothing installed). Dolphin gets both motors of the pad on the GameCube and Wii controllers
+(`Rumble/Motor` = `Motor L` | `Motor R`), and Ryujinx's `rumble.enable_rumble` is turned on, on Windows and Linux. Every
+mapping has a **Rumble (vibration)** setting (on by default) in the mapping editor to turn it off. A controller without
+motors simply does nothing. On Linux the pad needs force-feedback support in the kernel (the `xpad` driver has it). With
+BetterJoy or joycond, rumble goes through the same way.
 
 ## Connecting Wii Remotes and Switch controllers
 

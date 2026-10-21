@@ -81,13 +81,17 @@ const familyOf = controller => (controller && controller.combined) ? 'nintendo' 
 const SETTING_DEFS = {
     wii: [
         { key: 'Options/Sideways Wiimote', label: 'Hold the remote sideways', values: [['False', 'No'], ['True', 'Yes']] },
-        { key: 'Options/Upright Wiimote', label: 'Hold the remote upright', values: [['False', 'No'], ['True', 'Yes']] }
+        { key: 'Options/Upright Wiimote', label: 'Hold the remote upright', values: [['False', 'No'], ['True', 'Yes']] },
+        { key: 'Rumble/Enabled', label: 'Rumble (vibration)', values: [['True', 'On'], ['False', 'Off']] }
     ],
-    gamecube: [],
+    gamecube: [
+        { key: 'Rumble/Enabled', label: 'Rumble (vibration)', values: [['True', 'On'], ['False', 'Off']] }
+    ],
     switch: [
         { key: 'Sticks/Left', label: 'Left stick of the Switch uses', values: [['Left', 'The left stick'], ['Right', 'The right stick']] },
         { key: 'Sticks/Right', label: 'Right stick of the Switch uses', values: [['Right', 'The right stick'], ['Left', 'The left stick']] },
-        { key: 'Motion/Enabled', label: 'Motion controls (gyro)', values: [['True', 'On'], ['False', 'Off']] }
+        { key: 'Motion/Enabled', label: 'Motion controls (gyro)', values: [['True', 'On'], ['False', 'Off']] },
+        { key: 'Rumble/Enabled', label: 'Rumble (vibration)', values: [['True', 'On'], ['False', 'Off']] }
     ]
 };
 const SETTINGS = Object.fromEntries(Object.entries(SETTING_DEFS).map(([t, defs]) => [t, defs.map(d => d.key)]));
@@ -406,7 +410,9 @@ function dolphinSection(profile, device, { pair = false } = {}) {
     if (profile.target === 'wii') out.push(['Source', '1']);
     out.push(['Device', device]);
     if (profile.target === 'wii') out.push(['Extension', DOLPHIN_EXTENSION[profile.extension]]);
-    for (const [key, value] of Object.entries(profile.settings)) out.push([key, value]);
+    // Only Dolphin's own options are written as they are; rumble is a control (both motors of the pad, when it has them)
+    for (const [key, value] of Object.entries(profile.settings)) if (key.startsWith('Options/')) out.push([key, value]);
+    if (settingValue(profile.target, profile.settings, 'Rumble/Enabled') === 'True') out.push(['Rumble/Motor', '`Motor L`|`Motor R`']);
     const controls = CONTROLS[profile.target];
     for (const ctl of controls) {
         if (ctl.ext && ctl.ext !== profile.extension) continue;
@@ -430,7 +436,7 @@ const RYUJINX_SLOT = {
 // What a Switch mapping changes in a Ryujinx input_config entry: the buttons, which stick is which, and motion.
 // Anything the mapping leaves unmapped is unbound.
 function ryujinxPatch(profile) {
-    const patch = { left_joycon: {}, right_joycon: {}, left_joycon_stick: {}, right_joycon_stick: {}, motion: {} };
+    const patch = { left_joycon: {}, right_joycon: {}, left_joycon_stick: {}, right_joycon_stick: {}, motion: {}, rumble: {} };
     for (const [key, [group, field]] of Object.entries(RYUJINX_SLOT)) {
         const source = profile.entries[key];
         patch[group][field] = source && RYUJINX_INPUT[source] ? RYUJINX_INPUT[source] : 'Unbound';
@@ -438,6 +444,7 @@ function ryujinxPatch(profile) {
     patch.left_joycon_stick.joystick = settingValue('switch', profile.settings, 'Sticks/Left');
     patch.right_joycon_stick.joystick = settingValue('switch', profile.settings, 'Sticks/Right');
     patch.motion.enable_motion = settingValue('switch', profile.settings, 'Motion/Enabled') === 'True';
+    patch.rumble.enable_rumble = settingValue('switch', profile.settings, 'Rumble/Enabled') === 'True';
     return patch;
 }
 

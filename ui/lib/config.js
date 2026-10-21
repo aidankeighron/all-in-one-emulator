@@ -114,6 +114,15 @@ function setJoyconPairs(next) {
     save({ ...load(), joyconPairs: { merges: pairList(next.merges ?? now.merges), splits: pairList(next.splits ?? now.splits), auto: typeof next.auto === 'boolean' ? next.auto : now.auto } });
 }
 
+// BetterJoy (Windows): on means it is started with the menu and its virtual Xbox pads stand in for the real Switch controllers
+function getBetterJoy() {
+    return { enabled: !!(load().betterjoy || {}).enabled };
+}
+
+function setBetterJoy(next) {
+    if (typeof next.enabled === 'boolean') save({ ...load(), betterjoy: { ...(load().betterjoy || {}), enabled: next.enabled } });
+}
+
 const clamp01 = (v, fallback) => (typeof v === 'number' && v >= 0 && v <= 1 ? v : fallback);
 
 function getSound() {
@@ -212,4 +221,4 @@ const mappingsDir = path.join(path.dirname(configFile), 'mappings');
 const artworkDir = path.join(path.dirname(configFile), 'artwork');
 const soundsDir = process.env.SOUNDS_DIR || path.join(path.dirname(configFile), 'sounds');
 
-module.exports = { getRomsDir, setRomsDir, getAutoControllers, setAutoControllers, getWiiRemotes, setWiiRemotes, getTheme, setTheme, THEMES, getPauseHold, setPauseHold, PAUSE_HOLD_STEPS, getFavorites, setFavorite, getPlayers, setPlayers, getJoyconPairs, setJoyconPairs, getSound, setSound, getCloud, getCloudToken, getLibrary, setLibrary, libraryCacheFile, getEmulatorPaths, getEmulatorUrls, setEmulatorPath, emulatorsDir, configFile, mappingsDir, artworkDir, soundsDir };
+module.exports = { getRomsDir, setRomsDir, getAutoControllers, setAutoControllers, getWiiRemotes, setWiiRemotes, getTheme, setTheme, THEMES, getPauseHold, setPauseHold, PAUSE_HOLD_STEPS, getFavorites, setFavorite, getPlayers, setPlayers, getJoyconPairs, setJoyconPairs, getBetterJoy, setBetterJoy, getSound, setSound, getCloud, getCloudToken, getLibrary, setLibrary, libraryCacheFile, getEmulatorPaths, getEmulatorUrls, setEmulatorPath, emulatorsDir, configFile, mappingsDir, artworkDir, soundsDir };

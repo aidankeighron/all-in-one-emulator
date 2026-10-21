@@ -65,3 +65,13 @@ Linux needs Bluetooth (the menu offers to install it) and kernel 5.16 or newer f
 - To move a small file (like `cloud-token.txt`) once: [PairDrop](https://pairdrop.net) (browser, direct between the two
   computers), `croc send <file>` / `croc <code>`, or Tailscale's `tailscale file cp`. Do not paste the token into
   chat apps or shared drives you do not control.
+
+## 5. Joy-Cons as one controller, and rumble
+
+- **Windows:** Controllers page -> **Connect a controller** -> **Use two Joy-Cons as one controller**. Run the four steps (the driver
+  step shows a Windows permission prompt). Afterwards the Joy-Cons should show as one *Xbox 360 Controller* card, BetterJoy should start by
+  itself when the menu starts, and games should see one pad. Check `[BETTERJOY]` lines in the terminal.
+- **Linux:** same screen: install joycond (password), pair both Joy-Cons, **Turn on**, press L + R together. One
+  *Nintendo Switch Combined Joy-Cons* card replaces the two halves.
+- **Rumble:** with a wired Xbox controller start a Wii or GameCube game and trigger rumble; in Ryujinx check
+  `"rumble": {"enable_rumble": true}` for the player in `Config.json`. Turn it off in the mapping editor (**Rumble (vibration)**) to compare.

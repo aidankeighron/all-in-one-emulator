@@ -218,3 +218,26 @@ test('Ryujinx: the Switch mapping is written, a layout made in Ryujinx is kept u
     assert.match(res.message, /Joy-Con pair is read as Joy-Con \(L\) alone/);
     assert.strictEqual(read().length, 1);
 });
+
+test('Ryujinx: rumble is on out of the box, and with BetterJoy running motion comes from its server', () => {
+    const mappings = require('../ui/lib/mappings');
+    const profiles = mappings.createStore(tmpHome());
+    const home = tmpHome();
+    const dir = path.join(home, '.var/app/io.github.ryubing.Ryujinx/config/Ryujinx');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'Config.json'), JSON.stringify({ version: 70, input_config: [] }));
+    const xpad = pad({ vendor: '045e', product: '028e', bus: '0003', version: '0110' });
+    const read = () => JSON.parse(fs.readFileSync(path.join(dir, 'Config.json'), 'utf8')).input_config[0];
+    inputconfig.apply('ryujinx', [xpad], { home, platform: 'linux', profiles });
+    assert.strictEqual(read().rumble.enable_rumble, true);
+    assert.notStrictEqual(read().motion.motion_backend, 'CemuHook');
+    // a layout made in Ryujinx is kept on automatic, but rumble still comes on
+    const mine = read(); mine.rumble.enable_rumble = false; mine.right_joycon.button_a = 'Y';
+    fs.writeFileSync(path.join(dir, 'Config.json'), JSON.stringify({ input_config: [mine] }));
+    inputconfig.apply('ryujinx', [xpad], { home, platform: 'linux', profiles, betterjoyMotion: 26760 });
+    assert.strictEqual(read().right_joycon.button_a, 'Y');
+    assert.strictEqual(read().rumble.enable_rumble, true);
+    assert.strictEqual(read().motion.motion_backend, 'CemuHook');
+    assert.strictEqual(read().motion.dsu_server_port, 26760);
+    assert.strictEqual(read().motion.dsu_server_host, '127.0.0.1');
+});

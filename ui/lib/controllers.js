@@ -86,7 +86,11 @@ function readUsbIds(root = '/sys/bus/usb/devices') {
 // Players are numbered in the order the system registered the devices (the order they were plugged in).
 function build(procDevices, usbIds = []) {
     const adapter = hasGcAdapter(usbIds);
+    // joycond joins two Joy-Cons into one "Combined Joy-Cons" controller and grabs the halves: only the combined one counts
+    const combinedCount = procDevices.filter(d => /combined joy-?cons/i.test(d.name)).length;
+    let halvesToDrop = combinedCount * 2;
     const found = procDevices
+        .filter(d => !(halvesToDrop > 0 && /joy-?con/i.test(d.name) && !/combined/i.test(d.name) && halvesToDrop--))
         // The kernel may also expose the adapter as a gamepad; it is shown once, as the adapter
         .filter(d => !(adapter && d.vendor === NINTENDO && d.product === GC_ADAPTER_PRODUCT))
         .filter(d => isController(d) || /^nintendo wii remote$/i.test(d.name))
@@ -188,7 +192,8 @@ function report(pads, now = Date.now()) {
 }
 
 // merge: {merges, splits, auto} as kept in config.json (see combine), applied to whatever was found
-function detect({ platform = process.platform, procFile = '/proc/bus/input/devices', usbRoot, now = Date.now(), merge } = {}) {
+// hideNintendo: leave out the real Switch controllers (BetterJoy's virtual Xbox pads stand in for them)
+function detect({ platform = process.platform, procFile = '/proc/bus/input/devices', usbRoot, now = Date.now(), merge, hideNintendo = false } = {}) {
     let found;
     if (platform === 'win32') found = now - reported.at < REPORT_TTL_MS ? fromGamepadApi(reported.pads) : [];
     else {
@@ -196,6 +201,7 @@ function detect({ platform = process.platform, procFile = '/proc/bus/input/devic
         try { text = fs.readFileSync(procFile, 'utf8'); } catch { /* no input subsystem */ }
         found = build(parseProc(text), readUsbIds(usbRoot));
     }
+    if (hideNintendo) found = found.filter(c => !(c.kind === 'switch' && c.vendor === NINTENDO));
     return merge ? combine(found, merge) : found;
 }
 

@@ -3088,7 +3088,7 @@
 
         // ================= CONNECT A CONTROLLER =================
         // Pairs Switch controllers and checks for Wii Remotes through the server (see lib/bluetooth.js).
-        const pair = { open: false, info: null, job: null, focus: 0, buttons: [], poll: null, found: null, error: '' };
+        const pair = { open: false, info: null, job: null, focus: 0, buttons: [], poll: null, found: null, error: '', screen: null, helper: null, helperPoll: null };
 
         const PAIR_HELP = {
             switch: ['Hold the small round <b>sync button</b> on the controller until its four lights sweep back and forth.', 'Pro Controller: the button on the top edge. Joy-Con: the button on the rail side.'],
@@ -3098,6 +3098,7 @@
         async function pairRefresh() {
             try { pair.info = await (await fetch('/api/bluetooth')).json(); pair.job = pair.info.job || null; pair.error = ''; }
             catch { pair.error = 'The menu could not check Bluetooth.'; }
+            try { pair.helper = await (await fetch('/api/betterjoy')).json(); } catch { pair.helper = null; }
             if (pair.open) renderPair();
         }
 
@@ -3134,7 +3135,9 @@
             const add = (label, act, primary) => buttons.push({ label, act, primary });
             let title = 'Connect a controller', body = '';
 
-            if (!info) {
+            if (info && pair.screen === 'helper' && pair.helper && pair.helper.supported) {
+                return helperScreen();
+            } else if (!info) {
                 body = '<div class="sheet-busy" style="min-height:120px"><span class="spinner"></span><span>Checking Bluetooth…</span></div>';
                 add('Close (B)', 'close');
             } else if (job && job.phase === 'running') {
@@ -3166,6 +3169,7 @@
                         <li>Back here, open <b>Players and mappings</b> and choose <b>A real Wii Remote</b> for the player who uses it.</li>
                     </ol>`;
                 add('Open Bluetooth settings', 'open-settings', true);
+                if (pair.helper && pair.helper.supported) add('Use two Joy-Cons as one controller', 'helper-open');
             } else if (!info.ready) {
                 title = 'Set up Bluetooth';
                 const why = info.problems.includes('not_installed') ? 'This computer does not have Bluetooth support installed yet. The menu can install it for you. You will be asked for your password once.'
@@ -3180,6 +3184,7 @@
                 body = `<p>Choose what you want to connect.</p>`;
                 add('Switch Pro Controller / Joy-Con', 'pair-switch', true);
                 add('Wii Remote', 'pair-wiimote');
+                if (pair.helper && pair.helper.supported) add('Use two Joy-Cons as one controller', 'helper-open');
                 if (!info.nintendoDriver) body += `<div class="guide-box off">This system’s Linux kernel (${escapeHtml(info.kernel)}) is older than 5.16, so Switch controllers will not work. Update the system to a newer kernel.</div>`;
             }
 
@@ -3196,6 +3201,72 @@
             if (pair.notice) body += `<div class="guide-box">${escapeHtml(pair.notice)}</div>`;
             if (pair.error) body += `<div class="guide-box off">${escapeHtml(pair.error)}</div>`;
             return { title, body, buttons };
+        }
+
+        // ----- two Joy-Cons as one: BetterJoy on Windows, joycond on Linux (the server picks, see lib/betterjoy.js, lib/joycond.js) -----
+        function helperStartPoll() {
+            clearInterval(pair.helperPoll);
+            pair.helperPoll = setInterval(async () => {
+                if (!pair.open || pair.screen !== 'helper') return clearInterval(pair.helperPoll);
+                try {
+                    const before = pair.helper && pair.helper.job && pair.helper.job.phase;
+                    pair.helper = await (await fetch('/api/betterjoy')).json();
+                    const phase = pair.helper.job && pair.helper.job.phase;
+                    if (phase !== 'running') { clearInterval(pair.helperPoll); if (before === 'running') { Sfx.play(phase === 'done' ? 'select' : 'error'); refreshControllers(); } }
+                    renderPair();
+                } catch { /* try again next time */ }
+            }, 800);
+        }
+
+        async function helperCall(step) {
+            try {
+                const res = await fetch(`/api/betterjoy/${step}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+                const data = await res.json();
+                if (!res.ok) pair.error = data.message || 'That did not work.'; else { pair.error = ''; pair.helper = data; }
+            } catch { pair.error = 'The menu could not be reached.'; }
+            helperStartPoll();
+            renderPair();
+        }
+
+        function helperScreen() {
+            const h = pair.helper, job = h.job;
+            const win = h.name === 'BetterJoy';
+            const buttons = [];
+            const add = (label, act, primary) => buttons.push({ label, act, primary });
+            const title = win ? 'Joy-Cons as one controller (BetterJoy)' : 'Joy-Cons as one controller (joycond)';
+            const steps = win ? [
+                { done: h.driver, name: 'Controller driver', text: 'ViGEmBus lets BetterJoy make virtual Xbox controllers. Windows asks for permission once: choose Yes.', act: 'helper:driver', label: 'Install the driver' },
+                { done: h.installed, name: 'BetterJoy', text: 'The menu downloads it and unpacks it into its own folder.', act: 'helper:install', label: 'Download BetterJoy' },
+                { done: null, name: 'Pair the Joy-Cons in Windows', text: 'Hold each Joy-Con’s sync button and add both under Bluetooth. Skip this if they are already paired.', act: 'open-settings', label: 'Open Bluetooth settings' },
+                { done: h.enabled && h.running, name: 'Turn it on', text: 'The menu then starts BetterJoy by itself, also before every game. A left and a right Joy-Con become one Xbox controller, with rumble and motion.', act: 'helper:enable', label: 'Turn on' }
+            ] : [
+                { done: h.driver, name: 'Linux kernel', text: h.driver ? 'This kernel can use Switch controllers.' : 'This kernel is older than 5.16 and cannot use Switch controllers. Update the system.', act: null },
+                { done: h.installed, name: 'joycond', text: 'A small service that joins two Joy-Cons into one controller. It is installed from the system’s packages; you are asked for your password once.', act: 'helper:install', label: 'Install joycond' },
+                { done: null, name: 'Pair the Joy-Cons', text: 'Pair each Joy-Con with Bluetooth (hold its sync button). Skip this if they are already paired.', act: 'pair-switch', label: 'Pair a Joy-Con' },
+                { done: h.running, name: 'Turn it on', text: 'Starts joycond now and at every boot (password once). Then press L on the left Joy-Con and R on the right one together: they become one controller. SL + SR together makes a single Joy-Con a sideways controller.', act: 'helper:enable', label: 'Turn on' }
+            ];
+            let body = `<p>${win ? 'BetterJoy makes Joy-Cons and the Pro Controller look like Xbox controllers, and joins a left and right Joy-Con into one.' : 'joycond joins a left and a right Joy-Con into one controller.'} After this one-time setup it runs by itself, like every other controller.</p>
+                <ol class="pair-steps" style="list-style:none;padding-left:0">${steps.map(st => `<li style="margin-bottom:8px"><b>${st.done ? '✓' : '○'} ${escapeHtml(st.name)}</b><br><span style="font-size:13px;color:var(--tx-6b747c)">${escapeHtml(st.text)}</span></li>`).join('')}</ol>`;
+            if (job && job.phase === 'running') {
+                body += `<div class="guide-box"><span class="spinner" style="vertical-align:-3px;margin-right:8px"></span>${escapeHtml(job.message || 'Working…')}</div>`;
+            } else {
+                if (job && job.phase === 'failed') body += `<div class="guide-box off">${escapeHtml(job.message)}</div>`;
+                else if (job && job.phase === 'done' && job.message) body += `<div class="guide-box">${escapeHtml(job.message)}</div>`;
+                const pending = steps.filter(st => st.act && st.done !== true);
+                pending.forEach((st, i) => add(st.label, st.act, i === pending.findIndex(x => x.done === false)));
+                if (steps.every(st => st.done !== false)) {
+                    body += '<div class="guide-box">All set. It starts by itself from now on.</div>';
+                    add('Turn off', 'helper:disable');
+                }
+                add('Back (B)', 'helper-back');
+            }
+            if (pair.error) body += `<div class="guide-box off">${escapeHtml(pair.error)}</div>`;
+            return { title, body, buttons };
+        }
+
+        function pairBack() {
+            if (pair.screen === 'helper' && !(pair.helper && pair.helper.job && pair.helper.job.phase === 'running')) { pair.screen = null; pair.focus = 0; clearInterval(pair.helperPoll); renderPair(); }
+            else closePair();
         }
 
         function renderPair() {
@@ -3218,7 +3289,7 @@
 
         async function openPair() {
             Sfx.play('open');
-            Object.assign(pair, { open: true, info: null, focus: 0, error: '', notice: '', showResult: false });
+            Object.assign(pair, { open: true, info: null, focus: 0, error: '', notice: '', showResult: false, screen: null });
             document.getElementById('pair-overlay').classList.add('open');
             renderPair();
             await pairRefresh();
@@ -3240,11 +3311,14 @@
             Sfx.play('select');
             const [act, arg] = b.act.split(':');
             if (act === 'close') return closePair();
+            if (act === 'helper-open') { pair.screen = 'helper'; pair.focus = 0; pair.error = ''; await pairRefresh(); return; }
+            if (act === 'helper-back') return pairBack();
+            if (act === 'helper') { pair.focus = 0; return helperCall(arg); }
             if (act === 'cancel') { await pairCall('/api/bluetooth/cancel'); pair.showResult = false; return pairRefresh(); }
             if (act === 'result-ok') { pair.showResult = false; pair.focus = 0; return pairRefresh(); }
             if (act === 'refresh') return pairRefresh();
             if (act === 'setup') { pair.showResult = true; return pairCall('/api/bluetooth/setup'); }
-            if (act === 'pair-switch' || act === 'pair-wiimote') { pair.showResult = true; pair.lastKind = act.slice(5); pair.focus = 0; return pairCall('/api/bluetooth/pair', { kind: pair.lastKind }); }
+            if (act === 'pair-switch' || act === 'pair-wiimote') { pair.screen = null; pair.showResult = true; pair.lastKind = act.slice(5); pair.focus = 0; return pairCall('/api/bluetooth/pair', { kind: pair.lastKind }); }
             if (act === 'retry') { pair.focus = 0; return pairCall('/api/bluetooth/pair', { kind: pair.lastKind || 'switch' }); }
             if (act === 'open-settings') return pairCall('/api/bluetooth/open-settings');
             if (act === 'forget') { await pairCall('/api/bluetooth/forget', { address: b.act.slice(7) }); return pairRefresh(); }
@@ -3688,7 +3762,7 @@
                 } else if (pair.open) {
                     if (now - lastInputTime > 180) {
                         if (st.a) { pairPress(); lastInputTime = now + 400; }
-                        else if (st.b) { const running = pair.job && pair.job.phase === 'running'; if (running || !pair.showResult) closePair(); else { pair.showResult = false; renderPair(); } lastInputTime = now + 400; }
+                        else if (st.b) { const running = pair.job && pair.job.phase === 'running'; if (pair.screen === 'helper') pairBack(); else if (running || !pair.showResult) closePair(); else { pair.showResult = false; renderPair(); } lastInputTime = now + 400; }
                         else if (st.down || st.right) { pairMove(1); lastInputTime = now; }
                         else if (st.up || st.left) { pairMove(-1); lastInputTime = now; }
                     }
@@ -3744,7 +3818,7 @@
             if (mps.open) { if (e.key === 'Escape') closeMaps(); return; }
             if (plr.open) { if (e.key === 'Escape') closePlayers(); return; }
             if (pair.open) {
-                if (e.key === 'Escape') closePair();
+                if (e.key === 'Escape') pairBack();
                 else if (e.key === 'Enter' || e.key === ' ') pairPress();
                 else if (e.key === 'ArrowDown' || e.key === 'ArrowRight') pairMove(1);
                 else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') pairMove(-1);
