@@ -100,7 +100,7 @@ function createBluetooth({ platform = process.platform, execImpl = execFile, spa
     }
 
     function snapshot() {
-        return job ? { kind: job.kind, phase: job.phase, message: job.message, lines: job.lines.slice(-12), device: job.device || null } : null;
+        return job ? { kind: job.kind, phase: job.phase, message: job.message, lines: job.lines.slice(-12), output: (job.output || []).slice(-40), device: job.device || null } : null;
     }
 
     // ---------- Setup (install and turn on) ----------
@@ -151,11 +151,17 @@ function createBluetooth({ platform = process.platform, execImpl = execFile, spa
         if (win) throw Object.assign(new Error('Pair in Windows settings'), { code: 'MANUAL' });
         if (!KIND_TYPES[kind]) throw Object.assign(new Error('Unknown controller type'), { code: 'BAD_KIND' });
         if (job && job.phase === 'running') throw Object.assign(new Error('Something is already in progress'), { code: 'BUSY' });
-        const mine = job = { kind, phase: 'running', stage: 'scanning', message: 'Looking for your controller…', lines: [], device: null };
+        const mine = job = { kind, phase: 'running', stage: 'scanning', message: 'Looking for your controller…', lines: [], output: [], device: null };
         const add = line => { mine.lines.push(line); log(`[BT] ${line}`); };
         const wanted = KIND_TYPES[kind];
 
-        const child = spawnImpl('bluetoothctl', [], { stdio: ['pipe', 'pipe', 'pipe'] });
+        // bluetoothctl prints through a pipe in big blocks, so what it finds can arrive minutes late. stdbuf makes it
+        // hand over every line at once.
+        const lineBuffered = platform === 'linux' && ['/usr/bin/stdbuf', '/bin/stdbuf'].some(f => exists(f));
+        const child = lineBuffered ? spawnImpl('stdbuf', ['-oL', '-eL', 'bluetoothctl'], { stdio: ['pipe', 'pipe', 'pipe'] })
+            : spawnImpl('bluetoothctl', [], { stdio: ['pipe', 'pipe', 'pipe'] });
+        // Everything bluetoothctl says is kept (and printed in the terminal), so a search that finds nothing can be diagnosed
+        const note = text => { const t = clean(text).trim(); if (!t) return; mine.output.push(t); if (mine.output.length > 200) mine.output.shift(); log(`[BT] ${t}`); };
         session = child;
         const send = cmd => { try { child.stdin.write(`${cmd}\n`); } catch { /* already gone */ } };
         const names = new Map();
@@ -209,6 +215,7 @@ function createBluetooth({ platform = process.platform, execImpl = execFile, spa
             for (const raw of lines) {
                 const line = clean(raw).trim();
                 if (!line) continue;
+                note(line);
                 // Confirmation prompts from the pairing agent are answered for the user
                 if (/Confirm passkey|Request confirmation|Authorize service|Accept pairing/i.test(line)) send('yes');
                 if (pending) {
@@ -246,9 +253,9 @@ function createBluetooth({ platform = process.platform, execImpl = execFile, spa
             }
         };
         child.stdout.on('data', d => onData(String(d)));
-        child.stderr.on('data', d => add(clean(d).trim()));
+        child.stderr.on('data', d => { add(clean(d).trim()); note(`(error output) ${clean(d)}`); });
         child.on('error', err => finish('failed', err.code === 'ENOENT' ? 'Bluetooth is not installed yet. Use “Set up Bluetooth” first.' : err.message));
-        child.on('close', () => { if (!finished) finish('failed', 'Bluetooth stopped unexpectedly'); });
+        child.on('close', code => { note(`(bluetoothctl closed, code ${code})`); if (!finished) finish('failed', 'Bluetooth stopped unexpectedly'); });
 
         send('power on');
         send('agent NoInputNoOutput');

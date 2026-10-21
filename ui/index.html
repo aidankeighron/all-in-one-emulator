@@ -3452,12 +3452,13 @@
                 const help = PAIR_HELP[job.kind] || [];
                 body = `<div class="guide-box"><span class="spinner" style="vertical-align:-3px;margin-right:8px"></span>${escapeHtml(job.message)}</div>
                     ${help.map(h => `<p>${h}</p>`).join('')}
-                    <div class="pair-log">${(job.lines || []).slice(-3).map(escapeHtml).join('<br>')}</div>`;
+                    <div class="pair-log">${((job.output && job.output.length) ? job.output : (job.lines || [])).slice(-4).map(escapeHtml).join('<br>')}</div>`;
                 add('Cancel (B)', 'cancel');
             } else if (job && ['done', 'failed'].includes(job.phase) && pair.showResult) {
                 const ok = job.phase === 'done';
                 title = ok ? 'All set' : 'That did not work';
                 body = `<div class="guide-box ${ok ? '' : 'off'}">${escapeHtml(job.message)}</div>`;
+                if (!ok && job.output && job.output.length) body += `<div class="desc">What Bluetooth reported (send this if it keeps failing):</div><pre class="wifi-details" style="max-height:170px">${escapeHtml(job.output.slice(-25).join('\n'))}</pre>`;
                 if (ok && job.kind === 'wiimote') {
                     body += `<p>Give it to the next free player? Dolphin connects to it by itself when a game starts. You can change who uses it on the Players screen.</p>`;
                     add('Use it for the next player', 'wii-add', true);
