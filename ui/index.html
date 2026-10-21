@@ -501,7 +501,7 @@
         .boot-card, .wp-working .boot-card { display: flex; align-items: center; gap: 22px; padding: 26px 40px; border-radius: 30px; background: linear-gradient(to bottom, var(--bg-ffffff), var(--bg-eef2f6)); border: 3px solid var(--wii-blue); box-shadow: 0 0 0 5px rgba(58, 180, 242, 0.3), 0 0 34px var(--wii-blue-glow); font-size: 26px; font-weight: 800; color: var(--tx-4a5258); max-width: 80vw; }
         .boot-card .spinner { width: 46px; height: 46px; border-width: 6px; flex: none; }
         .boot-card small { display: block; font-size: 15px; font-weight: 700; color: var(--tx-8a9199); margin-top: 2px; }
-        .wp-working { position: absolute; inset: 0; z-index: 20; display: none; align-items: center; justify-content: center; background: rgba(8, 16, 26, 0.35); }
+        .wp-working { position: absolute; inset: 0; z-index: 20; display: none; align-items: center; justify-content: center; background: rgba(8, 16, 26, 0.97); }
         .wp-working.show { display: flex; }
         .wp { position: relative; width: 100%; height: 100%; overflow: hidden; display: flex; flex-direction: column; }
         .wp-top, .wp-bottom { flex: none; background: linear-gradient(to bottom, var(--bg-ffffff) 0%, var(--bg-eef2f6) 100%); box-shadow: 0 0 24px rgba(0, 0, 0, 0.3); }
@@ -2932,6 +2932,7 @@
                 return `<button type="button" class="wp-btn ${act === 'quit' ? 'danger' : ''} ${asking ? 'confirm' : ''} ${i === pause.i ? 'pad-focus' : ''}" data-act="${act}" data-i="${i}" ${pause.busy || pause.working ? 'disabled' : ''}><svg viewBox="0 0 24 24">${PAUSE_ICONS[act]}</svg><span>${text}</span></button>`;
             };
             document.getElementById('pause-working').classList.toggle('show', !!pause.working);
+            document.getElementById('pause-overlay').classList.toggle('working', !!pause.working);
             document.getElementById('pause-working-text').textContent = pause.working || 'Working…';
             document.getElementById('pause-left').innerHTML = btn(PAUSE_ITEMS[0], 0);
             document.getElementById('pause-right').innerHTML = btn(PAUSE_ITEMS[1], 1);
@@ -4081,17 +4082,30 @@
         const NIN_PRO = { 0: 0, 1: 1, 2: 3, 3: 2, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8, 9: 9, 10: 11, 11: 12, 16: 10 };
         const NIN_L = { 4: 1, 6: 2, 8: 3, 10: 4, 12: 5, 13: 6, 14: 7, 15: 8 };
         const NIN_R = { 0: 0, 1: 1, 2: 3, 3: 2, 5: 4, 7: 5, 9: 6, 11: 8, 16: 7 };
+        // A button that is already down when the menu starts is ignored until it has been let go once, so nothing happens by itself.
+        const heldAtStart = new Map();      // gamepad index -> Set of button numbers
+        function updateHeld() {
+            const seen = new Set();
+            for (const gp of (navigator.getGamepads ? [...navigator.getGamepads()] : [])) {
+                if (!gp) continue;
+                seen.add(gp.index);
+                let set = heldAtStart.get(gp.index);
+                if (!set) { set = new Set(); if (performance.now() < 4000) gp.buttons.forEach((b, n) => { if (b.pressed) set.add(n); }); heldAtStart.set(gp.index, set); }   // only right at start: later, the press that wakes a controller is a real one
+                else for (const n of [...set]) if (!gp.buttons[n]?.pressed) set.delete(n);
+            }
+            for (const k of [...heldAtStart.keys()]) if (!seen.has(k)) heldAtStart.delete(k);
+        }
+        const down = (gp, n) => n !== undefined && n >= 0 && !!gp.buttons[n]?.pressed && !(heldAtStart.get(gp.index) || new Set()).has(n);
         function stdPressed(gp, i) {
-            if (!isNintendoPad(gp)) return !!gp.buttons[i]?.pressed;
+            if (!isNintendoPad(gp)) return down(gp, i);
             const [vendor, product] = padIds(gp);
             const keys = padKeyMap[`${vendor}:${product}`];
             if (keys && keys.length === gp.buttons.length) {
-                const raw = keys.findIndex(code => STD_OF_CODE[code] === i);
-                return raw >= 0 && !!gp.buttons[raw]?.pressed;
+                return down(gp, keys.findIndex(code => STD_OF_CODE[code] === i));
             }
-            if (gp.mapping === 'standard') return !!gp.buttons[i]?.pressed;
+            if (gp.mapping === 'standard') return down(gp, i);
             const table = product === '2006' ? NIN_L : product === '2007' ? NIN_R : NIN_PRO;
-            return table[i] !== undefined && !!gp.buttons[table[i]]?.pressed;
+            return down(gp, table[i]);
         }
         // Which Joy-Con a pad is: 'L', 'R', or null for anything else
         function nintendoSide(gp) {
@@ -4104,6 +4118,7 @@
 
         function readPads() {
             const now = Date.now();
+            updateHeld();
             let pads = (navigator.getGamepads ? [...navigator.getGamepads()] : []).filter(Boolean);
             const standard = pads.filter(gp => gp.mapping === 'standard' || isNintendoPad(gp));
             if (standard.length) pads = standard;
@@ -4359,6 +4374,7 @@
             loadGames().then(() => syncAtStart(true));
         }
         refreshControllers();
+        lastInputTime = Date.now() + 1200;      // nothing is read from the controllers in the first moments
         requestAnimationFrame(pollGamepad);
     </script>
 </body>

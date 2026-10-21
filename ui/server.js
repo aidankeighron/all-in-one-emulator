@@ -366,11 +366,13 @@ function restartCurrent() {
 // Quits the running game
 function stopCurrent() {
     if (!current || !current.child) return;
-    thaw();   // a stopped process would not hear the request to end
     current.stopping = true;
     const { emu, child } = current;
     console.log(`[HOTKEY] Stopping ${emu.id}`);
+    // Ask it to end first, then let a frozen game run: it hears the request the moment it wakes and does not play on
     child.kill('SIGTERM');
+    if (current.frozenPids && current.frozenPids.length) procs.signal(current.frozenPids, 'SIGTERM');
+    thaw();
     setTimeout(() => { if (current && current.child === child) runner.forceKill(emu, child); }, 3000);
 }
 
