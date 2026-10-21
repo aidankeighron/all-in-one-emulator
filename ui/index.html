@@ -451,6 +451,18 @@
         .tab-pane[hidden] { display: none; }
         .wifi-details { margin: 6px 0 10px; padding: 10px 12px; max-height: 150px; overflow: auto; font-size: 11px; line-height: 1.45; white-space: pre-wrap; word-break: break-all; border-radius: 10px; background: var(--bg-f3f6f8); color: var(--tx-6b747c); }
         .panel { min-height: 440px; }
+        /* Settings keeps one big size for every tab, so switching tabs never resizes it; each tab scrolls inside it if it must */
+        #settings-overlay .panel { width: min(1180px, 95vw); height: min(780px, 90vh); max-height: none; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+        #settings-overlay .tab-pane:not([hidden]) { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-content: start; padding: 4px 8px 8px 4px; margin: 4px -8px 0 -4px; }
+        #settings-overlay .settings-foot { flex: none; margin-top: 14px; }
+        .set-card { min-width: 0; padding: 4px 18px 14px; border: 2px solid var(--wii-edge); border-radius: 18px; background: linear-gradient(to bottom, var(--bg-ffffff) 0%, var(--bg-f3f6f8) 100%); box-shadow: 0 3px 8px rgba(80, 100, 120, 0.12); }
+        .set-card.wide { grid-column: 1 / -1; }
+        .set-card:has(> #wifi-section[style*="display: none"]) { display: none; }
+        .set-card.tall { grid-row: span 2; }
+        .set-card > h3:first-child { margin-top: 14px; }
+        .set-card .emu-row { flex-wrap: wrap; }
+        .set-card .emu-row .info { flex: 1 1 220px; }
+        @media (max-width: 900px) { #settings-overlay .tab-pane:not([hidden]) { grid-template-columns: 1fr; } .set-card.tall { grid-row: auto; } }
         .settings-foot { justify-content: space-between; margin-top: 22px; }
         .panel.guide { width: min(640px, 92vw); min-height: 0; }
         .guide .eyebrow { font-size: 12px; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: var(--wii-blue-deep); }
@@ -992,6 +1004,7 @@
             </div>
 
             <div class="tab-pane" data-pane="games">
+                <section class="set-card wide">
                 <h3>ROMs folder</h3>
                 <div class="row">
                     <input type="text" id="roms-dir" spellcheck="false">
@@ -1000,6 +1013,8 @@
                 </div>
                 <div class="desc" style="margin-top:8px">Put games (or .zip, .rar or .7z files) in subfolders named after the system: <span id="folder-list"></span></div>
 
+                </section>
+                <section class="set-card wide">
                 <h3>Emulators</h3>
                 <div id="flatpak-warning" class="notice" style="display:none">
                     Emulators are installed with Flatpak, which isn't installed yet. Run
@@ -1007,9 +1022,11 @@
                 </div>
                 <div id="windows-note" class="notice" style="display:none"></div>
                 <div id="emulator-list"></div>
+                </section>
             </div>
 
             <div class="tab-pane" data-pane="general" hidden>
+                <section class="set-card">
                 <h3>Sound</h3>
                 <div class="emu-row" style="border-top:none">
                     <div class="info">
@@ -1021,6 +1038,8 @@
                     <button class="btn" id="music-volume-button" onclick="cycleVolume('musicVolume')">Music</button>
                 </div>
 
+                </section>
+                <section class="set-card tall">
                 <h3>Controllers</h3>
                 <div class="emu-row" style="border-top:none">
                     <div class="info">
@@ -1040,6 +1059,8 @@
                     </div>
                 </div>
 
+                </section>
+                <section class="set-card">
                 <h3>Look</h3>
                 <div class="emu-row" style="border-top:none">
                     <div class="info">
@@ -1048,9 +1069,11 @@
                     </div>
                     <button class="btn" id="theme-button" onclick="cycleTheme()">System</button>
                 </div>
+                </section>
             </div>
 
             <div class="tab-pane" data-pane="system" hidden>
+                <section class="set-card">
                 <h3>This computer</h3>
                 <div class="emu-row" style="border-top:none">
                     <div class="info">
@@ -1074,6 +1097,8 @@
                     <button class="btn" id="sys-quit" onclick="sysQuit()">Close menu</button>
                 </div>
 
+                </section>
+                <section class="set-card">
                 <h3>Kiosk mode</h3>
                 <div class="emu-row" style="border-top:none" id="kiosk-row">
                     <div class="info">
@@ -1084,6 +1109,8 @@
                 </div>
                 <div id="kiosk-job" class="notice" style="display:none"></div>
 
+                </section>
+                <section class="set-card wide">
                 <div id="wifi-section">
                     <h3>Wi-Fi</h3>
                     <div class="emu-row" style="border-top:none">
@@ -1104,9 +1131,11 @@
                     </div>
                     <div id="wifi-job" class="notice" style="display:none"></div>
                 </div>
+                </section>
             </div>
 
             <div class="tab-pane" data-pane="library" hidden>
+                <section class="set-card wide">
                 <div class="emu-row" style="border-top:none">
                     <div class="info">
                         <div class="name">Share your games between computers</div>
@@ -1115,6 +1144,8 @@
                     <button class="btn primary" id="guide-button" onclick="openGuide()">How does this work?</button>
                 </div>
 
+                </section>
+                <section class="set-card">
                 <h3>This computer has the games</h3>
                 <div class="emu-row" style="border-top:none">
                     <div class="info">
@@ -1132,10 +1163,13 @@
                     <div class="desc" style="margin-top:6px">Type both into <b>Get games from another computer</b> on the other computer.</div>
                 </div>
 
+                </section>
+                <section class="set-card">
                 <h3>Get games from another computer</h3>
                 <div class="row"><input type="text" id="remote-address" spellcheck="false" placeholder="Server address, for example 192.168.1.20:8765"><button class="btn" onclick="testRemote()">Test</button></div>
                 <div class="row" style="margin-top:8px"><input type="password" id="remote-key" spellcheck="false" placeholder="Access key (leave empty to keep the saved one)"><button class="btn primary" onclick="saveRemote()">Save</button></div>
                 <div class="desc" id="remote-status" style="margin-top:8px"></div>
+                </section>
             </div>
 
             <div class="row settings-foot">
