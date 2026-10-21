@@ -241,3 +241,17 @@ test('Ryujinx: rumble is on out of the box, and with BetterJoy running motion co
     assert.strictEqual(read().motion.dsu_server_port, 26760);
     assert.strictEqual(read().motion.dsu_server_host, '127.0.0.1');
 });
+
+test('Ryujinx: the config from before the menu changed it can be put back', () => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'undo-'));
+    const dir = path.join(home, '.var/app/io.github.ryubing.Ryujinx/config/Ryujinx');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'Config.json'), JSON.stringify({ input_config: [], other: 1 }));
+    const pad = { id: 'js0', name: 'Microsoft X-Box 360 pad', kind: 'xbox', pad: true, bus: '0003', vendor: '045e', product: '028e', version: '0110', js: 0, sdlIndex: 0, nameIndex: 0, player: 1 };
+    const r = inputconfig.apply('ryujinx', [pad], { home, platform: 'linux', env: {} });
+    assert.strictEqual(r.status, 'configured');
+    assert.ok(JSON.parse(fs.readFileSync(path.join(dir, 'Config.json'), 'utf8')).input_config.length > 0);
+    assert.strictEqual(inputconfig.restore('ryujinx', { home, platform: 'linux', env: {} }), true);
+    assert.deepStrictEqual(JSON.parse(fs.readFileSync(path.join(dir, 'Config.json'), 'utf8')), { input_config: [], other: 1 });
+    assert.strictEqual(inputconfig.restore('ryujinx', { home, platform: 'linux', env: {} }), false, 'nothing left to put back');
+});

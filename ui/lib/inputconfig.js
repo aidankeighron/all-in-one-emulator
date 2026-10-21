@@ -217,8 +217,9 @@ function writeRyujinx(controllers, { home, platform, env, exePath, players, prof
     config.input_config = next;
     const text = JSON.stringify(config, null, 2);
     const note = made.map(e => `${e.player_index}: ${e.name}`).join(', ') + (unknown.length ? ` (${unknown.join(', ')} needs a one-time setup in Ryujinx)` : '') + (notes.length ? ` (${notes.join('; ')})` : '');
-    if (text === original.replace(/\r\n/g, '\n').trimEnd()) return { status: 'configured', changed: false, message: note };
+    if (text === original.replace(/\r\n/g, '\n').trimEnd()) { fs.rmSync(`${file}.emulator-menu.last`, { force: true }); return { status: 'configured', changed: false, message: note }; }
     if (!fs.existsSync(file + '.emulator-menu.bak')) fs.copyFileSync(file, file + '.emulator-menu.bak');
+    fs.copyFileSync(file, `${file}.emulator-menu.last`);     // how it was just before this change: put back if the emulator cannot start with the new one
     fs.writeFileSync(`${file}.tmp-${process.pid}`, text);
     fs.renameSync(`${file}.tmp-${process.pid}`, file);
     return { status: 'configured', changed: true, message: note };
@@ -244,4 +245,19 @@ function apply(emulatorId, controllers, context = {}) {
     }
 }
 
-module.exports = { apply, describe, slotsFor, dolphinDevice, ryujinxId };
+// Puts an emulator's controller config back the way it was before the menu's latest change. True when something was restored.
+function restore(emulatorId, context = {}) {
+    if (emulatorId !== 'ryujinx') return false;
+    try {
+        const platform = context.platform || platformLib.current();
+        const root = adapters.create({ platform, home: context.home || os.homedir(), env: context.env || process.env, exePath: context.exePath || (() => null) }).get('ryujinx').dataRoot();
+        const file = path.join(root, 'Config.json');
+        const last = `${file}.emulator-menu.last`;
+        if (!fs.existsSync(last)) return false;
+        fs.copyFileSync(last, file);
+        fs.rmSync(last, { force: true });
+        return true;
+    } catch { return false; }
+}
+
+module.exports = { apply, restore, describe, slotsFor, dolphinDevice, ryujinxId };

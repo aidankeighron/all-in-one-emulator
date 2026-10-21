@@ -167,6 +167,7 @@ async function ensureBetterJoy() {
 const detectPads = () => controllers.detect({ platform: runner.platform, merge: config.getJoyconPairs(), hideNintendo: betterjoyOn() });
 
 // Writes the controller settings of one emulator (or all installed ones) from what is plugged in now
+const skipSetup = new Set();      // emulators whose controller settings are left alone for the next start (see the quick-exit check)
 function setupControllers(emulatorIds) {
     const connected = detectPads();
     const results = emulatorIds.map(id => {
@@ -246,7 +247,7 @@ async function startGame(relPath, slotId, onGameState) {
 
     await runner.grantAccess(emu, romsDir);
     await ensureBetterJoy();
-    if (config.getAutoControllers()) setupControllers([emu.id]);
+    if (config.getAutoControllers() && !skipSetup.delete(emu.id)) setupControllers([emu.id]);
     let args = emu.args.map(a => a === '{rom}' ? abs : a);
 
     // Pick the save slot: make this computer's copy current, then start the emulator on that slot's own data
@@ -272,10 +273,17 @@ async function startGame(relPath, slotId, onGameState) {
     current.child = runner.launch(emu, args, (code, stderr) => {
         stopWatching();
         const wasPaused = !!(current && current.paused);
+        const asked = !!(current && current.stopping);
         current = null;
-        if (code !== 0 && Date.now() - started < 10000) {
-            lastError = `${emu.name} exited with an error: ${(stderr || '').trim().split('\n').pop()}`;
+        if (!asked && Date.now() - started < 8000) {
+            // It ended by itself right after starting. If the menu had just changed its controller settings, put them back
+            // (and leave them alone next time) in case they are what it could not start with.
+            const tail = (stderr || '').trim().split('\n').slice(-3).join(' | ');
+            const undone = inputconfig.restore(emu.id, platformCtx);
+            if (undone) skipSetup.add(emu.id);
+            lastError = `${emu.name} closed right after starting (exit code ${code}${tail ? `: ${tail}` : ''}).${undone ? ' The menu had changed its controller settings, so it put them back the way they were. Start the game again.' : ''}`;
             console.error(`[LAUNCH] ${lastError}`);
+            if (stderr) console.error(`[LAUNCH] ${emu.name} stderr:\n${stderr}`);
         }
         const again = restartTarget;
         restartTarget = null;
@@ -338,6 +346,7 @@ function restartCurrent() {
 function stopCurrent() {
     if (!current || !current.child) return;
     thaw();   // a stopped process would not hear the request to end
+    current.stopping = true;
     const { emu, child } = current;
     console.log(`[HOTKEY] Stopping ${emu.id}`);
     child.kill('SIGTERM');

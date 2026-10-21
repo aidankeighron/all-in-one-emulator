@@ -974,7 +974,7 @@
         </div>
     </div>
 
-    <!-- Icons: Feather (MIT) -->
+    <!-- Icons: Feather (MIT); the controller icon is from Lucide (ISC) -->
     <div class="bottom-bar">
         <div class="left-buttons">
             <div class="round-button" id="bb-rescan" onclick="rescan()" title="Refresh game list">
@@ -991,7 +991,7 @@
         <div class="pad-hints" id="pad-hints"></div>
         <div class="left-buttons">
         <div class="round-button" id="bb-maps" onclick="openMaps()" title="Mappings">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="6"/><line x1="7" y1="10" x2="7" y2="14"/><line x1="5" y1="12" x2="9" y2="12"/><circle cx="16" cy="11" r="1"/><circle cx="18.5" cy="13.5" r="1"/></svg>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" x2="10" y1="11" y2="11"/><line x1="8" x2="8" y1="9" y2="13"/><line x1="15" x2="15.01" y1="12" y2="12"/><line x1="18" x2="18.01" y1="10" y2="10"/><path d="M17.32 5H6.68a4 4 0 0 0-3.978 3.59c-.006.052-.01.101-.017.152C2.604 9.416 2 14.456 2 16a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.414-1.414A2 2 0 0 1 9.828 16h4.344a2 2 0 0 1 1.414.586L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-1.545-.604-6.584-.685-7.258-.007-.05-.011-.1-.017-.151A4 4 0 0 0 17.32 5z"/></svg>
         </div>
         <div class="round-button" id="bb-settings" onclick="openSettings()" title="Settings">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -1277,6 +1277,7 @@
     <div class="boot-overlay" id="boot-overlay" aria-live="polite"><div class="boot-card"><span class="spinner"></span><div><span id="boot-text">Starting the game…</span><small>One moment. Please don’t press anything.</small></div></div></div>
 
     <script src="/assets/audio.js"></script>
+    <script src="/assets/padart.js"></script>
     <script>
         // The games grid fills the window: as many columns and rows as fit tiles of a comfortable size (never fewer than 4 x 3)
         let COLUMNS = 4;
@@ -1515,52 +1516,8 @@
         }
 
         // ================= CONTROLLERS PAGE =================
-        const BODY = 'M150 168 H362 C414 168 438 206 452 286 C464 352 456 384 422 384 C396 384 384 366 368 340 C360 328 350 322 336 322 H176 C162 322 152 328 144 340 C128 366 116 384 90 384 C56 384 48 352 60 286 C74 206 98 168 150 168 Z';
-        // k scales the cross: the arms must stay inside the body, so the default is a small one
-        const dpadCross = (x, y, fill, k = 0.7) => { const a = 11 * k, b = 33 * k, c = 22 * k; return `<path fill="${fill}" d="M${x - a} ${y - b} h${c} v${c} h${c} v${c} h${-c} v${c} h${-c} v${-c} h${-c} v${-c} h${c} z"/>`; };
-        const dot = (x, y, r, fill) => `<circle cx="${x}" cy="${y}" r="${r}" fill="${fill}"/>`;
-
-        // The shape shared by the Xbox, Switch and generic pads: left stick high on the left, d-pad low, right stick low,
-        // four buttons high on the right. Every part is placed inside the body (the lower edge is at y 322).
-        function proPad({ body, edge, stick, stickIn, dpad, face, faceColors, small, bumper, guide }) {
-            const [fy, fl, fr, fb] = [[388, 208], [360, 236], [416, 236], [388, 264]];   // top, left, right, bottom
-            const colors = faceColors || [face, face, face, face];
-            return `<rect x="96" y="156" width="78" height="16" rx="8" fill="${bumper}"/><rect x="336" y="156" width="78" height="16" rx="8" fill="${bumper}"/>
-                <path d="${BODY}" fill="${body}" stroke="${edge}" stroke-width="6"/>
-                ${dot(156, 232, 25, stick)}${dot(156, 232, 15, stickIn)}
-                ${dpadCross(226, 292, dpad)}
-                ${dot(304, 292, 20, stick)}${dot(304, 292, 12, stickIn)}
-                ${dot(fy[0], fy[1], 12, colors[0])}${dot(fl[0], fl[1], 12, colors[1])}${dot(fr[0], fr[1], 12, colors[2])}${dot(fb[0], fb[1], 12, colors[3])}
-                <rect x="206" y="222" width="22" height="9" rx="4.5" fill="${small}"/><rect x="266" y="222" width="22" height="9" rx="4.5" fill="${small}"/>
-                ${guide ? dot(256, 204, 11, guide) : ''}`;
-        }
-
-        function padSvg(kind) {
-            const wrap = inner => `<svg viewBox="40 148 430 250" xmlns="http://www.w3.org/2000/svg">${inner}</svg>`;
-            if (kind === 'wiimote') {
-                return `<svg viewBox="20 170 440 170" xmlns="http://www.w3.org/2000/svg">
-                    <rect x="30" y="200" width="410" height="110" rx="50" fill="#fbfcfd" stroke="#c9d1d8" stroke-width="6"/>
-                    ${dpadCross(110, 255, '#c4ccd3', 0.85)}${dot(215, 255, 27, '#3ab4f2')}
-                    <rect x="268" y="249" width="26" height="12" rx="6" fill="#c4ccd3"/><rect x="304" y="249" width="26" height="12" rx="6" fill="#c4ccd3"/>
-                    ${dot(375, 255, 12, '#c4ccd3')}${dot(60, 255, 8, '#c4ccd3')}
-                    <g fill="#3ab4f2"><circle cx="410" cy="238" r="5"/><circle cx="410" cy="255" r="5" opacity=".3"/><circle cx="410" cy="272" r="5" opacity=".3"/></g></svg>`;
-            }
-            if (kind === 'gamecube') {
-                return wrap(`<path d="${BODY}" fill="#6f55bd" stroke="#4a3590" stroke-width="6"/>
-                    ${dot(158, 232, 24, '#3a2a78')}${dot(158, 232, 15, '#d9d2f2')}
-                    ${dpadCross(226, 292, '#d9d2f2')}${dot(318, 296, 14, '#d9d2f2')}${dot(318, 296, 8, '#3a2a78')}
-                    ${dot(392, 244, 26, '#58c06a')}${dot(342, 270, 11, '#e0453a')}${dot(364, 212, 11, '#d9d2f2')}
-                    <rect x="402" y="188" width="38" height="14" rx="7" fill="#d9d2f2" transform="rotate(25 421 195)"/>
-                    <rect x="330" y="188" width="38" height="14" rx="7" fill="#d9d2f2" transform="rotate(-25 349 195)"/>`);
-            }
-            if (kind === 'switch') {
-                return wrap(proPad({ body: '#5f666d', edge: '#3f454b', stick: '#2c3136', stickIn: '#8d949b', dpad: '#2c3136', face: '#e8ecef', small: '#c8ced3', bumper: '#3f454b' }));
-            }
-            if (kind === 'xbox') {
-                return wrap(proPad({ body: '#eef1f4', edge: '#aab4be', stick: '#5b6671', stickIn: '#aab4be', dpad: '#8d98a5', face: '#8d98a5', faceColors: ['#f2c230', '#2f7fd8', '#e0453a', '#6cbf3e'], small: '#c4ccd3', bumper: '#c4ccd3', guide: '#8fd16a' }));
-            }
-            return wrap(proPad({ body: '#d6dde4', edge: '#aab4be', stick: '#5b6671', stickIn: '#aab4be', dpad: '#8d98a5', face: '#8d98a5', small: '#c4ccd3', bumper: '#c4ccd3' }));
-        }
+        // The pictures of the controllers are in assets/padart.js
+        const padSvg = c => PadArt.svg(c);
 
         function renderControllers(grid) {
             const tiles = padList.length;
@@ -1576,7 +1533,7 @@
                     card.className = 'wii-channel pad-card';
                     card.innerHTML = `
                         <div class="pad-leds">${leds}</div>
-                        <div class="pad-art">${padSvg(c.kind)}</div>
+                        <div class="pad-art">${padSvg(c)}</div>
                         <div class="pad-name">${escapeHtml(c.adapter ? 'GameCube Adapter' : c.name)}</div>
                         <div class="pad-meta">
                             <span class="pill ${c.connection === 'Bluetooth' ? 'bt' : ''}">${escapeHtml(c.connection)}</span>
@@ -1824,7 +1781,7 @@
         const chord = { since: 0, fired: false };
         function chordPoll(now) {
             const nin = (navigator.getGamepads ? [...navigator.getGamepads()] : []).filter(g => g && isNintendoPad(g));
-            const held = nin.filter(g => g.buttons[4]?.pressed || g.buttons[5]?.pressed);
+            const held = nin.filter(g => stdPressed(g, 4) || stdPressed(g, 5));
             if (held.length >= 2) {
                 if (!chord.since) chord.since = now;
                 else if (!chord.fired && now - chord.since > 200) { chord.fired = true; joinOrSplit(held[0], held[1]); }
@@ -2920,7 +2877,7 @@
         const PAUSE_ITEMS = [['Quit to menu', 'quit'], ['Reset', 'restart'], ['Change controllers', 'players'], ['Connect controllers', 'pair']];
         const PAUSE_START = 2;      // the button that has the focus when the menu opens (a harmless one)
         const PAUSE_ICONS = {
-            players: '<rect x="2" y="7" width="20" height="11" rx="5.5"/><line x1="7" y1="10.5" x2="7" y2="14.5"/><line x1="5" y1="12.5" x2="9" y2="12.5"/><circle cx="16" cy="11.5" r="1"/><circle cx="18.5" cy="13.8" r="1"/>',
+            players: '<line x1="6" x2="10" y1="11" y2="11"/><line x1="8" x2="8" y1="9" y2="13"/><line x1="15" x2="15.01" y1="12" y2="12"/><line x1="18" x2="18.01" y1="10" y2="10"/><path d="M17.32 5H6.68a4 4 0 0 0-3.978 3.59c-.006.052-.01.101-.017.152C2.604 9.416 2 14.456 2 16a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.414-1.414A2 2 0 0 1 9.828 16h4.344a2 2 0 0 1 1.414.586L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-1.545-.604-6.584-.685-7.258-.007-.05-.011-.1-.017-.151A4 4 0 0 0 17.32 5z"/>',
             pair: '<polyline points="6.5 6.5 17.5 17.5 12 23 12 1 17.5 6.5 6.5 17.5"/>',
             restart: '<polyline points="23 4 23 10 17 10"/><path d="M20.5 15a9 9 0 1 1-2.1-9.4L23 10"/>',
             quit: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>'
@@ -2954,7 +2911,7 @@
                 const c = padList.find(x => x.player === n);
                 const leds = `<div class="leds">${[1, 2, 3, 4].map(m => `<i class="${m === n ? 'on' : ''}"></i>`).join('')}</div>`;
                 return c
-                    ? `<div class="wp-pad here" data-id="${escapeHtml(c.id)}" title="${escapeHtml(c.name)}"><span class="dot"></span><div class="art">${padSvg(c.kind)}</div><div class="nm">${escapeHtml(c.name)}</div><div class="how">${escapeHtml(c.connection)}</div>${leds}</div>`
+                    ? `<div class="wp-pad here" data-id="${escapeHtml(c.id)}" title="${escapeHtml(c.name)}"><span class="dot"></span><div class="art">${padSvg(c)}</div><div class="nm">${escapeHtml(c.name)}</div><div class="how">${escapeHtml(c.connection)}</div>${leds}</div>`
                     : `<div class="wp-pad"><div class="art none">–</div><div class="nm">Player ${n}</div><div class="how">No controller</div>${leds}</div>`;
             }).join('');
             document.querySelectorAll('#pause-overlay .wp-btn').forEach(el => el.addEventListener('click', () => { pause.i = Number(el.dataset.i); pausePress(); }));
@@ -4083,7 +4040,18 @@
         // Switch controllers (vendor 057e) in the browser's raw layout: the button order is the Linux one, which differs from the
         // standard layout in a few places. standard index -> raw index
         const isNintendoPad = gp => /057e/i.test(gp.id || '');
-        const NINTENDO_RAW = [0, 1, 3, 2, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16];
+        // The browser lists a pad's buttons in Linux key-code order, and only those the pad has, so each kind differs.
+        // standard index -> raw index. Pro Controller: its d-pad is a hat on axes 4 and 5. Left Joy-Con: no face buttons, its
+        // arrows are buttons. Right Joy-Con: no d-pad.
+        const NIN_PRO = { 0: 0, 1: 1, 2: 3, 3: 2, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8, 9: 9, 10: 11, 11: 12, 16: 10 };
+        const NIN_L = { 4: 1, 6: 2, 8: 3, 10: 4, 12: 5, 13: 6, 14: 7, 15: 8 };
+        const NIN_R = { 0: 0, 1: 1, 2: 3, 3: 2, 5: 4, 7: 5, 9: 6, 11: 8, 16: 7 };
+        function stdPressed(gp, i) {
+            if (gp.mapping === 'standard' || !isNintendoPad(gp)) return !!gp.buttons[i]?.pressed;
+            const product = padIds(gp)[1];
+            const table = product === '2006' ? NIN_L : product === '2007' ? NIN_R : NIN_PRO;
+            return table[i] !== undefined && !!gp.buttons[table[i]]?.pressed;
+        }
 
         function readPads() {
             const now = Date.now();
@@ -4101,11 +4069,11 @@
             const { gp, s } = active;
 
             const rawNintendo = gp.mapping !== 'standard' && isNintendoPad(gp);
-            const btn = i => !!gp.buttons[rawNintendo ? NINTENDO_RAW[i] : i]?.pressed;
+            const btn = i => stdPressed(gp, i);
             const ax = i => (gp.axes[i] || 0) - (s.rest[i]?.offset || 0);
             // Non-standard Xbox layouts report the d-pad as a hat on axes 6/7
-            const hatX = gp.mapping === 'standard' ? 0 : (gp.axes[6] || 0);
-            const hatY = gp.mapping === 'standard' ? 0 : (gp.axes[7] || 0);
+            const hatX = gp.mapping === 'standard' ? 0 : (gp.axes[rawNintendo ? 4 : 6] || 0);
+            const hatY = gp.mapping === 'standard' ? 0 : (gp.axes[rawNintendo ? 5 : 7] || 0);
             // The stick counts as one direction: whichever way it is pushed furthest
             const dx = ax(0), dy = ax(1);
             const horizontal = Math.abs(dx) > Math.abs(dy);
