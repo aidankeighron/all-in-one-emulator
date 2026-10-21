@@ -462,52 +462,67 @@
         html.pause-window, html.pause-window body { background: transparent !important; }
         body.pause-window > *:not(.overlay):not(.toast):not(script) { display: none !important; }
         body.pause-window .overlay { background: rgba(10, 20, 32, 0.55); }
-        /* The pause menu, in the style of the Wii's HOME menu: a white bar down from the top, a curved bar up from the
-           bottom with big rounded buttons and the four player lights, the game dimmed behind */
+        /* The pause menu, in the style of the Wii's HOME menu: a white bar at the top, a white bar at the bottom, the game
+           dimmed between them with the main choices in the middle */
         #pause-overlay { align-items: stretch; justify-content: stretch; background: rgba(12, 22, 34, 0.42); }
-        .wp { position: relative; width: 100%; height: 100%; overflow: hidden; }
-        .wp-top { position: absolute; top: 0; left: 0; right: 0; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 6vw 30px;
-            background: linear-gradient(to bottom, #ffffff 0%, #eef2f6 100%); border-bottom: 2px solid var(--wii-edge); border-radius: 0 0 50% 50% / 0 0 36px 36px;
-            box-shadow: 0 6px 22px rgba(0, 0, 0, 0.28); animation: wpTop 0.32s cubic-bezier(.2, .8, .2, 1); }
+        .wp { position: relative; width: 100%; height: 100%; overflow: hidden; display: flex; flex-direction: column; }
+        .wp-top, .wp-bottom { flex: none; background: linear-gradient(to bottom, #ffffff 0%, #eef2f6 100%); box-shadow: 0 0 24px rgba(0, 0, 0, 0.3); }
+        .wp-top { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 5vw; border-bottom: 3px solid var(--wii-edge); animation: wpTop 0.3s cubic-bezier(.2, .8, .2, 1); }
+        .wp-bottom { display: flex; align-items: center; justify-content: space-between; gap: 18px 3vw; flex-wrap: wrap; padding: 14px 5vw 18px; border-top: 3px solid var(--wii-edge); animation: wpBottom 0.3s cubic-bezier(.2, .8, .2, 1); }
+        @keyframes wpTop { from { transform: translateY(-110%); } }
+        @keyframes wpBottom { from { transform: translateY(110%); } }
         .wp-title { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
         .wp-eyebrow { font-size: 12px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; color: var(--wii-blue-deep); }
         #pause-title { font-size: 24px; font-weight: 800; color: #4a5258; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .wp-bottom { position: absolute; bottom: 0; left: 0; right: 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 14px 4vw; padding: 34px 4vw 22px;
-            background: linear-gradient(to bottom, #ffffff 0%, #edf1f5 100%); border-top: 2px solid var(--wii-edge); border-radius: 50% 50% 0 0 / 36px 36px 0 0;
-            box-shadow: 0 -6px 22px rgba(0, 0, 0, 0.28); animation: wpBottom 0.32s cubic-bezier(.2, .8, .2, 1); }
-        @keyframes wpTop { from { transform: translateY(-110%); } }
-        @keyframes wpBottom { from { transform: translateY(110%); } }
-        .wp-note { position: absolute; left: 50%; bottom: 190px; transform: translateX(-50%); max-width: min(560px, 88vw); text-align: center; font-size: 14px; font-weight: 700; color: #4a5258;
+        .wp-hints { display: flex; gap: 18px; font-size: 13px; font-weight: 800; color: #6b747c; white-space: nowrap; }
+        .wp-main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; padding: 12px 4vw; }
+        .wp-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 22px; }
+        .wp-note { max-width: min(560px, 88vw); text-align: center; font-size: 14px; font-weight: 700; color: #4a5258;
             background: rgba(255, 255, 255, 0.95); border: 2px solid var(--wii-blue); border-radius: 22px; padding: 9px 20px; box-shadow: 0 0 16px var(--wii-blue-glow); }
         .wp-note.warn { border-color: #f0b84a; box-shadow: 0 0 16px rgba(240, 184, 74, 0.5); }
-        .wp-pads { display: flex; gap: 10px; }
-        .wp-pad { width: 78px; display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 11px; font-weight: 800; color: #8a9199; }
-        .wp-pad .art { width: 70px; height: 34px; display: flex; align-items: center; justify-content: center; }
+        .wp-label { font-size: 11px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: #8a9199; margin-bottom: 6px; }
+        .wp-pads { display: flex; gap: 12px; }
+        .wp-pad { width: 128px; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 6px; border-radius: 14px; background: #f3f6f8; border: 2px solid #e3e8ec; font-size: 12px; font-weight: 800; color: #9aa2a9; }
+        .wp-pad.here { background: #fff; border-color: #cfe6f5; color: #4a5258; }
+        .wp-pad .art { width: 76px; height: 36px; display: flex; align-items: center; justify-content: center; }
         .wp-pad .art svg { width: 100%; height: 100%; filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.2)); }
         .wp-pad .art.none { color: #c4ccd3; font-size: 22px; }
-        .wp-pad .leds { display: flex; gap: 4px; }
+        .wp-pad .nm { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .wp-pad .how { font-size: 10px; font-weight: 700; color: #8a9199; letter-spacing: .06em; text-transform: uppercase; }
+        .wp-pad .leds { display: flex; gap: 4px; margin-top: 1px; }
         .wp-pad .leds i { width: 8px; height: 8px; border-radius: 50%; background: #d3dae0; }
         .wp-pad .leds i.on { background: radial-gradient(circle at 35% 30%, #bfeaff, var(--wii-blue)); box-shadow: 0 0 6px var(--wii-blue-glow); }
-        .wp-pad.here { color: #4a5258; }
-        .wp-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; }
-        .wp-btn { width: 134px; height: 104px; box-sizing: border-box; border-radius: 22px; border: 2px solid var(--wii-edge); cursor: pointer; font: inherit; font-weight: 800; font-size: 14px; line-height: 1.2; color: #4a5258;
+        .wp-btn { box-sizing: border-box; border-radius: 22px; border: 2px solid var(--wii-edge); cursor: pointer; font: inherit; font-weight: 800; line-height: 1.2; color: #4a5258;
             background: linear-gradient(to bottom, #ffffff 0%, #f3f6f8 55%, #e4e9ed 100%); box-shadow: 0 3px 8px rgba(80, 100, 120, 0.22), inset 0 -4px 8px rgba(0, 0, 0, 0.04);
-            display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 8px; transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease; }
-        .wp-btn svg { width: 34px; height: 34px; fill: none; stroke: var(--wii-blue-deep); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+            display: flex; align-items: center; justify-content: center; gap: 10px; transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease; }
+        .wp-btn svg { fill: none; stroke: var(--wii-blue-deep); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
         .wp-btn.danger svg { stroke: #d0222e; }
         .wp-btn:disabled { opacity: 0.55; cursor: default; }
-        .wp-btn.pad-focus, .wp-btn:hover:not(:disabled) { transform: scale(1.07); border-color: var(--wii-blue); outline: none; box-shadow: 0 0 0 3px rgba(58, 180, 242, 0.35), 0 0 22px var(--wii-blue-glow), 0 8px 18px rgba(0, 0, 0, 0.18); }
-        .wp-resume { flex-direction: row; width: auto; height: 52px; padding: 0 26px; border-radius: 26px; font-size: 17px; color: #fff; border-color: #2c9fe0; background: linear-gradient(to bottom, #5cc6fa, #2c9fe0); }
-        .wp-resume svg { width: 22px; height: 22px; stroke: #fff; fill: #fff; }
-        @media (max-width: 900px), (max-height: 600px) {
-            .wp-btn { width: 100px; height: 82px; font-size: 12px; border-radius: 18px; }
-            .wp-btn svg { width: 26px; height: 26px; }
-            .wp-pads { display: none; }
-            .wp-btn.wp-resume { width: auto; height: 44px; padding: 0 20px; font-size: 15px; border-radius: 22px; }
-            .wp-btn.wp-resume svg { width: 18px; height: 18px; }
-            .wp-bottom { padding-top: 28px; }
-            .wp-note { bottom: 150px; font-size: 12px; }
+        .wp-btn.pad-focus, .wp-btn:hover:not(:disabled) { transform: scale(1.06); border-color: var(--wii-blue); outline: none; box-shadow: 0 0 0 3px rgba(58, 180, 242, 0.35), 0 0 22px var(--wii-blue-glow), 0 8px 18px rgba(0, 0, 0, 0.18); }
+        /* the three main choices */
+        .wp-big { width: 190px; height: 150px; flex-direction: column; gap: 12px; font-size: 18px; border-radius: 28px; }
+        .wp-big svg { width: 48px; height: 48px; }
+        .wp-big.primary { color: #fff; border-color: #2c9fe0; background: linear-gradient(to bottom, #5cc6fa, #2c9fe0); }
+        .wp-big.primary svg { stroke: #fff; fill: #fff; }
+        /* the controller choices, in the bottom bar */
+        .wp-small { height: 58px; padding: 0 20px; font-size: 15px; border-radius: 29px; }
+        .wp-small svg { width: 24px; height: 24px; }
+        .wp-controls { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
+        @media (max-width: 900px), (max-height: 620px) {
+            .wp-top { padding: 10px 4vw; }
             #pause-title { font-size: 18px; }
+            .wp-big { width: 128px; height: 100px; font-size: 14px; border-radius: 22px; gap: 8px; }
+            .wp-big svg { width: 32px; height: 32px; }
+            .wp-row { gap: 14px; }
+            .wp-bottom { padding: 8px 4vw 10px; justify-content: center; }
+            .wp-label { display: none; }
+            .wp-pads { gap: 8px; }
+            .wp-pad { width: 84px; padding: 4px; }
+            .wp-pad .art { width: 52px; height: 24px; }
+            .wp-pad .how { display: none; }
+            .wp-pad .nm { font-size: 10px; }
+            .wp-small { height: 44px; padding: 0 14px; font-size: 13px; }
+            .wp-hints { display: none; }
         }
         .sel { font: inherit; font-weight: 700; font-size: 14px; color: #4a5258; padding: 7px 10px; border: 2px solid var(--wii-edge); border-radius: 10px; background: #fff; min-width: 0; width: 100%; cursor: pointer; }
         .sel:disabled { opacity: .45; cursor: default; }
@@ -919,12 +934,18 @@
         <div class="wp">
             <div class="wp-top">
                 <div class="wp-title"><span class="wp-eyebrow">Paused</span><span id="pause-title">Game paused</span></div>
-                <span id="pause-resume"></span>
+                <div class="wp-hints"><span>A &nbsp;Choose</span><span>B &nbsp;Resume</span></div>
             </div>
-            <div class="wp-note" id="pause-note"></div>
+            <div class="wp-main">
+                <div class="wp-note" id="pause-note"></div>
+                <div class="wp-row" id="pause-main"></div>
+            </div>
             <div class="wp-bottom">
-                <div class="wp-pads" id="pause-pads"></div>
-                <div class="wp-actions" id="pause-list"></div>
+                <div>
+                    <div class="wp-label">Connected controllers</div>
+                    <div class="wp-pads" id="pause-pads"></div>
+                </div>
+                <div class="wp-controls" id="pause-list"></div>
             </div>
         </div>
     </div>
@@ -2215,7 +2236,9 @@
         const isPauseWindow = new URLSearchParams(location.search).get('pause') === '1';
         if (isPauseWindow) { document.body.classList.add('pause-window'); document.documentElement.classList.add('pause-window'); }
         const pause = { open: false, i: 0, changed: false, frozen: true, busy: false, title: '' };
-        const PAUSE_ITEMS = [['Resume', 'resume'], ['Change controllers', 'players'], ['Connect a controller', 'pair'], ['Restart game', 'restart'], ['Quit to menu', 'quit']];
+        // Order: the three main choices (middle of the screen), then the two controller choices (bottom bar)
+        const PAUSE_ITEMS = [['Resume', 'resume'], ['Restart game', 'restart'], ['Quit to menu', 'quit'], ['Change controllers', 'players'], ['Connect a controller', 'pair']];
+        const PAUSE_MAIN = 3;     // items before this index are in the middle row
         const PAUSE_ICONS = {
             resume: '<polygon points="6 4 20 12 6 20 6 4"/>',
             players: '<rect x="2" y="7" width="20" height="11" rx="5.5"/><line x1="7" y1="10.5" x2="7" y2="14.5"/><line x1="5" y1="12.5" x2="9" y2="12.5"/><circle cx="16" cy="11.5" r="1"/><circle cx="18.5" cy="13.8" r="1"/>',
@@ -2235,17 +2258,20 @@
 
             const btn = (item, i) => {
                 const [label, act] = item;
-                const cls = act === 'resume' ? 'wp-btn wp-resume' : `wp-btn ${act === 'quit' ? 'danger' : ''}`;
-                const long = act === 'resume' ? 'Resume' : label;
-                return `<button type="button" class="${cls} ${i === pause.i ? 'pad-focus' : ''}" data-act="${act}" data-i="${i}" ${pause.busy ? 'disabled' : ''}><svg viewBox="0 0 24 24">${PAUSE_ICONS[act]}</svg><span>${long}</span></button>`;
+                const big = i < PAUSE_MAIN;
+                const cls = `wp-btn ${big ? 'wp-big' : 'wp-small'} ${act === 'resume' ? 'primary' : ''} ${act === 'quit' ? 'danger' : ''}`;
+                return `<button type="button" class="${cls} ${i === pause.i ? 'pad-focus' : ''}" data-act="${act}" data-i="${i}" ${pause.busy ? 'disabled' : ''}><svg viewBox="0 0 24 24">${PAUSE_ICONS[act]}</svg><span>${label}</span></button>`;
             };
-            document.getElementById('pause-resume').innerHTML = btn(PAUSE_ITEMS[0], 0);
-            document.getElementById('pause-list').innerHTML = PAUSE_ITEMS.slice(1).map((item, k) => btn(item, k + 1)).join('');
+            document.getElementById('pause-main').innerHTML = PAUSE_ITEMS.slice(0, PAUSE_MAIN).map((item, i) => btn(item, i)).join('');
+            document.getElementById('pause-list').innerHTML = PAUSE_ITEMS.slice(PAUSE_MAIN).map((item, k) => btn(item, k + PAUSE_MAIN)).join('');
 
-            // The four player lights, with the controller each player has
+            // The four player lights, with the controller each player has right now
             document.getElementById('pause-pads').innerHTML = [1, 2, 3, 4].map(n => {
                 const c = padList.find(x => x.player === n);
-                return `<div class="wp-pad ${c ? 'here' : ''}"><div class="art ${c ? '' : 'none'}">${c ? padSvg(c.kind) : '–'}</div><div class="leds">${[1, 2, 3, 4].map(m => `<i class="${m === n ? 'on' : ''}"></i>`).join('')}</div></div>`;
+                const leds = `<div class="leds">${[1, 2, 3, 4].map(m => `<i class="${m === n ? 'on' : ''}"></i>`).join('')}</div>`;
+                return c
+                    ? `<div class="wp-pad here" title="${escapeHtml(c.name)}"><div class="art">${padSvg(c.kind)}</div><div class="nm">${escapeHtml(c.name)}</div><div class="how">${escapeHtml(c.connection)}</div>${leds}</div>`
+                    : `<div class="wp-pad"><div class="art none">–</div><div class="nm">Player ${n}</div><div class="how">No controller</div>${leds}</div>`;
             }).join('');
             document.querySelectorAll('#pause-overlay .wp-btn').forEach(el => el.addEventListener('click', () => { pause.i = Number(el.dataset.i); pausePress(); }));
         }
@@ -2275,12 +2301,17 @@
             if (!quiet) Sfx.play('close');
         }
 
-        // Resume is the button in the top bar; the rest are in a row in the bottom bar
+        // Two rows: the main choices in the middle, the controller choices in the bottom bar
         function pauseMove(dir) {
+            const n = PAUSE_ITEMS.length;
             let next = pause.i;
-            if (dir === 'up') next = 0;
-            else if (dir === 'down') next = pause.i === 0 ? 1 : pause.i;
-            else if (pause.i > 0) next = Math.max(1, Math.min(PAUSE_ITEMS.length - 1, pause.i + (dir === 'right' ? 1 : -1)));
+            const inMain = pause.i < PAUSE_MAIN;
+            if (dir === 'down' && inMain) next = PAUSE_MAIN;
+            else if (dir === 'up' && !inMain) next = 0;
+            else if (dir === 'left' || dir === 'right') {
+                const lo = inMain ? 0 : PAUSE_MAIN, hi = inMain ? PAUSE_MAIN - 1 : n - 1;
+                next = Math.max(lo, Math.min(hi, pause.i + (dir === 'right' ? 1 : -1)));
+            }
             if (next === pause.i) return;
             pause.i = next;
             Sfx.play('move');
