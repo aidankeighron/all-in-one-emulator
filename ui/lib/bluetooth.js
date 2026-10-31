@@ -33,7 +33,10 @@ const KIND_TYPES = {
     wiimote: ['wiimote'],
     switch: ['pro', 'joycon-l', 'joycon-r'],
     pro: ['pro'],
-    joycon: ['joycon-l', 'joycon-r']
+    joycon: ['joycon-l', 'joycon-r'],
+    // one side only: the steps that connect a left and then a right Joy-Con to be joined
+    'joycon-l': ['joycon-l'],
+    'joycon-r': ['joycon-r']
 };
 
 const TYPE_LABELS = { wiimote: 'Wii Remote', pro: 'Switch Pro Controller', 'joycon-l': 'Joy-Con (L)', 'joycon-r': 'Joy-Con (R)', 'balance-board': 'Balance Board' };
@@ -183,7 +186,11 @@ function createBluetooth({ platform = process.platform, execImpl = execFile, spa
             setTimeout(() => { try { child.kill(); } catch { /* done */ } }, 500);
             if (session === child) session = null;
         };
-        const arm = (seconds, message) => { clearTimeout(timer); timer = setTimeout(() => finish('failed', message), seconds * 1000); };
+        // A Wii Remote that cannot be connected to the computer still works in games (Dolphin connects it itself), so that is
+        // not a failure, only a remote the menu cannot be driven with
+        const WII_LATER = 'Wii Remote found. The menu could not connect it, but Dolphin connects it by itself when a game starts: press 1 + 2 then.';
+        const fail = message => (kind === 'wiimote' && mine.device ? finish('done', WII_LATER) : finish('failed', message));
+        const arm = (seconds, message) => { clearTimeout(timer); timer = setTimeout(() => fail(message), seconds * 1000); };
 
         // A step of the pairing conversation waits for one of these lines
         const expect = (ok, bad, then) => { pending = { ok, bad, then }; };
@@ -192,21 +199,19 @@ function createBluetooth({ platform = process.platform, execImpl = execFile, spa
             const type = classifyDevice(name);
             if (!type || !wanted.includes(type) || mine.device || connected.has(address)) return;
             mine.device = { address, name, type, label: TYPE_LABELS[type] };
-            if (kind === 'wiimote') {
-                add(`Found ${name}`);
-                return finish('done', 'Wii Remote found. It connects by itself when a game starts: press 1 + 2 then.');
-            }
+            // A Wii Remote is connected to the computer too (BlueZ knows how to pair one), so it can drive the menu; Dolphin
+            // still finds it when a game starts
             mine.stage = 'pairing';
             mine.message = `Connecting ${TYPE_LABELS[type]}…`;
             add(`Found ${name}, pairing`);
             send('scan off');
-            arm(stepSeconds, 'The controller did not finish pairing. Hold its sync button again and retry.');
+            arm(stepSeconds, type === 'wiimote' ? 'The Wii Remote did not finish pairing. Press 1 + 2 again and retry.' : 'The controller did not finish pairing. Hold its sync button again and retry.');
             expect(/Pairing successful|AlreadyExists|Already Exists/i, /Failed to pair/i, () => {
                 send(`trust ${address}`);
                 expect(/trust succeeded|trusted: yes/i, /Failed to trust/i, () => {
                     send(`connect ${address}`);
                     arm(stepSeconds, 'Paired, but it did not connect. Press a button on the controller, or retry.');
-                    expect(/Connection successful/i, /Failed to connect/i, () => finish('done', `${TYPE_LABELS[type]} connected`));
+                    expect(/Connection successful/i, /Failed to connect/i, () => finish('done', type === 'wiimote' ? 'Wii Remote connected. Use the D-pad and A in the menu; in a game Dolphin uses it as a real Wii Remote.' : `${TYPE_LABELS[type]} connected`));
                 });
             });
             send(`pair ${address}`);
@@ -227,7 +232,7 @@ function createBluetooth({ platform = process.platform, execImpl = execFile, spa
                     if (pending.bad.test(line)) {
                         // A controller that is already paired is fine: carry on to connecting it
                         if (/AlreadyExists|Already Exists/i.test(line)) { const next = pending.then; pending = null; next(); continue; }
-                        return finish('failed', line.replace(/^.*Failed to \w+:?\s*/i, 'Failed: '));
+                        return fail(line.replace(/^.*Failed to \w+:?\s*/i, 'Failed: '));
                     }
                 }
                 // The answer to `devices`: controllers BlueZ already knows from an earlier scan (it announces those

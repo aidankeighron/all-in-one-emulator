@@ -77,3 +77,16 @@ test('a hold time of zero goes off as soon as both buttons are down', () => {
     assert.strictEqual(delay, 0);
     assert.strictEqual(fired, 1);
 });
+
+test('the pause combo is Back + Start on each controller, wherever they are numbered; − and + on a Wii Remote', () => {
+    const { comboFor } = require('../ui/lib/hotkey');
+    // Xbox 360 (xpad): A B X Y LB RB Back Start Guide L3 R3
+    assert.deepStrictEqual(comboFor({ name: 'Microsoft X-Box 360 pad', keys: [0x130, 0x131, 0x133, 0x134, 0x136, 0x137, 0x13a, 0x13b, 0x13c, 0x13d, 0x13e] }), [6, 7]);
+    // Switch Pro Controller (hid-nintendo): Capture (BTN_Z) and ZL/ZR come before − and +
+    assert.deepStrictEqual(comboFor({ name: 'Nintendo Switch Pro Controller', keys: [0x130, 0x131, 0x133, 0x134, 0x135, 0x136, 0x137, 0x138, 0x139, 0x13a, 0x13b, 0x13c, 0x13d, 0x13e] }), [9, 10]);
+    // Wii Remote, in the joystick device's order: A B Home + − 1 2
+    assert.deepStrictEqual(comboFor({ name: 'Nintendo Wii Remote', keys: [0x130, 0x131, 0x13c, 0x197, 0x19c, 0x101, 0x102] }), [4, 3]);
+    // a pad with no Back or Start is not watched; one whose buttons are unknown gets the usual numbers
+    assert.strictEqual(comboFor({ name: 'Nintendo Wii Remote Accelerometer', keys: [0x130] }), null);
+    assert.deepStrictEqual(comboFor({ name: 'x', keys: [] }), [6, 7]);
+});

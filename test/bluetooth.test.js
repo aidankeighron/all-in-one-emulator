@@ -155,7 +155,7 @@ test('a controller that is connected already is skipped, so the other Joy-Con is
     assert.strictEqual(job.device.address, 'BB:BB:BB:BB:BB:BB');
 });
 
-test('a Wii Remote is only found, never paired with the computer', async () => {
+test('a Wii Remote is connected to the computer, so it can drive the menu', async () => {
     process.env.FAKE_NAME = 'Nintendo RVL-CNT-01';
     const lines = [];
     const spawnImpl = () => { const c = fakeBluetoothctl(GOOD)(); const w = c.stdin.write.bind(c.stdin); c.stdin.write = d => { lines.push(String(d).trim()); return w(d); }; return c; };
@@ -164,8 +164,20 @@ test('a Wii Remote is only found, never paired with the computer', async () => {
     const job = await waitFor(b);
     delete process.env.FAKE_NAME;
     assert.strictEqual(job.phase, 'done', job.message);
+    assert.match(job.message, /Wii Remote connected/);
+    assert.ok(['pair', 'trust', 'connect'].every(cmd => lines.some(l => l.startsWith(cmd))), `missing commands: ${lines}`);
+});
+
+test('a Wii Remote that cannot be paired is still found: Dolphin connects it in a game', async () => {
+    process.env.FAKE_NAME = 'Nintendo RVL-CNT-01';
+    process.env.FAKE_PAIR_FAIL = '1';
+    const b = bt.createBluetooth({ platform: 'linux', spawnImpl: fakeBluetoothctl(GOOD) });
+    b.startPairing('wiimote');
+    const job = await waitFor(b);
+    delete process.env.FAKE_NAME;
+    delete process.env.FAKE_PAIR_FAIL;
+    assert.strictEqual(job.phase, 'done', job.message);
     assert.match(job.message, /press 1 \+ 2/);
-    assert.ok(!lines.some(l => /^(pair|trust|connect)\b/.test(l)), `unexpected commands: ${lines}`);
 });
 
 test('a failed pairing says so, and nothing is left running', async () => {
@@ -228,4 +240,17 @@ test('real Wii Remotes take the first players and gamepads fill the rest', () =>
     const dir = path.join(home, '.var/app/org.DolphinEmu.dolphin-emu/config/dolphin-emu');
     assert.match(fs.readFileSync(path.join(dir, 'WiimoteNew.ini'), 'utf8'), /\[Wiimote1\]\s+Source = 2/);
     assert.match(fs.readFileSync(path.join(dir, 'Dolphin.ini'), 'utf8'), /WiimoteContinuousScanning = True/);
+});
+
+test('pairing one side of a Joy-Con pair ignores the other side', async () => {
+    process.env.FAKE_NAME = 'Joy-Con (R)';
+    const b = bt.createBluetooth({ platform: 'linux', spawnImpl: fakeBluetoothctl(GOOD), scanSeconds: 1.2 });
+    b.startPairing('joycon-l');
+    const wrong = await waitFor(b);
+    assert.strictEqual(wrong.phase, 'failed', 'a right Joy-Con is not taken for the left one');
+    b.startPairing('joycon-r');
+    const right = await waitFor(b);
+    delete process.env.FAKE_NAME;
+    assert.strictEqual(right.phase, 'done', right.message);
+    assert.strictEqual(right.device.type, 'joycon-r');
 });

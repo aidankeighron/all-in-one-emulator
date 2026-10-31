@@ -206,9 +206,9 @@ test('Dolphin config on Windows: written to %APPDATA%\\Dolphin Emulator\\Config,
     const gc = Ini.read(path.join(dir, 'GCPadNew.ini'));
     assert.strictEqual(gc.get('GCPad1', 'Device'), 'XInput/0/Gamepad');
     assert.strictEqual(gc.get('GCPad1', 'Buttons/A'), '`Button A`');
-    assert.strictEqual(gc.get('GCPad2', 'Device'), 'SDL/0/Pro Controller');
+    assert.strictEqual(gc.get('GCPad2', 'Device'), 'SDL/0/Nintendo Switch Pro Controller');
     const wm = Ini.read(path.join(dir, 'WiimoteNew.ini'));
     assert.strictEqual(wm.get('Wiimote1', 'Device'), 'XInput/0/Gamepad');
-    assert.strictEqual(wm.get('Wiimote2', 'Device'), 'SDL/0/Pro Controller');
+    assert.strictEqual(wm.get('Wiimote2', 'Device'), 'SDL/0/Nintendo Switch Pro Controller');
     assert.strictEqual(Ini.read(path.join(dir, 'Dolphin.ini')).get('Core', 'SIDevice0'), '6');
 });

@@ -122,4 +122,13 @@ function place(players, slots, key, to) {
     return list;
 }
 
-module.exports = { PLAYERS, defaults, normalize, resolve, swap, place, repin, padKey };
+// A real Wii Remote for the first player who has nothing right now; everyone else keeps what they have
+function addReal(players, slots) {
+    const free = slots.findIndex(s => s.mode === 'empty' || s.mode === 'none');
+    if (free < 0) return null;
+    const list = pinAll(normalize(players), slots);
+    list[free] = { ...list[free], device: 'real' };
+    return { players: list, player: free };
+}
+
+module.exports = { PLAYERS, defaults, normalize, resolve, swap, place, repin, addReal, padKey };

@@ -127,3 +127,28 @@ test('the buttons a controller has are read from /proc, in the order a browser n
     const [pad] = controllers.build([dev]);
     assert.deepStrictEqual(pad.keys, dev.keys);
 });
+
+test('a controller that drops out and comes back keeps its place', () => {
+    const order = controllers.createOrder();
+    const pad = (name, js, vendor = '045e', product = '028e') => ({ id: `js${js}`, name, vendor, product, js, nameIndex: 0, kind: 'xbox', pad: true });
+    const xbox = pad('Microsoft X-Box 360 pad', 0);
+    const wii = { ...pad('Nintendo Wii Remote', 1, '057e', '0306'), kind: 'wiimote', pad: false };
+    const pro = pad('Nintendo Switch Pro Controller', 2, '057e', '2009');
+    assert.deepStrictEqual(order([xbox, wii, pro]).map(c => c.name), ['Microsoft X-Box 360 pad', 'Nintendo Wii Remote', 'Nintendo Switch Pro Controller']);
+    // the Wii Remote reconnects and the system now lists it last
+    const again = order([xbox, pro, { ...wii, id: 'js3', js: 3 }]);
+    assert.deepStrictEqual(again.map(c => [c.name, c.player]), [['Microsoft X-Box 360 pad', 1], ['Nintendo Wii Remote', 2], ['Nintendo Switch Pro Controller', 3]]);
+    // a new one goes after everyone seen before
+    assert.strictEqual(order([pad('8BitDo Pro 2', 4, '2dc8', '6003'), xbox]).map(c => c.name)[1], '8BitDo Pro 2');
+});
+
+test('button codes are listed in the order the joystick device numbers them', () => {
+    // a Wii Remote: 1 and 2 (0x101, 0x102) come after the others
+    const codes = [0x67, 0x69, 0x6a, 0x6c, 0x101, 0x102, 0x130, 0x131, 0x13c, 0x197, 0x19c];
+    const words = Array(12).fill(0n);
+    for (const c of codes) words[Math.floor(c / 64)] |= 1n << BigInt(c % 64);
+    const keyLine = words.reverse().map(w => w.toString(16)).join(' ');
+    const wii = `I: Bus=0005 Vendor=057e Product=0306 Version=8600\nN: Name="Nintendo Wii Remote"\nH: Handlers=event7 js2\nB: KEY=${keyLine}\n`;
+    const [dev] = controllers.parseProc(wii);
+    assert.deepStrictEqual(dev.keys, [0x130, 0x131, 0x13c, 0x197, 0x19c, 0x101, 0x102]);
+});

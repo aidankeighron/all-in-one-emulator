@@ -66,14 +66,24 @@ function describe(controllers, settings = {}, store) {
 
 // ---------- Dolphin ----------
 
-// Xbox pads on Windows are reached through XInput; everything else through SDL
-function dolphinDevice(c, platform) {
+// Xbox pads on Windows are reached through XInput; everything else through SDL, by the name SDL gives it (see sdlName in
+// lib/controllers.js) and how many controllers with that same name come before it
+function dolphinDevice(c, platform, all = [c], opts = {}) {
     if (platform === 'win32' && c.xinputIndex !== null && c.xinputIndex !== undefined) return `XInput/${c.xinputIndex}/Gamepad`;
-    return `SDL/${c.nameIndex}/${c.sdlName || c.name}`;
+    const name = controllersLib.sdlName(c, { platform, ...opts });
+    // SDL finds controllers in the order the system numbered them, which is not always the order of the players
+    const order = all.filter(o => !o.adapter && o.kind !== 'wiimote' && (o.js !== null && o.js !== undefined || o.combined || platform === 'win32'))
+        .map((o, i) => ({ o, i })).sort((a, b) => ((a.o.js ?? 1e6) - (b.o.js ?? 1e6)) || a.i - b.i).map(x => x.o);
+    const before = order.slice(0, Math.max(0, order.indexOf(c))).filter(o => controllersLib.sdlName(o, { platform, ...opts }) === name).length;
+    return `SDL/${order.includes(c) ? before : c.nameIndex || 0}/${name}`;
 }
 
 // Dolphin's SDL puts the two halves of a Joy-Con pair together only when told to (a recent Dolphin; older ones ignore the setting)
 const JOYCON_HINT = ['SDL_Hints', 'SDL_JOYSTICK_HIDAPI_COMBINE_JOY_CONS'];
+// Whether SDL reads Joy-Cons itself (HIDAPI) or through the kernel's driver. On Linux the menu decides, so that the names it
+// writes are the names Dolphin sees: through the kernel (the same controllers the menu lists, a joycond pair included),
+// unless a pair the menu joined is in use, which only SDL itself can join.
+const JOYCON_HIDAPI_HINT = ['SDL_Hints', 'SDL_JOYSTICK_HIDAPI_JOY_CONS'];
 
 function writeDolphin(controllers, { home, platform, env, exePath, wiiRemotes = 0, players, profiles, joyconsSplit = false }) {
     const adapter = controllers.some(c => c.adapter);
@@ -88,29 +98,37 @@ function writeDolphin(controllers, { home, platform, env, exePath, wiiRemotes = 
     const done = [];
     // The GameCube ports are left alone when no gamepad or adapter is involved (only a real Wii Remote, say)
     const touchPorts = adapter || slots.some(s => s.mode === 'pad');
+    const menuPair = slots.some(s => s.controller && s.controller.combined);
+    const sdlOpts = { hidapiJoycons: menuPair };
 
+    // Wii Remotes keep their player number (a game's player 2 is the second remote)
     for (const s of slots) {
         const i = s.index;
         if (s.mode === 'pad') {
-            const device = dolphinDevice(s.controller, platform);
-            main.set('Core', `SIDevice${i}`, String(SI_GC_CONTROLLER));
-            const pair = !!s.controller.combined;
-            gc.replaceSection(`GCPad${i + 1}`, mappings.dolphinSection(s.gc, device, { pair }));
-            wm.replaceSection(`Wiimote${i + 1}`, mappings.dolphinSection(s.wii, device, { pair }));
+            const device = dolphinDevice(s.controller, platform, controllers, sdlOpts);
+            wm.replaceSection(`Wiimote${i + 1}`, mappings.dolphinSection(s.wii, device, { pair: !!s.controller.combined }));
             done.push(`Player ${i + 1}: ${s.controller.name} (${s.wii.name})`);
+        } else if (s.mode === 'real') {
+            wm.replaceSection(`Wiimote${i + 1}`, [['Source', String(WIIMOTE_REAL)]]);
+            done.push(`Player ${i + 1}: real Wii Remote`);
         } else {
-            if (touchPorts) main.set('Core', `SIDevice${i}`, String(adapter ? SI_GC_ADAPTER : SI_NONE));
-            if (s.mode === 'real') {
-                wm.replaceSection(`Wiimote${i + 1}`, [['Source', String(WIIMOTE_REAL)]]);
-                done.push(`Player ${i + 1}: real Wii Remote`);
-            } else {
-                wm.replaceSection(`Wiimote${i + 1}`, [['Source', String(WIIMOTE_NONE)]]);
-            }
+            wm.replaceSection(`Wiimote${i + 1}`, [['Source', String(WIIMOTE_NONE)]]);
         }
     }
+    // A real Wii Remote cannot play GameCube games, so the gamepads fill the GameCube ports from the first one, in player
+    // order: a pad on player 3 behind a Wii Remote on player 2 is GameCube port 2, not a port with nobody before it
+    const pads = slots.filter(s => s.mode === 'pad');
+    for (let port = 0; port < slots.length; port++) {
+        const s = pads[port];
+        if (s) {
+            main.set('Core', `SIDevice${port}`, String(SI_GC_CONTROLLER));
+            gc.replaceSection(`GCPad${port + 1}`, mappings.dolphinSection(s.gc, dolphinDevice(s.controller, platform, controllers, sdlOpts), { pair: !!s.controller.combined }));
+        } else if (touchPorts) main.set('Core', `SIDevice${port}`, String(adapter ? SI_GC_ADAPTER : SI_NONE));
+    }
     if (slots.some(s => s.mode === 'real')) main.set('Core', 'WiimoteContinuousScanning', 'True');
-    if (slots.some(s => s.controller && s.controller.combined)) main.set(JOYCON_HINT[0], JOYCON_HINT[1], '1');
+    if (menuPair) main.set(JOYCON_HINT[0], JOYCON_HINT[1], '1');
     else if (joyconsSplit) main.set(JOYCON_HINT[0], JOYCON_HINT[1], '0');
+    if (platform !== 'win32' && slots.some(s => s.controller && s.controller.kind === 'switch')) main.set(JOYCON_HIDAPI_HINT[0], JOYCON_HIDAPI_HINT[1], menuPair ? '1' : '0');
     if (adapter) done.push('GameCube adapter');
 
     const changed = [save(path.join(dir, 'Dolphin.ini'), main), save(path.join(dir, 'GCPadNew.ini'), gc), save(path.join(dir, 'WiimoteNew.ini'), wm)];
@@ -171,8 +189,10 @@ function writeRyujinx(controllers, { home, platform, env, exePath, players, prof
     // Ryujinx's own names for Minus and Plus: whichever the person's own entries already use, since the two spellings
     // belong to different versions of it
     const spelling = old.some(e => e.left_joycon && e.left_joycon.button_minus === 'Minus') ? { Back: 'Minus', Start: 'Plus' } : {};
-    for (const s of slots) {
-        const index = `Player${s.index + 1}`;
+    // Gamepads take the Switch's players from the first one, in player order (a real Wii Remote has no place in a Switch game,
+    // and a game expects player 2 before player 3)
+    for (const [n, s] of slots.entries()) {
+        const index = `Player${n + 1}`;
         // A pair is looked for under its left half: Ryujinx reads one device per player
         const c = s.controller.combined ? { ...s.controller, name: s.controller.memberNames[0] } : s.controller;
         if (s.controller.combined) notes.push(`${s.controller.name} is read as ${s.controller.memberNames[0]} alone by Ryujinx: it takes one device per player`);
@@ -207,6 +227,8 @@ function writeRyujinx(controllers, { home, platform, env, exePath, players, prof
         // A single Joy-Con is a Joy-Con to Ryujinx too; anything else keeps the layout it had
         const side = controllersLib.joyconSide(c);
         if (side) entry.controller_type = side === 'L' ? 'JoyconLeft' : 'JoyconRight';
+        // a layout borrowed from another controller of this player (a single Joy-Con before) must not make a full pad half of one
+        else if (/^Joycon(Left|Right)$/.test(entry.controller_type) || mine.id !== id) entry.controller_type = 'ProController';
         made.push(entry);
     }
     if (!made.length) return { status: 'skipped', message: `Set ${unknown[0]} up once in Ryujinx (Settings → Open → Input); the menu then keeps it on the right player` };

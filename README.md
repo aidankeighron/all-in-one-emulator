@@ -133,9 +133,14 @@ Nothing else to install: the AppImage already contains the menu and its runtime.
    sound and input stand still) and the menu comes to the front with **Quit to menu** (left) and **Reset** (right) as long, thin Wii-style buttons over the game, and at the bottom
    the connected controllers (picture, name, how it is connected, its player lights, and it lights up when you press
    something on it) with **Change controllers** and **Connect controllers** on the right. There is no Resume button:
-   **B** closes the menu. Quit and Reset ask for a second **A** press, since they end the game. D-pad moves, A chooses. Holding the buttons again also closes it. Emulators read their controller settings only when a game starts, so after changing controllers the
-   screen suggests **Reset**: it ends the game (the save is uploaded as usual) and starts it again on the
-   same save. **Quit to menu** ends the game like closing the emulator, so save first. In the app the pause menu is its own
+   **B** closes the menu. Quit and Reset ask for a second **A** press, since they end the game. D-pad moves, A chooses. Holding the buttons again also closes it.
+   The combo is found per controller: **Back + Start** on an Xbox-style pad, **− + +** on a Switch controller or Joy-Con pair,
+   and **− and +** on a real Wii Remote. Controllers connected while the game runs are watched too.
+   Controllers can be connected and changed from the pause menu. A controller that drops out and comes back, or a real Wii Remote
+   connecting, is picked up by the running game by itself. Anything else (a new controller on a player, another mapping) needs the
+   game to start again: the pause screen then says so and puts the focus on **Reset**, which ends the game (the save is uploaded as
+   usual) and starts it again on the same save. The emulator's settings files are left alone while it runs and written when it closes.
+   Dolphin is started with its "confirm on stop" question off, so **Quit to menu** closes it without a second prompt. **Quit to menu** ends the game like closing the emulator, so save first. In the app the pause menu is its own
    transparent window above everything, so the frozen game stays visible behind it; in a plain browser it shows inside the page. The menu reads the controller
    through `/dev/input/js*`; if that isn't readable on your system, the combo does nothing, and you can still
    quit with each emulator's own Stop/Exit (Dolphin's Stop, for example, also returns to the menu).
@@ -297,10 +302,19 @@ Settings -> Sound & controls.
 
 | Emulator | What is set up |
 |---|---|
-| Dolphin | GameCube ports 1-4 and Wii Remotes 1-4. A gamepad becomes both a GameCube controller and an emulated Wii Remote, using the player's mappings (below). A connected Wii Remote is set to *Real Wiimote*. With an official GameCube adapter, ports without a gamepad use the adapter. |
-| Ryujinx | Linux: each player's controller is written into Ryujinx's `Config.json` (`input_config`) by its SDL id. Open Ryujinx once first. Windows: a controller is matched to the entry Ryujinx already has for it (set each controller up once with **Open** in Settings; after that the menu keeps it on the right player). The buttons come from the player's Switch mapping; a layout you made in Ryujinx is left alone until you pick a Switch mapping for that player. |
+| Dolphin | GameCube ports 1-4 and Wii Remotes 1-4. A gamepad becomes both a GameCube controller and an emulated Wii Remote, using the player's mappings (below). A connected Wii Remote is set to *Real Wiimote* and keeps its player number; the gamepads fill the GameCube ports from port 1 (a Wii Remote cannot play GameCube games). With an official GameCube adapter, ports without a gamepad use the adapter. |
+| Ryujinx | Linux: each player's controller is written into Ryujinx's `Config.json` (`input_config`) by its SDL id. Open Ryujinx once first. Windows: a controller is matched to the entry Ryujinx already has for it (set each controller up once with **Open** in Settings; after that the menu keeps it on the right player). The buttons come from the player's Switch mapping; a layout you made in Ryujinx is left alone until you pick a Switch mapping for that player. The gamepads take Ryujinx's players from Player 1 on (a real Wii Remote has no place in a Switch game). |
 
-Players are numbered in the order the system registered the controllers. Existing settings in the files
+Players are numbered in the order the controllers were connected. A controller that drops out and comes back while the
+menu runs (a Wii Remote that went to sleep, say) keeps its place instead of moving behind the others.
+
+**Controller names in Dolphin.** Dolphin finds a controller by the name SDL gives it (`SDL/0/Xbox 360 Controller`), which
+is often not the name the system shows (`Microsoft X-Box 360 pad`; joycond's `Nintendo Switch Combined Joy-Cons` is
+`Nintendo Switch Joy-Con (L/R)` to SDL). The menu works out SDL's name the way SDL does: its mapping database, then its own
+names for known vendor and product ids, then the system's name tidied up. The tables are in `ui/lib/sdlnames.json`, taken from
+SDL's sources (`node scripts/sdl-names.js` refreshes them). On Linux the menu also tells Dolphin's SDL to read Joy-Cons
+through the kernel (`SDL_JOYSTICK_HIDAPI_JOY_CONS = 0` in `[SDL_Hints]`), so it sees the same controllers the menu lists,
+except when a pair joined in the menu is used (only SDL itself can join those). Existing settings in the files
 are kept; only the controller entries are replaced, and the first time a file is changed the original is
 copied next to it as `<file>.emulator-menu.bak`. Nothing is written when no suitable controller is
 connected, so keyboard setups are left alone.
@@ -358,7 +372,7 @@ controller, or splits a pair again (a pair you split stays split).
 | | Windows: BetterJoy | Linux: joycond |
 |---|---|---|
 | What it does | Makes Joy-Cons and the Pro Controller look like Xbox 360 controllers and joins a left and a right Joy-Con into one, with rumble and motion (served on port 26760) | Joins a left and a right Joy-Con into one "Nintendo Switch Combined Joy-Cons" controller (press **L** and **R** together; **SL + SR** makes one a sideways controller) |
-| Setup steps | 1. the ViGEmBus driver (its installer asks Windows' permission once, the menu downloads and runs it) 2. BetterJoy (downloaded and unpacked into the menu's emulators folder, its settings set for Xbox pads and the motion server) 3. pair the Joy-Cons in Windows 4. **Turn on** | 1. checks the kernel is 5.16 or newer 2. installs the `joycond` package (`apt`, `dnf` or `zypper`, password once; on other systems the screen links to the build instructions) 3. pair with **Pair a Joy-Con** 4. **Turn on** (`systemctl enable --now joycond`, password once) |
+| Setup steps | 1. the ViGEmBus driver (its installer asks Windows' permission once, the menu downloads and runs it) 2. BetterJoy (downloaded and unpacked into the menu's emulators folder, its settings set for Xbox pads and the motion server) 3. pair the Joy-Cons in Windows 4. **Turn on** | 1. checks the kernel is 5.16 or newer 2. installs the `joycond` package (`apt`, `dnf` or `zypper`, password once; on other systems the screen links to the build instructions) 3. pair with **Two Joy-Cons as one** (left, right, then L + R) 4. **Turn on** (`systemctl enable --now joycond`, password once) |
 | Afterwards | The menu starts BetterJoy with itself and before every game, shows its virtual Xbox pads instead of the real Joy-Cons, and uses the Xbox mappings. Ryujinx's motion is pointed at BetterJoy's server | joycond is a system service that starts at boot. The menu shows the combined controller instead of the two halves it joined |
 | Needs | Windows 10/11. Download addresses come from GitHub; set `emulatorUrls.betterjoy` or `emulatorUrls.vigembus` in `config.json` (a web address, or a file on this computer) if they cannot be reached | A distribution that has the `joycond` package |
 
@@ -385,18 +399,26 @@ chip at the top right) choose **Connect a controller**.
   `pkexec`, so you get one password prompt; `apt`, `dnf`, `pacman` and `zypper` are supported). Then:
   - **Switch Pro Controller / Joy-Con:** hold the sync button; the menu finds the controller, pairs, trusts
     and connects it. It then works like any gamepad. Needs Linux 5.16 or newer (the menu checks).
-  - **Wii Remote:** press 1 + 2; the menu checks it is in range, then **Use as Wii Remote N** tells Dolphin to
-    use that many real remotes. The menu deliberately does not pair Wii Remotes with the computer: Dolphin
-    connects to them itself, and cannot once the system has taken them. It also gives Dolphin's Flatpak
-    Bluetooth access. Press 1 + 2 again when a game starts.
+  - **Joy-Cons with joycond on:** **Two Joy-Cons as one** walks through three steps: connect the left Joy-Con, connect the
+    right one, then press **L** on the left and **R** on the right together, which is what joins them (the screen moves on
+    by itself when the joined controller appears). **One Joy-Con** connects a single one, used on its own held sideways
+    (**SL + SR**). Both work at the same time: joycond keeps joined pairs and single Joy-Cons apart.
+  - **Joy-Cons with joycond off:** **Joy-Con** connects one at a time, and each is a controller of its own (they can still
+    be joined inside the menu, see *Two Switch controllers as one*).
+  - **Wii Remote:** press 1 + 2; the menu pairs, trusts and connects it to the computer so it can drive the menu (held
+    upright: D-pad moves, **A** chooses, **B** goes back, **1** / **2** are X / Y, **−** / **+** change page, **Home** is
+    Start). The kernel shows its D-pad as arrow keys, which the browser's gamepad support leaves out, so the menu reads the
+    remote itself (`ui/lib/wiimote.js`, from `/dev/input/event*`). In a game Dolphin uses it as a real Wii Remote (press
+    1 + 2 if it does not answer). If the remote cannot be connected to the computer, the menu says so and Dolphin connects
+    it itself when a game starts, as before. If Dolphin cannot reach a remote the computer holds (Dolphin needs read access
+    to its `/dev/hidraw*` device for that), remove it on the Controllers page (**B**) and let Dolphin connect it.
 - **Windows:** Windows owns pairing, so the menu opens its Bluetooth page and lists the steps; the Wii Remote
   count works the same way.
-- Joy-Cons are paired one at a time. They appear as two controllers and are combined into one by the menu (see *Two
-  Switch controllers as one*).
+- Without joycond, Joy-Cons are paired one at a time and appear as two controllers (see *Two Switch controllers as one*).
 - This was tested against a stand-in for `bluetoothctl`, not real Wii Remotes or Switch controllers.
 
 Things to know:
-- A real Wii Remote is connected by Dolphin itself (hold 1+2); the menu only tells Dolphin to use it.
+- In a game, a real Wii Remote is used by Dolphin directly; the menu only sets which players use real remotes.
 - The official GameCube adapter needs the udev rule from Dolphin's documentation so the Flatpak may use it.
   Adapter controllers play on the port they are plugged into.
 - Third-party GameCube adapters in "PC" mode look like ordinary gamepads and are not assigned to GameCube ports.

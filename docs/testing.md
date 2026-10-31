@@ -16,16 +16,17 @@ next to the menu: lines starting `[SAVES]`, `[PADS]`, `[PAUSE]`, `[LIBRARY]` and
 
 ## 2. Pause menu
 
-1. Start any game. Hold **Back + Start** for the time set in Settings -> Sound & controls (1.5 seconds by default; try 0 and 2 too). Expect `[PAUSE]` in the terminal, the game freezing (sound stops) and
+1. Start any game. Hold **Back + Start** (**−** and **+** on a Switch controller or a real Wii Remote) for the time set in Settings -> Sound & controls (1.5 seconds by default; try 0 and 2 too). Expect `[PAUSE]` in the terminal, the game freezing (sound stops) and
    a dark, see-through layer over the game with the Paused screen on it. If it does not appear over the game, or appears but
    ignores the controller, the desktop is not putting the new window in front or giving it focus (some Wayland setups):
    note which desktop you use and what you see.
 2. **B** closes the menu and the game continues exactly where it was. Press buttons on a controller: its card in the bottom bar lights up.
-3. **Change controllers** (bottom right): change Player 1's controller or a mapping, close the screen: it now says *Controllers changed*.
-   Choose **Reset** (right; it asks for A twice): the game closes, the save uploads (`[SAVES]`), and the same game
+3. **Change controllers** (bottom right): change Player 1's controller or a mapping, close the screen: it now says the game has to
+   start again, with the focus on **Reset**. Turning a controller off and on again instead should say *Nothing to restart*. Choose **Reset** (right; it asks for A twice): the game closes, the save uploads (`[SAVES]`), and the same game
    starts again on the same save with the new settings.
 4. **Connect a controller** during the pause works the same as on the Controllers page.
-5. **Quit to menu** (left; asks for A twice) ends the game; the save is uploaded as usual.
+5. **Quit to menu** (left; asks for A twice) ends the game; the save is uploaded as usual. Dolphin must close without asking
+   "Do you want to stop the current emulation?".
 6. If the game could not be frozen the screen says it keeps running behind the menu. Check `flatpak ps` while a game runs.
 
 ## 3. Save system
@@ -49,8 +50,13 @@ Linux needs Bluetooth (the menu offers to install it) and kernel 5.16 or newer f
   connects it. It should then appear as a controller card. A left and a right Joy-Con show as one **Joy-Con pair**; **Y** splits
   and combines them. In Dolphin check that both halves work as one pad (`SDL_JOYSTICK_HIDAPI_COMBINE_JOY_CONS = 1` in `Dolphin.ini`), and
   that the gyro mapping moves the pointer-less remote (needs a Dolphin with SDL motion support).
-- **Wii Remote:** press 1 + 2; the menu sees it; choose **Use as Wii Remote 1**. Start a Wii game and press 1 + 2 again when
-  it starts. Do not pair the remote in Ubuntu's own Bluetooth settings: Dolphin cannot use it afterwards.
+- **Joy-Cons with joycond on:** **Two Joy-Cons as one**: left (the screen asks for it), then right, then press L + R; the
+  screen should move to *All set* by itself. **One Joy-Con**: connect one, hold it sideways, SL + SR.
+- **Wii Remote:** press 1 + 2; the menu connects it (*Wii Remote connected*). In the menu, hold it upright: the D-pad moves,
+  A chooses, B goes back. Start a Wii game with an Xbox pad on player 1, the Wii Remote on player 2 and a Switch controller on
+  player 3: in the game each must control its own player (check `Device =` in `WiimoteNew.ini`: `SDL/0/Xbox 360 Controller`,
+  `SDL/0/Nintendo Switch Joy-Con (L/R)` for a joycond pair). If the remote does nothing in the game, press 1 + 2; if it
+  still does not, remove it on the Controllers page (B) and let Dolphin connect it when the game starts, and note it.
 - If something fails, copy the terminal lines and the text in the Connect screen.
 
 ## 5. Two computers on one network (library sharing, and moving files)

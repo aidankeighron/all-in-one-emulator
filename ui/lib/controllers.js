@@ -22,7 +22,8 @@ const PAD_KINDS = new Set(['xbox', 'switch', 'generic']);
 const NOT_A_PAD = /keyboard|mouse|touchpad|trackpad|consumer control|system control|power button|sleep button|video bus|lid switch|hdmi|speaker|headphone|headset|webcam|camera|\bir\b|accelerometer|motion ?plus|motion sensors|gyro|imu|nunchuk|classic controller|balance board|touchscreen|pen\b|stylus/i;
 
 // The button codes a device has, from the "B: KEY=" line of /proc/bus/input/devices (hex words, the highest first, 64 bits each).
-// Only the button range (0x100 and up): browsers number a pad's buttons in the order of these codes.
+// Only the button range (0x100 and up), in the order the joystick device (/dev/input/js*) numbers them, which is the
+// order browsers use too: the codes from BTN_JOYSTICK (0x120) up first, then the 0x100-0x11f ones (a Wii Remote's 1 and 2).
 function keyCodes(text) {
     const words = String(text).trim().split(/\s+/).filter(Boolean).reverse();
     const codes = [];
@@ -31,7 +32,7 @@ function keyCodes(text) {
         try { bits = BigInt('0x' + w); } catch { return; }
         for (let b = 0; b < 64; b++) if ((bits >> BigInt(b)) & 1n) { const code = i * 64 + b; if (code >= 0x100 && code < 0x300) codes.push(code); }
     });
-    return codes;
+    return [...codes.filter(c => c >= 0x120), ...codes.filter(c => c < 0x120)];
 }
 
 // Parses the text of /proc/bus/input/devices into [{name, vendor, product, bus, handlers, js, event}]
@@ -300,4 +301,88 @@ function combine(list, { merges = [], splits = [], auto = true } = {}) {
     return out.map((c, i) => ({ ...c, player: i + 1 }));
 }
 
-module.exports = { parseProc, classify, build, detect, hasGcAdapter, fromGamepadApi, report, combine, keyOf, joyconSide, KIND_LABELS, PAD_KINDS, JOYCON_PAIR_SDL_NAME };
+// ---------- The name SDL gives a controller ----------
+// Dolphin finds a controller by the name SDL gives it ("SDL/0/Xbox 360 Controller"), which is often not the name the kernel
+// reports ("Microsoft X-Box 360 pad"). SDL picks it like this (src/joystick/SDL_joystick.c, SDL_gamepad.c):
+//   1. a controller in SDL's mapping database is called by the name there (on Linux, matched by bus, vendor, product,
+//      version and, for some entries, a checksum of the kernel's name);
+//   2. otherwise SDL's own name for that vendor and product, if it has one;
+//   3. otherwise the kernel's name, tidied up.
+// Joy-Cons that SDL reads itself (its HIDAPI driver, not the kernel's) have names of their own.
+// The tables come from SDL's sources: scripts/sdl-names.js rebuilds them.
+const SDL_NAMES = require('./sdlnames.json');
+
+// SDL_crc16: CRC-16 (polynomial 0xA001, reflected, starting at 0)
+function crc16(text) {
+    let crc = 0;
+    for (const byte of Buffer.from(String(text), 'utf8')) {
+        crc ^= byte;
+        for (let i = 0; i < 8; i++) crc = crc & 1 ? (crc >>> 1) ^ 0xA001 : crc >>> 1;
+    }
+    return crc;
+}
+
+// SDL_CreateDeviceName's clean-up of a name it has no better name for
+const NAME_PREFIXES = [
+    ['(Standard system devices) ', ''], ['8BitDo Tech Ltd', '8BitDo'], ['ASTRO Gaming', 'ASTRO'], ['Bensussen Deutsch & Associates,Inc.(BDA)', 'BDA'],
+    ['Guangzhou Chicken Run Network Technology Co., Ltd.', 'GameSir'], ['HORI CO.,LTD.', 'HORI'], ['HORI CO.,LTD', 'HORI'], ['Mad Catz Inc.', 'Mad Catz'],
+    ['Nintendo Co., Ltd.', 'Nintendo'], ['NVIDIA Corporation ', ''], ['Performance Designed Products', 'PDP'], ['QANBA USA, LLC', 'Qanba'],
+    ['QANBA USA,LLC', 'Qanba'], ['Voyetra Turtle Beach,Inc.', 'Turtle Beach'], ['Unknown ', '']
+];
+function tidyName(name) {
+    let out = String(name || '').trim().replace(/ {2,}/g, ' ');
+    const hit = NAME_PREFIXES.find(([prefix]) => out.toLowerCase().startsWith(prefix.toLowerCase()));
+    if (hit) out = hit[1] + out.slice(hit[0].length);
+    return out.trim() || 'Controller';
+}
+
+const le16 = hex => String(hex || '0000').padStart(4, '0').slice(-4).match(/../g).reverse().join('');
+
+// The name from SDL's database for a Linux controller, if it is in there
+function databaseName(c) {
+    if (!c.vendor || !c.product) return null;
+    const crc = crc16(c.name).toString(16).padStart(4, '0');
+    const guid = version => `${le16(c.bus || '0003')}0000${le16(c.vendor)}0000${le16(c.product)}0000${le16(version)}0000`;
+    const withVersion = guid(c.version), noVersion = guid('0000');
+    const pick = (match, exactCrc) => {
+        let best = null;
+        for (const [g, name, entryCrc] of SDL_NAMES.linux) {
+            if (!match(g)) continue;
+            if (entryCrc) { if (entryCrc === crc) return name; continue; }
+            if (!exactCrc && !best) best = name;
+        }
+        return best;
+    };
+    const sameNoVersion = g => g.slice(0, 24) === noVersion.slice(0, 24);
+    return pick(g => g === withVersion, true) || pick(g => g === withVersion, false) || pick(sameNoVersion, true) || pick(sameNoVersion, false);
+}
+
+// The name SDL (and so Dolphin) gives a controller. hidapiJoycons: SDL reads Joy-Cons itself rather than through the kernel.
+function sdlName(c, { platform = 'linux', hidapiJoycons = false } = {}) {
+    if (c.sdlName) return c.sdlName;
+    const side = joyconSide(c);
+    if (side && (hidapiJoycons || platform === 'win32')) return `Nintendo Switch Joy-Con (${side})`;
+    // Windows reaches Switch Pro Controllers through SDL's own driver, which names them
+    if (platform === 'win32' && c.vendor === NINTENDO && c.product === '2009') return 'Nintendo Switch Pro Controller';
+    if (platform !== 'win32') {
+        const known = databaseName(c);
+        if (known) return known;
+    }
+    return (c.vendor && c.product && SDL_NAMES.names[`${c.vendor}:${c.product}`]) || tidyName(c.name);
+}
+
+// ---------- Keeping the players in place ----------
+// Without a player chosen for it, a controller plays in the order it was connected. The system's own order changes when a
+// controller drops out and comes back (a Wii Remote that went to sleep, one that Dolphin takes over and lets go), which would
+// shuffle the players in the middle of an evening. This keeps the order controllers were first seen in while the menu runs.
+function createOrder() {
+    const seen = new Map();
+    let next = 0;
+    return list => {
+        for (const c of list) { const k = keyOf(c); if (!seen.has(k)) seen.set(k, next++); }
+        const rank = c => (c.adapter ? Infinity : seen.get(keyOf(c)));
+        return list.map((c, i) => ({ c, i })).sort((a, b) => (rank(a.c) - rank(b.c)) || a.i - b.i).map(({ c }, i) => ({ ...c, player: i + 1 }));
+    };
+}
+
+module.exports = { createOrder, parseProc, classify, build, detect, hasGcAdapter, fromGamepadApi, report, combine, keyOf, joyconSide, sdlName, crc16, KIND_LABELS, PAD_KINDS, JOYCON_PAIR_SDL_NAME };

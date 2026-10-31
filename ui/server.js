@@ -8,6 +8,7 @@ const platformLib = require('./lib/platform');
 const { createRunner } = require('./lib/runner');
 const roms = require('./lib/roms');
 const hotkey = require('./lib/hotkey');
+const wiimoteLib = require('./lib/wiimote');
 const procs = require('./lib/procs');
 const controllers = require('./lib/controllers');
 const inputconfig = require('./lib/inputconfig');
@@ -164,7 +165,9 @@ async function ensureBetterJoy() {
 }
 
 // What is plugged in now, with any Switch controllers the person put together shown as one
-const detectPads = () => controllers.detect({ platform: runner.platform, merge: config.getJoyconPairs(), hideNintendo: betterjoyOn() });
+const wiimoteReader = wiimoteLib.createReader();
+const keepOrder = controllers.createOrder();
+const detectPads = () => keepOrder(controllers.detect({ platform: runner.platform, merge: config.getJoyconPairs(), hideNintendo: betterjoyOn() }));
 
 // Writes the controller settings of one emulator (or all installed ones) from what is plugged in now
 // The last problem lines in the emulator's own log file (Ryujinx keeps one per run), for a game that closed right away
@@ -182,7 +185,25 @@ function emulatorLogTail(emu) {
 
 let autoRetried = null;          // the game the menu already started a second time after a quick close (never loops)
 const skipSetup = new Set();      // emulators whose controller settings are left alone for the next start (see the quick-exit check)
+// Emulators whose controller settings changed while they were running: written once the game ends. A running emulator's files
+// are left alone (Dolphin writes its own settings back when it closes, and neither emulator reads them again while it runs).
+const pendingSetup = new Set();
+
+// What a running game was started with, per player: which controller (or real Wii Remote) and which mappings. When this
+// differs from what the players are now, the game has to start again to use it; when it is the same (a controller that
+// dropped out and came back, a real Wii Remote connecting) the emulator picks it up by itself.
+function controllerPlan(emulatorId) {
+    const view = inputconfig.describe(detectPads(), { players: config.getPlayers(), wiiRemotes: config.getWiiRemotes() }, mappings);
+    const field = emulatorId === 'ryujinx' ? ['sw'] : ['wii', 'gc'];
+    return JSON.stringify(view.slots.map(s => [s.mode, s.controller ? playersLib.padKey(s.controller) : null, ...field.map(f => s[f] && s[f].id)]));
+}
+
 function setupControllers(emulatorIds) {
+    const running = current && current.path ? current.emulator : null;
+    if (running && emulatorIds.includes(running)) {
+        pendingSetup.add(running);
+        emulatorIds = emulatorIds.filter(id => id !== running);
+    }
     const connected = detectPads();
     const results = emulatorIds.map(id => {
         const result = inputconfig.apply(id, connected, { ...platformCtx, wiiRemotes: config.getWiiRemotes(), players: config.getPlayers(), profiles: mappings, betterjoyMotion: betterjoyOn() ? betterjoyLib.MOTION_PORT : 0, joyconsSplit: config.getJoyconPairs().splits.length > 0 });
@@ -280,7 +301,8 @@ async function startGame(relPath, slotId, onGameState) {
     }
     console.log(`[LAUNCH] ${emu.name}: ${abs}${slot ? ` (slot ${slot.id})` : ''}`);
 
-    current = { emulator: emu.id, path: relPath, emu, slotId: slot ? slot.id : null, paused: false, frozenPids: [] };
+    current = { emulator: emu.id, path: relPath, emu, slotId: slot ? slot.id : null, paused: false, frozenPids: [], plan: controllerPlan(emu.id) };
+    pendingSetup.delete(emu.id);
     lastError = null;
     const started = Date.now();
     const stopWatching = process.env.EMU_NO_HOTKEY ? () => {} : hotkey.start(togglePause, { holdMs: config.getPauseHold() * 1000 });
@@ -289,6 +311,8 @@ async function startGame(relPath, slotId, onGameState) {
         const wasPaused = !!(current && current.paused);
         const asked = !!(current && current.stopping);
         current = null;
+        // Controller changes made during the game go into the emulator's files now that it has closed
+        if (pendingSetup.delete(emu.id)) setupControllers([emu.id]);
         let quickUndone = false;
         if (!asked && Date.now() - started < 8000) {
             // It ended by itself right after starting. If the menu had just changed its controller settings, put them back
@@ -695,14 +719,13 @@ async function handlePlayers(route, req, res) {
             return sendJson(res, 200, controllersView()), true;
         }
         if (route === 'POST /api/players/add-real') {
-            // "Use this Wii Remote": the first player who is not already using a gamepad or remote gets it
-            const list = config.getPlayers();
-            const free = list.findIndex(p => p.device === 'auto' || p.device === 'none');
-            if (free < 0) return sendJson(res, 409, { error: 'full', message: 'All four players already have a controller chosen. Change one on the Players screen.' }), true;
-            list[free] = { ...list[free], device: 'real' };
-            config.setPlayers(list);
+            // "Use this Wii Remote": the first player who has no controller right now gets it (the others keep theirs)
+            const { slots } = inputconfig.describe(detectPads(), { players: config.getPlayers(), wiiRemotes: config.getWiiRemotes() }, mappings);
+            const done = playersLib.addReal(config.getPlayers(), slots);
+            if (!done) return sendJson(res, 409, { error: 'full', message: 'All four players already have a controller. Change one on the Controllers page.' }), true;
+            config.setPlayers(done.players);
             await syncNow();
-            return sendJson(res, 200, { player: free + 1 }), true;
+            return sendJson(res, 200, { player: done.player + 1 }), true;
         }
         if (route === 'GET /api/mappings') {
             // The inputs a mapping can use depend on the console and on the kind of controller it is for
@@ -905,6 +928,15 @@ function createServer(onGameState) {
                 if (url.pathname.startsWith('/api/bluetooth')) {
                     if (await handleBluetooth(route, req, res)) return;
                 }
+                if (route === 'GET /api/wiimote/events') {
+                    // A real Wii Remote's buttons for the menu window, as they change (see lib/wiimote.js)
+                    res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
+                    if (runner.platform === 'win32') return res.end('data: {"remotes":[],"supported":false}\n\n');
+                    const off = wiimoteReader.subscribe(remotes => res.write(`data: ${JSON.stringify({ remotes })}\n\n`));
+                    const ping = setInterval(() => res.write(': still here\n\n'), 15000);
+                    req.on('close', () => { clearInterval(ping); off(); });
+                    return;
+                }
                 if (route === 'POST /api/controllers/report') {
                     controllers.report((await readJson(req)).pads);      // Windows: the window says which gamepads it sees
                     return sendJson(res, 200, { ok: true });
@@ -982,7 +1014,9 @@ function createServer(onGameState) {
                 if (route === 'GET /api/status') {
                     const error = lastError;
                     lastError = null;
-                    return sendJson(res, 200, { running: !!current || restarting, game: current && { emulator: current.emulator, path: current.path }, paused: !!(current && current.paused), frozen: !!(current && current.frozenPids && current.frozenPids.length), error, sync: saves.activity() });
+                    // Whether the controllers now differ from what the running game started with (it needs a Reset to use them)
+                    const controllersChanged = !!(current && current.plan && current.paused && controllerPlan(current.emulator) !== current.plan);
+                    return sendJson(res, 200, { running: !!current || restarting, controllersChanged, game: current && { emulator: current.emulator, path: current.path }, paused: !!(current && current.paused), frozen: !!(current && current.frozenPids && current.frozenPids.length), error, sync: saves.activity() });
                 }
                 if (route === 'POST /api/game/resume') { resumeGame(); return sendJson(res, 200, { ok: true }); }
                 if (route === 'POST /api/game/quit') { restartTarget = null; restarting = false; stopCurrent(); return sendJson(res, 200, { ok: true }); }

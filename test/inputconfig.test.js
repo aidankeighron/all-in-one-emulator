@@ -255,3 +255,69 @@ test('Ryujinx: the config from before the menu changed it can be put back', () =
     assert.deepStrictEqual(JSON.parse(fs.readFileSync(path.join(dir, 'Config.json'), 'utf8')), { input_config: [], other: 1 });
     assert.strictEqual(inputconfig.restore('ryujinx', { home, platform: 'linux', env: {} }), false, 'nothing left to put back');
 });
+
+test('Dolphin is given the names SDL uses, not the kernel names', () => {
+    const { sdlName, crc16 } = require('../ui/lib/controllers');
+    // SDL's checksum: these are the values in SDL's own database
+    assert.strictEqual(crc16('Nintendo Wii Remote').toString(16), '60be');
+    assert.strictEqual(crc16('Nintendo Wii Remote Classic Controller').toString(16), 'd8a');
+    const xbox = { id: 'js0', name: 'Microsoft X-Box 360 pad', kind: 'xbox', pad: true, bus: '0003', vendor: '045e', product: '028e', version: '0114', js: 0, nameIndex: 0 };
+    const joycond = { id: 'js1', name: 'Nintendo Switch Combined Joy-Cons', kind: 'switch', pad: true, bus: '0006', vendor: '057e', product: '2008', version: '0000', js: 1, nameIndex: 0 };
+    const left = { id: 'js2', name: 'Nintendo Switch Left Joy-Con', kind: 'switch', pad: true, bus: '0005', vendor: '057e', product: '2006', version: '8001', js: 2, nameIndex: 0 };
+    assert.strictEqual(sdlName(xbox), 'Xbox 360 Controller');
+    assert.strictEqual(sdlName(joycond), 'Nintendo Switch Joy-Con (L/R)');
+    assert.strictEqual(sdlName(left), 'Nintendo Switch Left Joy-Con');
+    assert.strictEqual(sdlName(left, { hidapiJoycons: true }), 'Nintendo Switch Joy-Con (L)');
+    assert.strictEqual(sdlName({ name: '  Some  Pad ', vendor: '1234', product: '5678', bus: '0003' }), 'Some Pad');
+
+    // Xbox on player 1, the joycond pair on player 2: both reachable in Dolphin, and SDL reads Joy-Cons through the kernel
+    const home = tmpHome();
+    inputconfig.apply('dolphin', [xbox, joycond], { home });
+    const dir = dolphinDir(home);
+    const wm = Ini.read(path.join(dir, 'WiimoteNew.ini'));
+    assert.strictEqual(wm.get('Wiimote1', 'Device'), 'SDL/0/Xbox 360 Controller');
+    assert.strictEqual(wm.get('Wiimote2', 'Device'), 'SDL/0/Nintendo Switch Joy-Con (L/R)');
+    assert.strictEqual(wm.get('Wiimote2', 'Source'), '1');
+    assert.strictEqual(Ini.read(path.join(dir, 'Dolphin.ini')).get('SDL_Hints', 'SDL_JOYSTICK_HIDAPI_JOY_CONS'), '0');
+
+    // two pads SDL names alike are counted together, whatever the kernel calls them
+    const other = { ...xbox, id: 'js3', js: 3, name: 'Xbox 360 Wireless Receiver', product: '0719' };
+    const twice = tmpHome();
+    inputconfig.apply('dolphin', [xbox, other], { home: twice });
+    const second = Ini.read(path.join(dolphinDir(twice), 'GCPadNew.ini')).get('GCPad2', 'Device');
+    assert.match(second, /^SDL\/\d\//);
+});
+
+test('Dolphin: a Wii Remote keeps its player for Wii games, and the gamepads fill the GameCube ports from the first', () => {
+    const home = tmpHome();
+    // player 1 Xbox, player 2 a real Wii Remote, player 3 another pad
+    const second = pad({ id: 'js2', js: 2, name: 'Some Pad', vendor: '1234', product: '5678', bus: '0003' });
+    inputconfig.apply('dolphin', [pad(), wiimote(), second], { home });
+    const dir = dolphinDir(home);
+    const wm = Ini.read(path.join(dir, 'WiimoteNew.ini'));
+    assert.strictEqual(wm.get('Wiimote1', 'Device'), 'SDL/0/Xbox 360 Controller');
+    assert.strictEqual(wm.get('Wiimote2', 'Source'), '2');
+    assert.strictEqual(wm.get('Wiimote3', 'Device'), 'SDL/0/Some Pad');
+    const gc = Ini.read(path.join(dir, 'GCPadNew.ini'));
+    const main = Ini.read(path.join(dir, 'Dolphin.ini'));
+    assert.strictEqual(gc.get('GCPad2', 'Device'), 'SDL/0/Some Pad');
+    assert.deepStrictEqual([0, 1, 2, 3].map(i => main.get('Core', `SIDevice${i}`)), ['6', '6', '0', '0']);
+});
+
+test('Ryujinx: gamepads take the Switch players from the first (a Wii Remote is skipped), and a pair replaces a single Joy-Con cleanly', () => {
+    const mappings = require('../ui/lib/mappings');
+    const profiles = mappings.createStore(tmpHome());
+    const home = tmpHome();
+    const dir = path.join(home, '.var/app/io.github.ryubing.Ryujinx/config/Ryujinx');
+    fs.mkdirSync(dir, { recursive: true });
+    // Player 2 used to be a single left Joy-Con
+    fs.writeFileSync(path.join(dir, 'Config.json'), JSON.stringify({ version: 70, input_config: [{ backend: 'GamepadSDL2', id: '0-old', player_index: 'Player2', controller_type: 'JoyconLeft' }] }));
+    const xbox = pad({ name: 'Microsoft X-Box 360 pad', bus: '0003', vendor: '045e', product: '028e', version: '0114' });
+    const joycond = pad({ id: 'js2', js: 2, name: 'Nintendo Switch Combined Joy-Cons', kind: 'switch', bus: '0006', vendor: '057e', product: '2008', version: '0000' });
+    inputconfig.apply('ryujinx', [xbox, wiimote(), joycond], { home, platform: 'linux', profiles });
+    const list = JSON.parse(fs.readFileSync(path.join(dir, 'Config.json'), 'utf8')).input_config;
+    const p2 = list.find(e => e.player_index === 'Player2');
+    assert.match(p2.id, /^0-00000006-057e-0000-0820-/);
+    assert.strictEqual(p2.controller_type, 'ProController');
+    assert.ok(!list.some(e => e.player_index === 'Player3'), 'nobody is left on player 3 behind an empty player 2');
+});

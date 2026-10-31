@@ -48,41 +48,79 @@ function createDetector({ buttons, holdMs = HOLD_MS, onTrigger, setTimer = setTi
     };
 }
 
-// Starts watching every joystick device. Returns a function that stops watching.
-function start(onCombo, { holdMs = HOLD_MS } = {}) {
-    let names;
-    try {
-        names = fs.readdirSync('/dev/input').filter(n => /^js\d+$/.test(n));
-    } catch {
-        return () => {};
-    }
+// Which button numbers make the pause combo on one joystick device. A device's buttons are numbered in the order of its
+// button codes (see keyCodes in lib/controllers.js), so Back + Start is not 6 + 7 on every controller: on a Switch Pro
+// Controller or a Joy-Con pair those numbers are other buttons. A Wii Remote has no Back or Start: − and + are its combo.
+const BTN_SELECT = 0x13a, BTN_START = 0x13b, KEY_PREVIOUS = 0x19c, KEY_NEXT = 0x197;
+function comboFor(dev) {
+    const keys = dev && Array.isArray(dev.keys) ? dev.keys : [];
+    const pick = (a, b) => (keys.includes(a) && keys.includes(b) ? [keys.indexOf(a), keys.indexOf(b)] : null);
+    if (/^nintendo wii remote$/i.test((dev && dev.name) || '')) return pick(KEY_PREVIOUS, KEY_NEXT);
+    return pick(BTN_SELECT, BTN_START) || (keys.length ? null : COMBO);
+}
 
-    const watchers = [];
-    for (const js of names) {
+// Starts watching every joystick device, and the ones connected later (checked every two seconds). Returns a function
+// that stops watching. listDevices() -> [{name, js, keys}] (from /proc/bus/input/devices)
+function start(onCombo, { holdMs = HOLD_MS, listDevices = defaultDevices, rescanMs = 2000 } = {}) {
+    const watchers = new Map();     // "js3" -> stop function
+
+    function watch(js, buttons) {
         let fd;
         try {
             fd = fs.openSync(path.join('/dev/input', js), fs.constants.O_RDONLY | fs.constants.O_NONBLOCK);
         } catch (err) {
             console.warn(`[HOTKEY] cannot read ${js}: ${err.code}`);
-            continue;
+            return () => {};
         }
-        const detector = createDetector({ buttons: COMBO, holdMs, onTrigger: onCombo });
+        const detector = createDetector({ buttons, holdMs, onTrigger: onCombo });
         const buf = Buffer.alloc(EVENT_SIZE * 64);
+        let gone = false;
         const timer = setInterval(() => {
             for (;;) {
                 let n;
                 try {
                     n = fs.readSync(fd, buf, 0, buf.length, null);
-                } catch {
-                    return; // EAGAIN: nothing new (or the device went away)
+                } catch (err) {
+                    if (err.code !== 'EAGAIN') gone = true;     // unplugged: the next scan lets it go
+                    return;
                 }
                 if (n <= 0) return;
                 detector.feed(buf.subarray(0, n));
             }
         }, 25);
-        watchers.push(() => { clearInterval(timer); detector.stop(); try { fs.closeSync(fd); } catch { /* already closed */ } });
+        const stop = () => { clearInterval(timer); detector.stop(); try { fs.closeSync(fd); } catch { /* already closed */ } };
+        stop.gone = () => gone;
+        return stop;
     }
-    return () => watchers.forEach(stop => stop());
+
+    function scan() {
+        let devices;
+        try { devices = listDevices(); } catch { devices = []; }
+        const now = new Map();
+        for (const d of devices) {
+            if (d.js === null || d.js === undefined) continue;
+            const combo = comboFor(d);
+            if (combo) now.set(`js${d.js}`, combo);
+        }
+        for (const [js, stop] of watchers) {
+            if (!now.has(js) || (stop.gone && stop.gone())) { stop(); watchers.delete(js); }
+        }
+        for (const [js, combo] of now) if (!watchers.has(js)) watchers.set(js, watch(js, combo));
+    }
+
+    scan();
+    const rescan = setInterval(scan, rescanMs);
+    return () => { clearInterval(rescan); for (const stop of watchers.values()) stop(); watchers.clear(); };
 }
 
-module.exports = { start, createDetector };
+function defaultDevices() {
+    const { parseProc } = require('./controllers');
+    let text = '';
+    try { text = fs.readFileSync('/proc/bus/input/devices', 'utf8'); } catch { /* no input subsystem */ }
+    const devices = parseProc(text);
+    if (devices.length) return devices;
+    // No /proc to read: every joystick device with the usual numbering
+    try { return fs.readdirSync('/dev/input').filter(n => /^js\d+$/.test(n)).map(n => ({ name: '', js: Number(n.slice(2)), keys: [] })); } catch { return []; }
+}
+
+module.exports = { start, createDetector, comboFor };

@@ -23,6 +23,8 @@
         "-b",
         "-C",
         "Dolphin.Display.Fullscreen=True",
+        "-C",
+        "Dolphin.Interface.ConfirmStop=False",
         "-e",
         "{rom}"
       ],

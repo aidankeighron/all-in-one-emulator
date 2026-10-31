@@ -605,6 +605,10 @@
         .pm-title { display: flex; justify-content: center; margin-bottom: 6px; }
         .pm-title .channel-badge { height: 24px; font-size: 12px; padding: 0 16px; }
         .pair-steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
+        .pair-flow { list-style: none; margin: 0; padding: 0; display: flex; gap: 8px; }
+        .pair-flow li { flex: 1 1 0; padding: 8px 10px; border-radius: 10px; border: 2px solid var(--wii-edge); font-weight: 700; font-size: 13px; color: var(--tx-8a9199); text-align: center; }
+        .pair-flow li.now { border-color: var(--wii-blue); color: inherit; }
+        .pair-flow li.done { color: #3d8f47; }
         .pair-list { display: flex; flex-direction: column; gap: 8px; }
         .pair-device { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--bg-ffffff); border: 2px solid var(--wii-edge); border-radius: 12px; padding: 8px 12px; font-weight: 700; }
         .pair-device small { display: block; color: var(--tx-8a9199); font-weight: 600; }
@@ -1852,6 +1856,12 @@
                 const changed = applyControllers(data);
                 if (changed && onControllers() && !settingsOpen) renderPage();
                 if (changed && pause.open) renderPause();
+                if (pair.open && pair.flow && pair.flow.step === 2) {
+                    const was = pair.lastJoined;
+                    pair.lastJoined = joinedPair();
+                    if (pair.lastJoined && !was) Sfx.play('select');
+                    renderPair();
+                }
             } catch { /* server hiccup: try again next time */ }
         }
         setInterval(refreshControllers, 2000);
@@ -2919,11 +2929,13 @@
         function renderPause() {
             document.getElementById('pause-title').textContent = pause.title || 'Game paused';
             const note = document.getElementById('pause-note');
-            note.textContent = pause.changed
-                ? 'Controllers changed. A running game cannot pick them up: choose Reset (it starts again on the same save).'
+            // The server compares the controllers now with what the game started with (status.controllersChanged)
+            note.textContent = pause.restart
+                ? 'The controllers changed. The game has to start again to use them: choose Reset (it starts again on the same save).'
+                : pause.changed ? 'Saved. Nothing to restart: the game keeps using the same controllers, and one that reconnects is picked up by itself.'
                 : pause.frozen ? '' : 'The game keeps running behind this menu.';
             note.style.display = note.textContent ? '' : 'none';
-            note.classList.toggle('warn', !pause.changed);
+            note.classList.toggle('warn', !pause.restart && !pause.changed);
 
             const btn = (item, i) => {
                 const [label, act] = item;
@@ -2978,7 +2990,7 @@
 
         function openPauseMenu(status) {
             const g = status && status.game && allGames.find(x => x.path === status.game.path);
-            Object.assign(pause, { open: true, i: PAUSE_START, confirm: null, changed: false, busy: false, frozen: !!(status && status.frozen), title: g ? g.title : 'Game paused' });
+            Object.assign(pause, { open: true, i: PAUSE_START, confirm: null, changed: false, restart: !!(status && status.controllersChanged), busy: false, frozen: !!(status && status.frozen), title: g ? g.title : 'Game paused' });
             lastInputTime = Date.now() + 600;       // the buttons that opened it may still be held
             Sfx.unlock();
             Sfx.play('open');
@@ -2991,6 +3003,11 @@
             if (!mine) return;
             if (status.paused && !pause.open) openPauseMenu(status);
             else if (!status.paused && pause.open && !pause.busy) closePauseMenu(true);
+            if (pause.open && !!status.controllersChanged !== pause.restart) {
+                pause.restart = !!status.controllersChanged;
+                if (pause.restart) pause.i = PAUSE_ITEMS.findIndex(x => x[1] === 'restart');
+                renderPause();
+            }
         }
 
         function closePauseMenu(quiet) {
@@ -3163,7 +3180,7 @@
                 if (res.ok) { plr.data = data; plr.error = ''; } else plr.error = data.message || 'That did not work.';
             } catch { plr.error = 'The menu could not be reached.'; }
             plr.syncing = false;
-            if (pause.open) { pause.changed = true; pause.i = PAUSE_ITEMS.findIndex(x => x[1] === 'restart'); renderPause(); }
+            if (pause.open) { pause.changed = true; renderPause(); }
             if (plr.open) renderPlayers();
             refreshControllers();
         }
@@ -3489,6 +3506,8 @@
         const PAIR_HELP = {
             pro: ['Hold the small round <b>sync button</b> on the top edge of the controller until its four lights sweep back and forth.'],
             joycon: ['Hold the small round <b>sync button</b> on the Joy-Con’s rail side until its four lights sweep back and forth.', 'Connect one Joy-Con at a time: run this again for the other one.'],
+            'joycon-l': ['Take the <b>left</b> Joy-Con (the one with − and the arrow buttons). Hold the small round <b>sync button</b> on its rail side until its four lights sweep back and forth.'],
+            'joycon-r': ['Now the <b>right</b> Joy-Con (the one with + and A B X Y). Hold the small round <b>sync button</b> on its rail side until its four lights sweep back and forth.'],
             switch: ['Hold the small round <b>sync button</b> on the controller until its four lights sweep back and forth.', 'Pro Controller: the button on the top edge. Joy-Con: the button on the rail side.'],
             wiimote: ['Press <b>1</b> and <b>2</b> on the Wii Remote together and keep them held.', 'Do not use the red sync button under the battery cover.']
         };
@@ -3520,7 +3539,12 @@
                     pair.job = (await (await fetch('/api/bluetooth/job')).json()).job;
                     if (!pair.job || pair.job.phase !== 'running') {
                         clearInterval(pair.poll);
-                        if (before === 'running') { Sfx.play(pair.job && pair.job.phase === 'done' ? 'select' : 'error'); await pairRefresh(); return; }
+                        if (before === 'running') {
+                            Sfx.play(pair.job && pair.job.phase === 'done' ? 'select' : 'error');
+                            if (flowAfterJob(pair.job)) return;
+                            await pairRefresh();
+                            return;
+                        }
                     }
                     renderPair();
                 } catch { /* try again next time */ }
@@ -3535,6 +3559,8 @@
 
             if (info && pair.screen === 'helper' && pair.helper && pair.helper.supported) {
                 return helperScreen();
+            } else if (info && pair.flow) {
+                return joyconFlowScreen();
             } else if (!info) {
                 body = '<div class="sheet-busy" style="min-height:120px"><span class="spinner"></span><span>Checking Bluetooth…</span></div>';
                 add('Close (B)', 'close');
@@ -3550,10 +3576,13 @@
                 const ok = job.phase === 'done';
                 title = ok ? 'All set' : 'That did not work';
                 body = `<div class="guide-box ${ok ? '' : 'off'}">${escapeHtml(job.message)}</div>`;
-                if (ok && job.kind === 'wiimote') {
-                    body += `<p>Give it to the next free player? Dolphin connects to it by itself when a game starts. You can change who uses it on the Players screen.</p>`;
+                // A remote the computer could not connect is not in the list, so it needs a player of its own; a connected one takes
+                // the next free player by itself
+                if (ok && job.kind === 'wiimote' && !/connected/i.test(job.message)) {
+                    body += `<p>Give it to the next free player? Dolphin connects to it by itself when a game starts. You can change who uses it on the Controllers page.</p>`;
                     add('Use it for the next player', 'wii-add', true);
                 }
+                if (ok && job.kind === 'joycon' && joycondOn()) body += `<p>To use it on its own, hold it sideways and press <b>SL</b> + <b>SR</b> together (the two small buttons on its rail). To join it with a second Joy-Con, choose <b>Two Joy-Cons as one</b> instead.</p>`;
                 if (!ok && job.kind !== 'setup') add('Try again', 'retry', true);
                 if (!ok && job.kind === 'setup') add('Try again', 'setup', true);
                 add('Done (B)', 'result-ok', ok && !buttons.length);
@@ -3581,12 +3610,16 @@
             } else {
                 body = `<p style="text-align:center">Choose what you want to connect.</p>`;
                 add('Switch Pro Controller', 'pair-pro', true);
-                add('Joy-Con', 'pair-joycon');
+                if (joycondOn()) {
+                    // joycond joins a left and a right Joy-Con into one controller, and lets one be used alone held sideways
+                    add('Two Joy-Cons as one', 'pair-joycons');
+                    add('One Joy-Con', 'pair-joycon');
+                } else add('Joy-Con', 'pair-joycon');
                 add('Wii Remote', 'pair-wiimote');
-                if (pair.helper && pair.helper.name === 'joycond' && pair.helper.running) {
-                    body += `<div class="guide-box off">joycond is on. It hides a single Joy-Con from the menu and the games until two are joined. To use Joy-Cons one by one (and join them yourself with both bumpers), turn it off.</div>`;
+                if (joycondOn()) {
+                    body += `<div class="guide-box">joycond is on: <b>Two Joy-Cons as one</b> connects the left one, then the right one, then shows how to join them. One Joy-Con on its own is held sideways (SL + SR). Turn joycond off to have every Joy-Con be a controller of its own.</div>`;
                     add('Turn off joycond', 'helper:disable');
-                }
+                } else body += `<p style="text-align:center;font-size:13px;color:var(--tx-8a9199)">Each Joy-Con is connected and used on its own.</p>`;
                 if (!info.nintendoDriver) body += `<div class="guide-box off">This system’s Linux kernel (${escapeHtml(info.kernel)}) is older than 5.16, so Switch controllers will not work. Update the system to a newer kernel.</div>`;
             }
 
@@ -3660,6 +3693,68 @@
             return { title, body, buttons };
         }
 
+        // ----- Two Joy-Cons as one (joycond): left, then right, then press L + R to join them -----
+        const joycondOn = () => !!(pair.helper && pair.helper.name === 'joycond' && pair.helper.running);
+        const FLOW_KINDS = ['joycon-l', 'joycon-r'];
+        // A Joy-Con of this side that is connected and not joined yet
+        const halfConnected = side => padList.some(c => c.kind === 'switch' && !c.combined && !/combined/i.test(c.name)
+            && (side === 'L' ? (c.product === '2006' || /\(l\)|left joy-?con/i.test(c.name)) : (c.product === '2007' || /\(r\)|right joy-?con/i.test(c.name))));
+        // joycond's joined controller ("Nintendo Switch Combined Joy-Cons")
+        const joinedPair = () => padList.some(c => /combined joy-?cons/i.test(c.name) || (c.vendor === '057e' && c.product === '2008' && !c.combined));
+
+        function flowStep(step) {
+            pair.flow = { step, joinedBefore: pair.flow ? pair.flow.joinedBefore : joinedPair() };
+            pair.focus = 0;
+            // a side that is connected already needs no pairing
+            if (step < 2 && halfConnected(step === 0 ? 'L' : 'R')) return flowStep(step + 1);
+            if (step < 2) return pairCall('/api/bluetooth/pair', { kind: FLOW_KINDS[step] });
+            renderPair();
+        }
+
+        // Called when a pairing finished: a finished side moves the steps on
+        function flowAfterJob(job) {
+            if (!pair.flow || !job || job.phase !== 'done') return false;
+            const at = FLOW_KINDS.indexOf(job.kind);
+            if (at < 0 || at !== pair.flow.step) return false;
+            flowStep(at + 1);
+            return true;
+        }
+
+        function joyconFlowScreen() {
+            const f = pair.flow, job = pair.job;
+            const buttons = [];
+            const add = (label, act, primary) => buttons.push({ label, act, primary });
+            const names = ['Left Joy-Con', 'Right Joy-Con', 'Join them'];
+            let body = `<ol class="pair-flow">${names.map((n, i) => `<li class="${i < f.step ? 'done' : i === f.step ? 'now' : ''}">${i < f.step ? '✓ ' : `${i + 1}. `}${n}</li>`).join('')}</ol>`;
+            let title = `Two Joy-Cons as one · step ${f.step + 1} of 3`;
+            if (f.step < 2) {
+                const kind = FLOW_KINDS[f.step], side = f.step === 0 ? 'left' : 'right';
+                const mine = job && job.kind === kind;
+                if (mine && job.phase === 'running') {
+                    body += `<div class="guide-box"><span class="spinner" style="vertical-align:-3px;margin-right:8px"></span>${escapeHtml(job.message)}</div>
+                        ${(PAIR_HELP[kind] || []).map(h => `<p>${h}</p>`).join('')}
+                        <div class="pair-log">${(job.lines || []).slice(-3).map(escapeHtml).join('<br>')}</div>`;
+                    add('Cancel (B)', 'flow-cancel');
+                } else {
+                    if (mine && job.phase === 'failed') body += `<div class="guide-box off">${escapeHtml(job.message)}</div>`;
+                    add(`Connect the ${side} Joy-Con`, 'flow-retry', true);
+                    add(`The ${side} one is connected already`, 'flow-skip');
+                    add('Close (B)', 'close');
+                }
+            } else if (joinedPair() && !f.joinedBefore || joinedPair() && !halfConnected('L') && !halfConnected('R')) {
+                title = 'All set';
+                body += `<div class="guide-box">The two Joy-Cons are one controller now. It is set up in the emulators when a game starts.</div>`;
+                add('Done (B)', 'close', true);
+            } else {
+                body += `<div class="guide-box"><b>Press L on the left Joy-Con and R on the right Joy-Con at the same time</b> (the top buttons, one on each).</div>
+                    <p>Their lights stop flashing and show the player number, and this screen moves on by itself. This is the step that joins them: without it the two are not one controller yet.</p>
+                    <p style="font-size:13px;color:var(--tx-8a9199)">To play with one Joy-Con on its own instead, hold it sideways and press SL + SR (the two small buttons on its rail).</p>`;
+                add('Close (B)', 'close');
+            }
+            if (pair.error) body += `<div class="guide-box off">${escapeHtml(pair.error)}</div>`;
+            return { title, body, buttons };
+        }
+
         function pairBack() {
             if (pair.screen === 'helper' && !(pair.helper && pair.helper.job && pair.helper.job.phase === 'running')) { pair.screen = null; pair.focus = 0; clearInterval(pair.helperPoll); renderPair(); }
             else closePair();
@@ -3686,7 +3781,7 @@
 
         async function openPair() {
             Sfx.play('open');
-            Object.assign(pair, { open: true, info: null, focus: 0, error: '', notice: '', showResult: false, screen: null });
+            Object.assign(pair, { open: true, info: null, focus: 0, error: '', notice: '', showResult: false, screen: null, flow: null });
             document.getElementById('pair-overlay').classList.add('open');
             renderPair();
             await pairRefresh();
@@ -3696,6 +3791,7 @@
         function closePair() {
             if (pair.job && pair.job.phase === 'running') fetch('/api/bluetooth/cancel', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
             pair.open = false;
+            pair.flow = null;
             clearInterval(pair.poll);
             document.getElementById('pair-overlay').classList.remove('open');
             lastInputTime = Date.now() + 300;
@@ -3717,6 +3813,10 @@
             if (act === 'setup') { pair.showResult = true; return pairCall('/api/bluetooth/setup'); }
             if (['pair-switch', 'pair-pro', 'pair-joycon', 'pair-wiimote'].includes(act)) { pair.screen = null; pair.showResult = true; pair.lastKind = act.slice(5); pair.focus = 0; return pairCall('/api/bluetooth/pair', { kind: pair.lastKind }); }
             if (act === 'retry') { pair.focus = 0; return pairCall('/api/bluetooth/pair', { kind: pair.lastKind || 'switch' }); }
+            if (act === 'pair-joycons') { pair.screen = null; pair.showResult = false; pair.flow = null; return flowStep(0); }
+            if (act === 'flow-retry') { pair.focus = 0; return pairCall('/api/bluetooth/pair', { kind: FLOW_KINDS[pair.flow.step] }); }
+            if (act === 'flow-skip') return flowStep(pair.flow.step + 1);
+            if (act === 'flow-cancel') { await pairCall('/api/bluetooth/cancel'); return renderPair(); }
             if (act === 'open-settings') return pairCall('/api/bluetooth/open-settings');
             if (act === 'forget') { await pairCall('/api/bluetooth/forget', { address: b.act.slice(7) }); return pairRefresh(); }
             if (act === 'players') { closePair(); return openPlayers(); }
@@ -4073,7 +4173,42 @@
 
         // Switch controllers (vendor 057e) in the browser's raw layout: the button order is the Linux one, which differs from the
         // standard layout in a few places. standard index -> raw index
-        const isNintendoPad = gp => /057e/i.test(gp.id || '');
+        // A Wii Remote (and its motion sensor and IR camera, which the system lists as devices of their own) is read through the
+        // server instead (below): the browser does not see its D-pad, and the sensors change all the time.
+        const isWiiRemotePad = gp => /wii remote|rvl-cnt/i.test(gp.id || '') || (/057e/i.test(gp.id || '') && ['0306', '0330'].includes(padIds(gp)[1]));
+        const isNintendoPad = gp => /057e/i.test(gp.id || '') && !isWiiRemotePad(gp);
+
+        // Real Wii Remotes, from the server (Linux): which buttons are down on each, and when that last changed
+        const wiiRemotes = new Map();       // id -> {buttons: Set, changedAt}
+        (function watchWiiRemotes() {
+            if (typeof EventSource === 'undefined') return;
+            const source = new EventSource('/api/wiimote/events');
+            source.onmessage = e => {
+                let data;
+                try { data = JSON.parse(e.data); } catch { return; }
+                if (data.supported === false) return source.close();
+                const now = Date.now(), seen = new Set();
+                for (const r of data.remotes || []) {
+                    seen.add(r.id);
+                    const before = wiiRemotes.get(r.id);
+                    const buttons = new Set(r.buttons || []);
+                    const same = before && before.buttons.size === buttons.size && [...buttons].every(b => before.buttons.has(b));
+                    // Buttons already down when a remote appears (1 + 2 held to connect it) count only once they have been let go
+                    const held = before ? new Set([...before.held].filter(b => buttons.has(b))) : new Set(buttons);
+                    wiiRemotes.set(r.id, { buttons, held, changedAt: before ? (same ? before.changedAt : now) : 0 });
+                }
+                for (const id of [...wiiRemotes.keys()]) if (!seen.has(id)) wiiRemotes.delete(id);
+            };
+        })();
+
+        // A Wii Remote held upright, as menu input: the D-pad moves, A selects, B goes back, 1 and 2 are X and Y,
+        // − and + change page, Home is Start
+        function wiiRemoteState(r, count) {
+            const on = n => r.buttons.has(n) && !r.held.has(n);
+            return { count, up: on('up'), down: on('down'), left: on('left'), right: on('right'),
+                     a: on('a'), b: on('b'), x: on('one'), y: on('two'), lb: on('minus'), rb: on('plus'), start: on('home'), back: false,
+                     scroll: 0, ids: ['Nintendo Wii Remote'], pressed: [...r.buttons].filter(on) };
+        }
         // The browser lists a pad's buttons in Linux key-code order, only those the pad has. The server tells which buttons each kind
         // of controller has (padKeyMap, by vendor:product), so the numbers can be turned into the standard layout exactly.
         let padKeyMap = {};
@@ -4119,17 +4254,21 @@
         function readPads() {
             const now = Date.now();
             updateHeld();
-            let pads = (navigator.getGamepads ? [...navigator.getGamepads()] : []).filter(Boolean);
+            let pads = (navigator.getGamepads ? [...navigator.getGamepads()] : []).filter(gp => gp && !isWiiRemotePad(gp));
             const standard = pads.filter(gp => gp.mapping === 'standard' || isNintendoPad(gp));
             if (standard.length) pads = standard;
             else if (pads.some(gp => gp.buttons.length >= 8)) pads = pads.filter(gp => gp.buttons.length >= 8);
 
-            const st = { count: pads.length, up: false, down: false, left: false, right: false,
+            const remotes = [...wiiRemotes.values()];
+            const remote = remotes.reduce((best, r) => (!best || r.changedAt > best.changedAt ? r : best), null);
+            const st = { count: pads.length + remotes.length, up: false, down: false, left: false, right: false,
                          a: false, b: false, x: false, y: false, lb: false, rb: false, start: false, back: false, ids: [], pressed: [] };
-            if (!pads.length) return st;
+            if (!pads.length) return remote ? wiiRemoteState(remote, st.count) : st;
 
             const tracked = pads.map(gp => ({ gp, s: trackPad(gp, now) }));
             const active = tracked.reduce((best, t) => (t.s.changedAt > best.s.changedAt ? t : best), tracked[0]);
+            // Whichever was used last counts: a gamepad or a Wii Remote
+            if (remote && remote.changedAt > active.s.changedAt) return wiiRemoteState(remote, st.count);
             const { gp, s } = active;
 
             const rawNintendo = gp.mapping !== 'standard' && isNintendoPad(gp);
