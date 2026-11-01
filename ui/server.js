@@ -1015,7 +1015,7 @@ function createServer(onGameState) {
                     const error = lastError;
                     lastError = null;
                     // Whether the controllers now differ from what the running game started with (it needs a Reset to use them)
-                    const controllersChanged = !!(current && current.plan && current.paused && controllerPlan(current.emulator) !== current.plan);
+                    const controllersChanged = !!(current && current.plan && controllerPlan(current.emulator) !== current.plan);
                     return sendJson(res, 200, { running: !!current || restarting, controllersChanged, game: current && { emulator: current.emulator, path: current.path }, paused: !!(current && current.paused), frozen: !!(current && current.frozenPids && current.frozenPids.length), error, sync: saves.activity() });
                 }
                 if (route === 'POST /api/game/resume') { resumeGame(); return sendJson(res, 200, { ok: true }); }

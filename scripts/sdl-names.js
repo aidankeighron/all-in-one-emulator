@@ -2,12 +2,17 @@
 // SDL does not use the name the kernel reports: it has its own names for well-known controllers (by vendor and product),
 // and a controller found in its built-in mapping database is called by the name in that database.
 //
-//   node scripts/sdl-names.js            downloads SDL's sources from GitHub
-//   node scripts/sdl-names.js <dir>      reads controller_list.h and SDL_gamepad_db.h from a folder
+// Use the SDL that Dolphin's Flatpak is built with (its Externals/SDL/SDL submodule), since that decides the names:
+//   node scripts/sdl-names.js --ref=<SDL commit>     downloads that commit's sources from GitHub (default: main)
+//   node scripts/sdl-names.js <dir> [--ref=<commit>] reads controller_list.h and SDL_gamepad_db.h from a folder
+// To find the commit: the `commit:` of dolphin in github.com/flathub/org.DolphinEmu.dolphin-emu, then
+// `git ls-tree <that commit> Externals/SDL/SDL` in a Dolphin checkout.
 const fs = require('fs');
 const path = require('path');
 
-const BASE = 'https://raw.githubusercontent.com/libsdl-org/SDL/main/src/joystick/';
+const args = process.argv.slice(2);
+const REF = (args.find(a => a.startsWith('--ref=')) || '--ref=main').slice(6);
+const BASE = `https://raw.githubusercontent.com/libsdl-org/SDL/${REF}/src/joystick/`;
 
 async function read(dir, name) {
     if (dir) return fs.readFileSync(path.join(dir, name), 'utf8');
@@ -17,7 +22,7 @@ async function read(dir, name) {
 }
 
 async function main() {
-    const dir = process.argv[2];
+    const dir = args.find(a => !a.startsWith('--'));
     const list = await read(dir, 'controller_list.h');
     const db = await read(dir, 'SDL_gamepad_db.h');
 
@@ -34,12 +39,15 @@ async function main() {
     const linuxPart = db.slice(start, db.indexOf('#endif', start));
     const linux = [];
     for (const m of linuxPart.matchAll(/^\s*"([0-9a-f]{32}),([^,]*),([^"]*)"/gim)) {
-        const crc = /(?:^|,)crc:([0-9a-f]{4})/i.exec(m[3]);
-        linux.push(crc ? [m[1].toLowerCase(), m[2], crc[1].toLowerCase()] : [m[1].toLowerCase(), m[2]]);
+        let guid = m[1].toLowerCase();
+        let crc = (/(?:^|,)crc:([0-9a-f]{4})/i.exec(m[3]) || [])[1];
+        // Older databases keep the name's checksum inside the id (bytes 2-3, little-endian) instead of a crc: field
+        if (guid.slice(4, 8) !== '0000') { crc = crc || guid.slice(6, 8) + guid.slice(4, 6); guid = guid.slice(0, 4) + '0000' + guid.slice(8); }
+        linux.push(crc ? [guid, m[2], crc.toLowerCase()] : [guid, m[2]]);
     }
 
     const out = path.join(__dirname, '..', 'ui', 'lib', 'sdlnames.json');
-    fs.writeFileSync(out, JSON.stringify({ source: 'libsdl-org/SDL src/joystick (controller_list.h, SDL_gamepad_db.h)', names, linux }) + '\n');
+    fs.writeFileSync(out, JSON.stringify({ source: `libsdl-org/SDL ${REF} src/joystick (controller_list.h, SDL_gamepad_db.h)`, names, linux }) + '\n');
     console.log(`${Object.keys(names).length} names, ${linux.length} Linux mappings -> ${out}`);
 }
 

@@ -312,7 +312,8 @@ menu runs (a Wii Remote that went to sleep, say) keeps its place instead of movi
 is often not the name the system shows (`Microsoft X-Box 360 pad`; joycond's `Nintendo Switch Combined Joy-Cons` is
 `Nintendo Switch Joy-Con (L/R)` to SDL). The menu works out SDL's name the way SDL does: its mapping database, then its own
 names for known vendor and product ids, then the system's name tidied up. The tables are in `ui/lib/sdlnames.json`, taken from
-SDL's sources (`node scripts/sdl-names.js` refreshes them). On Linux the menu also tells Dolphin's SDL to read Joy-Cons
+the SDL that Dolphin's Flatpak is built with (`node scripts/sdl-names.js --ref=<SDL commit>` refreshes them; the script
+says how to find the commit). On Linux the menu also tells Dolphin's SDL to read Joy-Cons
 through the kernel (`SDL_JOYSTICK_HIDAPI_JOY_CONS = 0` in `[SDL_Hints]`), so it sees the same controllers the menu lists,
 except when a pair joined in the menu is used (only SDL itself can join those). Existing settings in the files
 are kept; only the controller entries are replaced, and the first time a file is changed the original is
