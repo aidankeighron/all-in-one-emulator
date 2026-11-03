@@ -80,7 +80,7 @@ function packageCommand(has) {
     return null;
 }
 
-function createBluetooth({ platform = process.platform, execImpl = execFile, spawnImpl = spawn, exists = fs.existsSync, release = os.release(), log = () => {}, scanSeconds = 30, stepSeconds = 20, retryMs = 2500 } = {}) {
+function createBluetooth({ platform = process.platform, execImpl = execFile, spawnImpl = spawn, exists = fs.existsSync, release = os.release(), log = () => {}, scanSeconds = 30, stepSeconds = 20, retryMs = 2500, selfWaitMs = 4000, pollMs = 250, inputPresent = null } = {}) {
     const win = platform === 'win32';
     let job = null;       // the one thing happening now: {kind, phase, message, lines, device}
     let session = null;   // the running bluetoothctl for a pairing job
@@ -113,7 +113,7 @@ function createBluetooth({ platform = process.platform, execImpl = execFile, spa
     function snapshot() {
         if (!job) return null;
         const out = { kind: job.kind, phase: job.phase, message: job.message, lines: job.lines.slice(-12), device: job.device || null };
-        if (job.multi) { out.multi = true; out.devices = job.devices.map(d => ({ ...d })); }
+        if (job.multi) { out.multi = true; out.devices = job.devices.map(d => ({ ...d })); out.waiting = (job.queue || []).map(q => ({ address: q.address, type: classifyDevice(q.name), label: TYPE_LABELS[classifyDevice(q.name)] })); }
         return out;
     }
 
@@ -196,6 +196,7 @@ function createBluetooth({ platform = process.platform, execImpl = execFile, spa
             if (session === child) session = null;
         };
         mine.finish = finish;
+        mine.queue = queue;
         // What everyone at once ends with: who was connected
         const summary = () => {
             const ok = mine.devices.filter(d => d.ok);
@@ -239,31 +240,56 @@ function createBluetooth({ platform = process.platform, execImpl = execFile, spa
         const repaired = new Set();       // controllers whose old pairing was thrown away once already (never loops)
         const connectedText = type => (type === 'wiimote' ? 'Wii Remote connected. Use the D-pad and A in the menu; in a game Dolphin uses it as a real Wii Remote.' : `${TYPE_LABELS[type]} connected`);
 
-        // The last step. A Switch controller often connects to the computer by itself right after pairing, and an explicit
-        // "connect" at that moment fails ("br-connection-create-socket") although the controller is there: so it counts as
-        // connected as soon as BlueZ says so, a failed attempt is tried again a little later, and a controller BlueZ only knew
-        // from an old pairing (one it may have forgotten, say after it was used with a Switch) is unpaired and paired afresh.
-        function connectStep(device, attempt = 1) {
-            if (mine.device !== device || finished) return;
-            if (device.linked) return settle(true, connectedText(device.type));
+        // Sends a command and waits for its answer: 'ok', 'bad' or 'timeout'
+        const ask = (cmd, ok, bad, ms) => new Promise(resolve => {
+            const t = setTimeout(() => { if (pending && pending.ok === ok) pending = null; resolve('timeout'); }, ms);
+            expect(ok, bad, () => { clearTimeout(t); resolve('ok'); }, () => { clearTimeout(t); pending = null; resolve('bad'); });
+            send(cmd);
+        });
+        // True as soon as the controller is on the computer as a controller (an input device with its address), false when
+        // it is not within `ms`. Without a way to look (inputPresent), bluetoothctl's own answer is all there is.
+        const sleep = ms => new Promise(r => setTimeout(r, ms));
+        async function present(device, ms) {
+            if (!inputPresent) return false;
+            const end = Date.now() + ms;
+            for (;;) {
+                if (mine.device !== device || finished) return false;
+                try { if (inputPresent(device.address)) return true; } catch { /* look again */ }
+                if (Date.now() >= end) return false;
+                await sleep(pollMs);
+            }
+        }
+
+        // The last step: the controller has to turn up on the computer as a controller. Bluetooth says "Connected: yes" as soon
+        // as the radio link is up (during pairing already), which is not enough: the controller part has to connect too. A Switch
+        // controller usually does that itself right after pairing, and an explicit "connect" at that moment can fail
+        // ("br-connection-create-socket") although it works out, so the menu first waits a moment, then asks, up to three
+        // times. A controller BlueZ only knew from an old pairing (it may have forgotten it, say after it was used with a
+        // Switch) is unpaired and paired afresh once.
+        async function connectStep(device) {
+            const alive = () => mine.device === device && !finished;
             mine.stage = 'connecting';
-            send(`connect ${device.address}`);
-            arm(stepSeconds, 'Paired, but it did not connect. Press a button on the controller, or retry.');
-            expect(/Connection successful/i, /Failed to connect/i, () => settle(true, connectedText(device.type)), line => {
-                if (device.linked) return settle(true, connectedText(device.type));
-                if (attempt < 3) { pending = null; setTimeout(() => connectStep(device, attempt + 1), retryMs); return; }
-                if (device.stale && !repaired.has(device.address)) {
-                    repaired.add(device.address);
-                    add(`${device.label}: old pairing did not work, pairing it again`);
-                    pending = null;
-                    send(`remove ${device.address}`);
-                    mine.device = null;
-                    mine.stage = 'scanning';
-                    send('scan on');
-                    return multi ? idle() : arm(scanSeconds, 'The controller did not connect. Hold its sync button until the lights sweep, then try again.');
-                }
-                return fail(line.replace(/^.*Failed to \w+:?\s*/i, 'Failed: '));
-            });
+            clearTimeout(timer);
+            if (await present(device, selfWaitMs)) return alive() && settle(true, connectedText(device.type));
+            for (let attempt = 1; attempt <= 3 && alive(); attempt++) {
+                const answer = await ask(`connect ${device.address}`, /Connection successful/i, /Failed to connect/i, stepSeconds * 1000);
+                if (!alive()) return;
+                if (!inputPresent && answer === 'ok') return settle(true, connectedText(device.type));
+                if (await present(device, answer === 'ok' ? stepSeconds * 500 : retryMs)) return alive() && settle(true, connectedText(device.type));
+                if (!alive()) return;
+                add(`${device.label}: not connected yet (${answer === 'bad' ? 'Bluetooth refused' : answer === 'ok' ? 'no controller appeared' : 'no answer'}), trying again`);
+            }
+            if (!alive()) return;
+            if (device.stale && !repaired.has(device.address)) {
+                repaired.add(device.address);
+                add(`${device.label}: old pairing did not work, pairing it again`);
+                send(`remove ${device.address}`);
+                mine.device = null;
+                mine.stage = 'scanning';
+                send('scan on');
+                return multi ? idle() : arm(scanSeconds, 'The controller did not connect. Hold its sync button until the lights sweep, then try again.');
+            }
+            fail('Paired, but it did not connect. Hold its sync button again.');
         }
 
         function found(address, name) {
@@ -276,7 +302,7 @@ function createBluetooth({ platform = process.platform, execImpl = execFile, spa
             // a controller that connected is done; one that did not is tried again when it turns up again
             if (multi && mine.devices.some(d => d.address === address && d.ok)) return;
             if (multi) mine.devices = mine.devices.filter(d => d.address !== address);
-            mine.device = { address, name, type, label: TYPE_LABELS[type], linked: false, stale: false };
+            mine.device = { address, name, type, label: TYPE_LABELS[type], stale: false };
             const device = mine.device;
             // A Wii Remote is connected to the computer too (BlueZ knows how to pair one), so it can drive the menu; Dolphin
             // still finds it when a game starts
@@ -334,16 +360,8 @@ function createBluetooth({ platform = process.platform, execImpl = execFile, spa
                 const ev = parseLine(line);
                 if (!ev) continue;
                 // Anything a known controller reports means it is in range right now
-                if (ev.event === 'prop' && /Connected: yes/i.test(ev.text)) {
-                    // the controller being paired connected by itself: that is the last step done
-                    if (mine.device && mine.device.address === ev.address) {
-                        mine.device.linked = true;
-                        if (mine.stage === 'connecting') settle(true, connectedText(mine.device.type));
-                        continue;
-                    }
-                    connected.add(ev.address);
-                    continue;
-                }
+                // (the controller being paired says so while pairing already: that is only the radio link, see connectStep)
+                if (ev.event === 'prop' && /Connected: yes/i.test(ev.text)) { if (!(mine.device && mine.device.address === ev.address)) connected.add(ev.address); continue; }
                 if (ev.event === 'prop' && /Connected: no/i.test(ev.text)) connected.delete(ev.address);
                 if (ev.event === 'prop' && names.has(ev.address) && /RSSI:/i.test(ev.text)) { found(ev.address, names.get(ev.address)); continue; }
                 if (ev.event === 'new') { names.set(ev.address, ev.name); found(ev.address, ev.name); }

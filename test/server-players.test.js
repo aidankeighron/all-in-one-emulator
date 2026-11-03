@@ -129,3 +129,27 @@ test('the Controllers page shows controllers in player order, and they can be mo
         assert.strictEqual(r.status, 400);
     } finally { srv.close(); controllers.detect = realDetect; }
 });
+
+test('closing the Connect screen gives every controller without a player a free one, and they keep it', async () => {
+    const controllers = require('../ui/lib/controllers');
+    const dev = (name, vendor, product, js) => `I: Bus=0005 Vendor=${vendor} Product=${product} Version=0110\nN: Name="${name}"\nP: Phys=\nS: Sysfs=/x\nU: Uniq=\nH: Handlers=event${js + 10} js${js}\nB: PROP=0\n`;
+    const procFile = path.join(tmp('proc'), 'devices');
+    fs.writeFileSync(procFile, [dev('Microsoft X-Box 360 pad', '045e', '028e', 0), dev('Pro Controller', '057e', '2009', 1), dev('Nintendo Switch Left Joy-Con', '057e', '2006', 2)].join('\n'));
+    const realDetect = controllers.detect;
+    controllers.detect = opts => realDetect({ ...opts, procFile, usbRoot: '/nonexistent' });
+    const { server: srv, port } = await server.start({ port: 0 });
+    try {
+        // players 1 and 2 are kept for controllers that are not here, 3 is the Xbox pad, 4 is free
+        await api(port, 'POST', '/api/players', { players: [{ device: 'pad:x:y:Gone#0' }, { device: 'pad:x:y:Gone too#0' }, { device: 'pad:045e:028e:Microsoft X-Box 360 pad#0' }, { device: 'auto' }] });
+        const r = await api(port, 'POST', '/api/players/fill');
+        assert.strictEqual(r.status, 200);
+        // the two new ones take the lowest free players in the order they connected (a player kept for a controller that is
+        // not here counts as free, and so does one that only had a controller on automatic)
+        assert.deepStrictEqual(r.body.placed.map(p => p.player), [1, 2]);
+        assert.deepStrictEqual(r.body.placed.map(p => p.name).sort(), ['Nintendo Switch Left Joy-Con', 'Pro Controller']);
+        const players = (await api(port, 'GET', '/api/players')).body.players;
+        assert.ok(players.slice(0, 3).every(p => p.device.startsWith('pad:')), 'the three controllers keep their players');
+        assert.strictEqual(players[3].device, 'auto', 'player 4 is still free for the next one');
+        assert.strictEqual(players[2].device, 'pad:045e:028e:Microsoft X-Box 360 pad#0', 'the Xbox pad stays player 3');
+    } finally { srv.close(); controllers.detect = realDetect; }
+});

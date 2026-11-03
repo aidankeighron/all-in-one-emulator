@@ -202,13 +202,27 @@ async function settled(b, ms = 4000) {
     return b.snapshot();
 }
 
-test('a Joy-Con that connects by itself after pairing counts as connected, although "connect" failed', async () => {
-    const { spawnImpl } = fakeSelfConnecting();
-    const b = bt.createBluetooth({ platform: 'linux', spawnImpl, exists: () => false, retryMs: 30 });
+test('a Joy-Con counts as connected once it is on the computer as a controller, even when "connect" failed', async () => {
+    const { spawnImpl, calls } = fakeSelfConnecting();
+    let since = 0;
+    // the controller part comes up by itself a moment after pairing
+    const inputPresent = () => { if (!since && calls.includes('trust')) since = Date.now(); return since && Date.now() - since > 60; };
+    const b = bt.createBluetooth({ platform: 'linux', spawnImpl, exists: () => false, retryMs: 30, selfWaitMs: 20, pollMs: 10, inputPresent });
     b.startPairing('all');
     const job = await settled(b);
     b.cancel();
     assert.deepStrictEqual(job.devices.map(d => [d.label, d.ok]), [['Joy-Con (R)', true]]);
+});
+
+test('"Connected: yes" from Bluetooth alone is not connected: without the controller showing up it is a failure, and is not hidden', async () => {
+    const { spawnImpl, calls } = fakeSelfConnecting();
+    const b = bt.createBluetooth({ platform: 'linux', spawnImpl, exists: () => false, retryMs: 20, selfWaitMs: 20, pollMs: 10, stepSeconds: 0.2, inputPresent: () => false });
+    b.startPairing('all');
+    const end = Date.now() + 4000;
+    while (Date.now() < end && !(b.snapshot().devices || []).length) await new Promise(r => setTimeout(r, 20));
+    const job = b.cancel();
+    assert.deepStrictEqual(job.devices.map(d => [d.label, d.ok]), [['Joy-Con (R)', false]]);
+    assert.strictEqual(calls.filter(c => c === 'connect').length, 3, 'it asked three times');
 });
 
 test('a Joy-Con BlueZ only knew from an old pairing is unpaired and paired afresh when it will not connect', async () => {

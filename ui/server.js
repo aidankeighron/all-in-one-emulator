@@ -453,7 +453,11 @@ function readJson(req) {
     });
 }
 
-const bluetooth = bluetoothLib.createBluetooth({ log: console.log });
+// A paired controller only counts as connected once the system shows it as a controller (an input device with its address)
+const inputPresent = address => {
+    try { return controllers.parseProc(fs.readFileSync('/proc/bus/input/devices', 'utf8')).some(d => d.address === address); } catch { return false; }
+};
+const bluetooth = bluetoothLib.createBluetooth({ log: console.log, inputPresent: runner.platform === 'linux' ? inputPresent : null });
 const wiimoteAccess = wiimoteAccessLib.createWiimoteAccess({ platform: runner.platform });
 
 // Whether a Wii Remote is paired with this computer (then free players in Dolphin wait for one, see inputconfig)
@@ -760,6 +764,27 @@ async function handlePlayers(route, req, res) {
             if (address) realFor.set(address, done.player);
             await syncNow();
             return sendJson(res, 200, { player: done.player + 1 }), true;
+        }
+        if (route === 'POST /api/players/fill') {
+            // The Connect screen closed. Like the Switch: the controllers that no player asked for by name take the lowest free
+            // players in the order they connected (a free player has nothing, or a controller only on automatic, or is kept
+            // for one that is not here), and keep them from now on. A player kept for a real Wii Remote stays as it is.
+            const list = detectPads();
+            const players = config.getPlayers();
+            const view = inputconfig.describe(list, { players, wiiRemotes: config.getWiiRemotes() }, mappings);
+            const held = new Set(view.slots.filter(sl => sl.mode === 'pad' && sl.request.device !== 'auto').map(sl => sl.controller));
+            const toPlace = list.filter(c => c.pad && !c.adapter && !held.has(c));
+            const free = view.slots.filter(sl => sl.mode === 'empty' || (sl.mode === 'pad' && sl.request.device === 'auto')).map(sl => sl.index);
+            const placed = [];
+            toPlace.forEach((c, i) => {
+                if (i >= free.length) return;
+                const to = free[i];
+                players[to] = { ...players[to], device: playersLib.padKey(c) };
+                if (view.playerOf[c.id] !== to + 1) placed.push({ name: c.name, player: to + 1 });
+            });
+            config.setPlayers(players);
+            await syncNow();
+            return sendJson(res, 200, { ...controllersView(), placed }), true;
         }
         if (route === 'POST /api/controllers/remove') {
             // B on the Controllers page. A Bluetooth controller is disconnected (stays paired: a button press connects it again)

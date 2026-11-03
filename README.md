@@ -399,8 +399,13 @@ BetterJoy or joycond, rumble goes through the same way.
 On the Controllers page (LB from the first page, or click the controller chip at the top right) choose **Connect a
 controller**. The screen starts looking at once, like the Switch's controller screen: everyone puts their controller in
 pairing mode at the same time and the menu pairs, trusts and connects each one as it turns up (one after another, a few
-seconds each), until you press **Done** (or nothing new turns up for three minutes; **Look again** starts over). The four
-buttons only show how to put each kind in pairing mode:
+seconds each), until you press **Done** (or nothing new turns up for three minutes; **Look again** starts over).
+
+Every controller shows as a card: the ones on the computer solid, with their player lights; one being found or connected
+greyed out until it is really there (it only counts as connected once the system shows it as a controller, not when
+Bluetooth's radio link is up). Pressing **L** on one Joy-Con and **R** on another joins them right on this screen (joycond does
+it when it runs). Closing the screen gives every controller that has no player the lowest free player, in the order they
+connected, and they keep those players. The four buttons only show how to put each kind in pairing mode:
 
 | Button | How |
 |---|---|
@@ -416,10 +421,9 @@ and is tried again when it is put in pairing mode again.
   prompt through `pkexec`; `apt`, `dnf`, `pacman` and `zypper` are supported), then starts looking. Switch controllers need
   Linux 5.16 or newer (the menu checks).
   - **Switch controllers that "failed to connect" (`br-connection-create-socket`):** a Joy-Con often connects to the computer
-    by itself right after pairing, and the menu's own connect request at that moment fails although the controller is there.
-    It now counts as connected as soon as Bluetooth says so, a failed request is tried twice more, and a controller Bluetooth
-    only knew from an old pairing (one it may have forgotten, say after it was used with a Switch) is unpaired and paired
-    afresh once.
+    by itself right after pairing, and the menu's own connect request at that moment can fail although it works out. So the
+    menu waits a moment for the controller to show up, then asks (up to three times), and a controller Bluetooth only knew
+    from an old pairing (one it may have forgotten, say after it was used with a Switch) is unpaired and paired afresh once.
   - **Wii Remote:** connected to the computer so it can drive the menu (held upright: D-pad moves, **A** chooses, **B** goes
     back, **1** / **2** are X / Y, **−** / **+** change page, **Home** is Start). The kernel shows its D-pad as arrow keys,
     which the browser's gamepad support leaves out, so the menu reads the remote itself (`ui/lib/wiimote.js`, from
