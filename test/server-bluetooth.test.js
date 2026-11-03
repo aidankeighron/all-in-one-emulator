@@ -54,3 +54,26 @@ test('the Bluetooth API refuses other sites and bad input', async () => {
         assert.strictEqual(r.status, 200);
     } finally { srv.close(); }
 });
+
+test('the same Wii Remote given a player twice keeps one player, and a player kept for a remote can be let go', async () => {
+    const { server: srv, port } = await server.start({ port: 0 });
+    try {
+        await api(port, 'POST', '/api/players', { players: [] });
+        let r = await api(port, 'POST', '/api/players/add-real', { address: 'aa:bb:cc:dd:ee:01' });
+        assert.strictEqual(r.body.player, 1);
+        r = await api(port, 'POST', '/api/players/add-real', { address: 'AA:BB:CC:DD:EE:01' });
+        assert.strictEqual(r.body.player, 1, 'paired again: still player 1, no second (ghost) player');
+        r = await api(port, 'POST', '/api/players/add-real', { address: 'AA:BB:CC:DD:EE:02' });
+        assert.strictEqual(r.body.player, 2, 'another remote gets the next player');
+
+        r = await api(port, 'GET', '/api/controllers');
+        assert.deepStrictEqual(r.body.controllers.filter(c => c.virtual).map(c => c.player), [1, 2]);
+        r = await api(port, 'POST', '/api/controllers/remove', { key: 'real', player: 1 });
+        assert.strictEqual(r.status, 200);
+        assert.deepStrictEqual(r.body.controllers.filter(c => c.virtual).map(c => c.player), [2]);
+        r = await api(port, 'POST', '/api/controllers/remove', { key: 'real', player: 1 });
+        assert.strictEqual(r.status, 400, 'nothing kept there any more');
+        r = await api(port, 'POST', '/api/controllers/remove', { key: 'pad:nothing', how: 'forget' });
+        assert.strictEqual(r.status, 404);
+    } finally { srv.close(); }
+});

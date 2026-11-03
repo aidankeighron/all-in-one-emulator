@@ -36,7 +36,10 @@ const KIND_TYPES = {
     joycon: ['joycon-l', 'joycon-r'],
     // one side only: the steps that connect a left and then a right Joy-Con to be joined
     'joycon-l': ['joycon-l'],
-    'joycon-r': ['joycon-r']
+    'joycon-r': ['joycon-r'],
+    // everyone at once (like the Switch's controller screen): every Switch controller and Wii Remote that turns up, one
+    // after another, until the screen is closed
+    all: ['pro', 'joycon-l', 'joycon-r', 'wiimote']
 };
 
 const TYPE_LABELS = { wiimote: 'Wii Remote', pro: 'Switch Pro Controller', 'joycon-l': 'Joy-Con (L)', 'joycon-r': 'Joy-Con (R)', 'balance-board': 'Balance Board' };
@@ -108,7 +111,10 @@ function createBluetooth({ platform = process.platform, execImpl = execFile, spa
     }
 
     function snapshot() {
-        return job ? { kind: job.kind, phase: job.phase, message: job.message, lines: job.lines.slice(-12), device: job.device || null } : null;
+        if (!job) return null;
+        const out = { kind: job.kind, phase: job.phase, message: job.message, lines: job.lines.slice(-12), device: job.device || null };
+        if (job.multi) { out.multi = true; out.devices = job.devices.map(d => ({ ...d })); }
+        return out;
     }
 
     // ---------- Setup (install and turn on) ----------
@@ -154,12 +160,14 @@ function createBluetooth({ platform = process.platform, execImpl = execFile, spa
 
     // ---------- Pairing ----------
 
-    // kind: 'switch' pairs the first Switch controller that appears; 'wiimote' only looks for one.
+    // kind: 'switch' pairs the first Switch controller that appears; 'wiimote' the first Wii Remote. 'all' keeps going: every
+    // Switch controller and Wii Remote that turns up is paired in turn (job.devices), until cancel() or a long quiet spell.
     function startPairing(kind) {
         if (win) throw Object.assign(new Error('Pair in Windows settings'), { code: 'MANUAL' });
         if (!KIND_TYPES[kind]) throw Object.assign(new Error('Unknown controller type'), { code: 'BAD_KIND' });
         if (job && job.phase === 'running') throw Object.assign(new Error('Something is already in progress'), { code: 'BUSY' });
-        const mine = job = { kind, phase: 'running', stage: 'scanning', message: 'Looking for your controller…', lines: [], device: null };
+        const multi = kind === 'all';
+        const mine = job = { kind, multi, phase: 'running', stage: 'scanning', message: multi ? 'Waiting for controllers…' : 'Looking for your controller…', lines: [], device: null, devices: [] };
         const add = line => { mine.lines.push(line); log(`[BT] ${line}`); };
         const wanted = KIND_TYPES[kind];
 
@@ -174,6 +182,7 @@ function createBluetooth({ platform = process.platform, execImpl = execFile, spa
         const names = new Map();
         let timer = null, pending = null, finished = false, infoFor = null;
         const connected = new Set();      // controllers that are connected already: not the one being looked for
+        const queue = [];                 // everyone at once: controllers that turned up while another one was being paired
 
         const finish = (phase, message) => {
             if (finished) return;
@@ -186,18 +195,56 @@ function createBluetooth({ platform = process.platform, execImpl = execFile, spa
             setTimeout(() => { try { child.kill(); } catch { /* done */ } }, 500);
             if (session === child) session = null;
         };
+        mine.finish = finish;
+        // What everyone at once ends with: who was connected
+        const summary = () => {
+            const ok = mine.devices.filter(d => d.ok);
+            return ok.length ? `Connected: ${ok.map(d => d.label).join(', ')}` : 'No new controller was connected';
+        };
+        mine.summary = summary;
         // A Wii Remote that cannot be connected to the computer still works in games (Dolphin connects it itself), so that is
         // not a failure, only a remote the menu cannot be driven with
         const WII_LATER = 'Wii Remote found. The menu could not connect it, but Dolphin connects it by itself when a game starts: press 1 + 2 then.';
-        const fail = message => (kind === 'wiimote' && mine.device ? finish('done', WII_LATER) : finish('failed', message));
         const arm = (seconds, message) => { clearTimeout(timer); timer = setTimeout(() => fail(message), seconds * 1000); };
+        // Everyone at once waits this long for the next controller before it stops by itself
+        const MULTI_IDLE = scanSeconds * 6;
+        const idle = () => arm(MULTI_IDLE, null);
+
+        // One controller is finished with (connected, or not): a single search ends there, everyone at once goes on looking
+        function settle(ok, message) {
+            const d = mine.device;
+            if (!multi) return finish(ok ? 'done' : (kind === 'wiimote' && d ? 'done' : 'failed'), ok ? message : (kind === 'wiimote' && d ? WII_LATER : message));
+            if (d) {
+                const later = !ok && d.type === 'wiimote';
+                mine.devices.push({ ...d, ok: ok || later, note: ok ? 'connected' : later ? 'Dolphin connects it when a game starts' : message });
+                connected.add(d.address);
+                add(ok ? `${d.label} connected` : later ? `${d.label} found (Dolphin connects it in a game)` : `${d.label}: ${message}`);
+            }
+            mine.device = null;
+            mine.stage = 'scanning';
+            pending = null;
+            const next = queue.shift();
+            if (next) return found(next.address, next.name);
+            mine.message = mine.devices.length ? `${summary()}. Connect more, or press Done.` : 'Waiting for controllers…';
+            send('scan on');
+            idle();
+        }
+        function fail(message) {
+            if (multi && !mine.device) return finish(mine.devices.length ? 'done' : 'failed', mine.devices.length ? summary() : 'No controller turned up. Hold the sync button (Switch) or press 1 + 2 (Wii Remote), then try again.');
+            return settle(false, message);
+        }
 
         // A step of the pairing conversation waits for one of these lines
         const expect = (ok, bad, then) => { pending = { ok, bad, then }; };
 
         function found(address, name) {
             const type = classifyDevice(name);
-            if (!type || !wanted.includes(type) || mine.device || connected.has(address)) return;
+            if (!type || !wanted.includes(type) || finished || connected.has(address)) return;
+            if (mine.device) {
+                if (multi && mine.device.address !== address && !queue.some(q => q.address === address)) queue.push({ address, name });
+                return;
+            }
+            if (multi && mine.devices.some(d => d.address === address)) return;
             mine.device = { address, name, type, label: TYPE_LABELS[type] };
             // A Wii Remote is connected to the computer too (BlueZ knows how to pair one), so it can drive the menu; Dolphin
             // still finds it when a game starts
@@ -211,7 +258,7 @@ function createBluetooth({ platform = process.platform, execImpl = execFile, spa
                 expect(/trust succeeded|trusted: yes/i, /Failed to trust/i, () => {
                     send(`connect ${address}`);
                     arm(stepSeconds, 'Paired, but it did not connect. Press a button on the controller, or retry.');
-                    expect(/Connection successful/i, /Failed to connect/i, () => finish('done', type === 'wiimote' ? 'Wii Remote connected. Use the D-pad and A in the menu; in a game Dolphin uses it as a real Wii Remote.' : `${TYPE_LABELS[type]} connected`));
+                    expect(/Connection successful/i, /Failed to connect/i, () => settle(true, type === 'wiimote' ? 'Wii Remote connected. Use the D-pad and A in the menu; in a game Dolphin uses it as a real Wii Remote.' : `${TYPE_LABELS[type]} connected`));
                 });
             });
             send(`pair ${address}`);
@@ -244,7 +291,7 @@ function createBluetooth({ platform = process.platform, execImpl = execFile, spa
                     // Listed by `devices`: ask whether it is connected or advertising right now (a controller added from
                     // the system's Bluetooth settings is already here and never announces itself again)
                     const t = classifyDevice(known[2]);
-                    if (t && wanted.includes(t) && !mine.device && !finished) send(`info ${addr}`);
+                    if (t && wanted.includes(t) && (multi || !mine.device) && !finished) send(`info ${addr}`);
                     continue;
                 }
                 if (known) { infoFor = known[1].toUpperCase(); continue; }       // the header of an `info` answer
@@ -275,13 +322,16 @@ function createBluetooth({ platform = process.platform, execImpl = execFile, spa
         // First find out which controllers are connected already (so the same one is not picked again), then search
         send('devices');
         setTimeout(() => { if (!finished) send('scan on'); }, 800);
-        arm(scanSeconds, kind === 'wiimote'
+        if (multi) idle();
+        else arm(scanSeconds, kind === 'wiimote'
             ? 'No Wii Remote found. Press 1 + 2 together (not the red sync button) and keep them held, then try again.'
             : 'No controller found. Hold the small sync button on the controller until its lights sweep back and forth, then try again.');
         return snapshot();
     }
 
+    // Stops the search. Everyone at once ends as done with whoever was connected by then.
     function cancel() {
+        if (job && job.phase === 'running' && job.multi && job.finish) { job.finish('done', job.summary()); return snapshot(); }
         if (session) { try { session.stdin.write('scan off\nquit\n'); } catch { /* gone */ } try { session.kill(); } catch { /* gone */ } session = null; }
         if (job && job.phase === 'running') { job.phase = 'cancelled'; job.message = 'Cancelled'; }
         return snapshot();
@@ -303,10 +353,21 @@ function createBluetooth({ platform = process.platform, execImpl = execFile, spa
         return list;
     }
 
+    const checkAddress = address => {
+        if (typeof address !== 'string' || !/^(?:[0-9A-F]{2}:){5}[0-9A-F]{2}$/i.test(address)) throw Object.assign(new Error('Bad address'), { code: 'BAD_ADDRESS' });
+        return address.toUpperCase();
+    };
+
+    // Unpairs it: it has to be paired again (sync button, or 1 + 2) before it can be used
     async function forget(address) {
-        if (!/^(?:[0-9A-F]{2}:){5}[0-9A-F]{2}$/i.test(address)) throw Object.assign(new Error('Bad address'), { code: 'BAD_ADDRESS' });
-        const r = await run('bluetoothctl', ['remove', address.toUpperCase()]);
+        const r = await run('bluetoothctl', ['remove', checkAddress(address)]);
         return { ok: r.ok };
+    }
+
+    // Drops the connection but stays paired, like the Switch's "Disconnect controllers": pressing a button on it connects it again
+    async function disconnect(address) {
+        const r = await run('bluetoothctl', ['disconnect', checkAddress(address)]);
+        return { ok: r.ok || /not connected/i.test(r.stdout + r.stderr) };
     }
 
     // Windows: opens the page where controllers are paired
@@ -316,7 +377,7 @@ function createBluetooth({ platform = process.platform, execImpl = execFile, spa
         return true;
     }
 
-    return { status, setup, startPairing, cancel, paired, forget, openSystemSettings, snapshot };
+    return { status, setup, startPairing, cancel, paired, forget, disconnect, openSystemSettings, snapshot };
 }
 
 module.exports = { createBluetooth, classifyDevice, parseLine, parseDevices, kernelAtLeast, packageCommand, KIND_TYPES, TYPE_LABELS };

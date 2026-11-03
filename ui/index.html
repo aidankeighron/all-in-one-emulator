@@ -1585,7 +1585,7 @@
             if (c) {
                 chips.push(['A', c.player ? 'Change player slot' : 'Give it a player slot', 'a']);
                 if (c.family !== 'wiimote' && !c.adapter) chips.push(['X', 'Change mapping', 'x']);
-                chips.push(['B', 'Remove this controller', 'b']);
+                chips.push(['B', c.virtual ? 'Free this player' : 'Remove this controller', 'b']);
                 if (nintendoUnits().length >= 2) chips.push(['L + R', 'Press both bumpers on two Joy-Cons: join them, or split them again', null]);
             } else if (zone === 'bottom') chips.push(['A', 'Press the button', 'a']);
             chips.push(['Y', 'Connect a controller', 'y']);
@@ -1643,35 +1643,45 @@
             if (act === 'b') return padRemove(c);
         }
 
-        // B (or Delete) on a controller: asks, then removes a Bluetooth controller from this computer
+        // B (or Delete) on a controller: asks, then disconnects it (it stays paired: a button press connects it again) or
+        // forgets it (it has to be paired again). Its player is free for the next controller either way. A Wii Remote that a
+        // player is only kept for (not connected) is let go.
         function padRemove(c) {
+            const done = (data, text) => { Sfx.play('back'); padApply(data, () => false); showToast(text); };
+            const call = async (body, text) => {
+                try { done(await padPost('/api/controllers/remove', body), text); } catch (err) { Sfx.play('error'); showToast(err.message); }
+            };
+            if (c.virtual) {
+                return askChoice(`Stop keeping Player ${c.player} for a Wii Remote?`, 'The player takes the next controller that connects instead. A Wii Remote that connects later still joins as a free player.',
+                    [{ label: 'Let it go', run: () => call({ key: 'real', player: c.player }, `Player ${c.player} is free`) }]);
+            }
             const addresses = c.addresses && c.addresses.length ? c.addresses : c.address ? [c.address] : [];
             if (!addresses.length) return showToast(`${c.name} is plugged in. Unplug it to remove it.`);
-            askConfirm(`Remove ${c.name}?`, 'You can pair it again at any time.', 'Remove', async () => {
-                try {
-                    for (const address of addresses) await padPost('/api/bluetooth/forget', { address });
-                    Sfx.play('back');
-                    showToast(`${c.name} removed`);
-                    refreshControllers();
-                } catch (err) { Sfx.play('error'); showToast(err.message); }
-            });
+            const again = c.kind === 'wiimote' ? 'press a button on it' : 'press any button on it';
+            askChoice(`Remove ${c.name}?`, `Disconnect turns it off from this computer; ${again} to connect it again. Forget unpairs it: it has to be paired again (Connect a controller).`, [
+                { label: 'Disconnect', run: () => call({ key: c.key, how: 'disconnect' }, `${c.name} disconnected`) },
+                { label: 'Forget', run: () => call({ key: c.key, how: 'forget' }, `${c.name} forgotten`) }
+            ]);
         }
 
-        // A yes/no question in the style of the menu. A (or Enter) says yes, B (or Escape) says no.
-        const cf = { open: false, yes: null, i: 1 };
-        function askConfirm(title, text, yesLabel, onYes) {
-            Object.assign(cf, { open: true, yes: onYes, i: 1 });
+        // A question in the style of the menu: one or more choices and Cancel. A (or Enter) picks the highlighted one,
+        // B (or Escape) cancels. Cancel is highlighted first.
+        const cf = { open: false, choices: [], i: 0 };
+        function askChoice(title, text, choices) {
+            Object.assign(cf, { open: true, choices, i: choices.length });
             document.getElementById('confirm-title').textContent = title;
             document.getElementById('confirm-text').textContent = text;
-            document.getElementById('confirm-buttons').innerHTML = `<button type="button" class="btn ${cf.i === 0 ? 'pad-focus' : ''}" data-i="0">${escapeHtml(yesLabel)}</button><button type="button" class="btn ${cf.i === 1 ? 'pad-focus' : ''}" data-i="1">Cancel (B)</button>`;
+            const labels = [...choices.map(ch => ch.label), 'Cancel (B)'];
+            document.getElementById('confirm-buttons').innerHTML = labels.map((l, n) => `<button type="button" class="btn ${n === cf.i ? 'pad-focus' : ''}" data-i="${n}">${escapeHtml(l)}</button>`).join('');
             document.querySelectorAll('#confirm-buttons .btn').forEach(el => el.addEventListener('click', () => { cf.i = Number(el.dataset.i); confirmPress(); }));
             document.getElementById('confirm-overlay').classList.add('open');
             Sfx.play('open');
         }
         function confirmMove(delta) {
-            cf.i = (cf.i + delta + 2) % 2;
+            const n = cf.choices.length + 1;
+            cf.i = (cf.i + delta + n) % n;
             Sfx.play('move');
-            document.querySelectorAll('#confirm-buttons .btn').forEach((el, n) => el.classList.toggle('pad-focus', n === cf.i));
+            document.querySelectorAll('#confirm-buttons .btn').forEach((el, k) => el.classList.toggle('pad-focus', k === cf.i));
         }
         function confirmClose(quiet) {
             cf.open = false;
@@ -1680,9 +1690,9 @@
             if (!quiet) Sfx.play('back');
         }
         function confirmPress() {
-            const yes = cf.i === 0 ? cf.yes : null;
-            confirmClose(!!yes);
-            if (yes) yes();
+            const choice = cf.choices[cf.i];
+            confirmClose(!!choice);
+            if (choice) choice.run();
         }
 
         function padMovePicker(c) {
@@ -3564,6 +3574,8 @@
             } else if (!info) {
                 body = '<div class="sheet-busy" style="min-height:120px"><span class="spinner"></span><span>Checking Bluetooth…</span></div>';
                 add('Close (B)', 'close');
+            } else if (job && job.kind === 'all' && (job.phase === 'running' || pair.showResult)) {
+                return everyoneScreen();
             } else if (job && job.phase === 'running') {
                 const setup = job.kind === 'setup';
                 title = setup ? 'Setting up Bluetooth' : job.kind === 'wiimote' ? 'Looking for a Wii Remote' : job.kind === 'joycon' ? 'Looking for a Joy-Con' : job.kind === 'pro' ? 'Looking for a Switch Pro Controller' : 'Looking for a Switch controller';
@@ -3582,6 +3594,7 @@
                     body += `<p>Give it to the next free player? Dolphin connects to it by itself when a game starts. You can change who uses it on the Controllers page.</p>`;
                     add('Use it for the next player', 'wii-add', true);
                 }
+                if (ok && job.kind === 'wiimote' && /connected/i.test(job.message)) body += accessOffer(add);
                 if (ok && job.kind === 'joycon' && joycondOn()) body += `<p>To use it on its own, hold it sideways and press <b>SL</b> + <b>SR</b> together (the two small buttons on its rail). To join it with a second Joy-Con, choose <b>Two Joy-Cons as one</b> instead.</p>`;
                 if (!ok && job.kind !== 'setup') add('Try again', 'retry', true);
                 if (!ok && job.kind === 'setup') add('Try again', 'setup', true);
@@ -3608,8 +3621,9 @@
                 else add(info.problems.includes('not_installed') ? 'Install and turn on Bluetooth' : 'Turn on Bluetooth', 'setup', true);
                 add('Close (B)', 'close');
             } else {
-                body = `<p style="text-align:center">Choose what you want to connect.</p>`;
-                add('Switch Pro Controller', 'pair-pro', true);
+                body = `<p style="text-align:center">Choose what you want to connect, or <b>Everyone at once</b> to connect any mix of Switch controllers and Wii Remotes in one go.</p>`;
+                add('Everyone at once', 'pair-all', true);
+                add('Switch Pro Controller', 'pair-pro');
                 if (joycondOn()) {
                     // joycond joins a left and a right Joy-Con into one controller, and lets one be used alone held sideways
                     add('Two Joy-Cons as one', 'pair-joycons');
@@ -3630,6 +3644,45 @@
             if (pair.notice) body += `<div class="guide-box">${escapeHtml(pair.notice)}</div>`;
             if (pair.error) body += `<div class="guide-box off">${escapeHtml(pair.error)}</div>`;
             return { title, body, buttons };
+        }
+
+        // A Wii Remote connected to the computer is used by Dolphin through its raw device, which needs a one-time permission
+        // (lib/wiimoteaccess.js). Offered once a remote is connected and Dolphin could not open it.
+        function accessOffer(add) {
+            const a = pair.info && pair.info.wiimoteAccess;
+            if (!a || !a.supported || !a.needed) return '';
+            add('Let Dolphin use Wii Remotes', 'wii-access', true);
+            return `<div class="guide-box off">One more step, once: Dolphin cannot use a Wii Remote while this computer holds it until you allow it. <b>Let Dolphin use Wii Remotes</b> asks for your password once; after that a connected Wii Remote works in games straight away.</div>`;
+        }
+
+        // ----- everyone at once: like the Switch's controller screen. Every Switch controller and Wii Remote that turns up is
+        // connected in turn; each player then takes their place by pressing the two top buttons (joycond) -----
+        function everyoneScreen() {
+            const job = pair.job, running = job.phase === 'running';
+            const buttons = [];
+            const add = (label, act, primary) => buttons.push({ label, act, primary });
+            const devices = job.devices || [];
+            const list = devices.length
+                ? `<ul class="pair-flow" style="list-style:none;padding-left:0">${devices.map(d => `<li class="${d.ok ? 'done' : ''}">${d.ok ? '✓' : '✗'} ${escapeHtml(d.label)}${d.note && d.note !== 'connected' ? ` <span style="font-size:13px;color:var(--tx-8a9199)">(${escapeHtml(d.note)})</span>` : ''}</li>`).join('')}</ul>`
+                : '';
+            const take = joycondOn()
+                ? '<b>Then take a player:</b> two Joy-Cons together, press <b>L</b> on the left and <b>R</b> on the right at the same time; one Joy-Con held sideways, press <b>SL</b> + <b>SR</b>. Players are numbered in the order they do this. A Pro Controller or Wii Remote takes the next player as soon as it connects.'
+                : '<b>Players</b> are numbered in the order the controllers connect. Two Joy-Cons become one controller when both bumpers are pressed on the Controllers page (L on one, R on the other).';
+            let body = `<div class="guide-box">${running ? `<span class="spinner" style="vertical-align:-3px;margin-right:8px"></span>` : ''}${escapeHtml(job.message)}</div>
+                ${list}`;
+            if (running) {
+                body += `<p><b>Everyone can do this at the same time.</b> Switch controllers: hold the small round <b>sync button</b> until the lights sweep (Pro Controller: top edge; Joy-Con: on the rail). Wii Remotes: press <b>1</b> + <b>2</b> together.</p>
+                    <p>${take}</p>
+                    <p style="font-size:13px;color:var(--tx-8a9199)">Controllers that were connected before only need a button press to come back, no need to do this again.</p>`;
+                add('Done (B)', 'all-done', true);
+            } else {
+                if (devices.some(d => d.type === 'wiimote' && d.note === 'connected')) body += accessOffer(add);
+                if (!devices.length && job.phase === 'failed') add('Try again', 'pair-all', true);
+                add('Done (B)', 'result-ok', !buttons.length);
+            }
+            if (pair.notice) body += `<div class="guide-box">${escapeHtml(pair.notice)}</div>`;
+            if (pair.error) body += `<div class="guide-box off">${escapeHtml(pair.error)}</div>`;
+            return { title: running ? 'Connect controllers' : devices.some(d => d.ok) ? 'All set' : 'Connect controllers', body, buttons };
         }
 
         // ----- two Joy-Cons as one: BetterJoy on Windows, joycond on Linux (the server picks, see lib/betterjoy.js, lib/joycond.js) -----
@@ -3811,7 +3864,9 @@
             if (act === 'result-ok') { pair.showResult = false; pair.focus = 0; return pairRefresh(); }
             if (act === 'refresh') return pairRefresh();
             if (act === 'setup') { pair.showResult = true; return pairCall('/api/bluetooth/setup'); }
-            if (['pair-switch', 'pair-pro', 'pair-joycon', 'pair-wiimote'].includes(act)) { pair.screen = null; pair.showResult = true; pair.lastKind = act.slice(5); pair.focus = 0; return pairCall('/api/bluetooth/pair', { kind: pair.lastKind }); }
+            if (act === 'wii-access') { pair.notice = ''; await pairCall('/api/bluetooth/wiimote-access'); if (!pair.error) pair.notice = 'Done: Dolphin can use Wii Remotes that are connected to this computer.'; return pairRefresh(); }
+            if (act === 'all-done') { await pairCall('/api/bluetooth/cancel'); pair.showResult = true; return pairRefresh(); }
+            if (['pair-switch', 'pair-pro', 'pair-joycon', 'pair-wiimote', 'pair-all'].includes(act)) { pair.screen = null; pair.showResult = true; pair.lastKind = act.slice(5); pair.focus = 0; return pairCall('/api/bluetooth/pair', { kind: pair.lastKind }); }
             if (act === 'retry') { pair.focus = 0; return pairCall('/api/bluetooth/pair', { kind: pair.lastKind || 'switch' }); }
             if (act === 'pair-joycons') { pair.screen = null; pair.showResult = false; pair.flow = null; return flowStep(0); }
             if (act === 'flow-retry') { pair.focus = 0; return pairCall('/api/bluetooth/pair', { kind: FLOW_KINDS[pair.flow.step] }); }
@@ -3821,7 +3876,7 @@
             if (act === 'forget') { await pairCall('/api/bluetooth/forget', { address: b.act.slice(7) }); return pairRefresh(); }
             if (act === 'players') { closePair(); return openPlayers(); }
             if (act === 'wii-add') {
-                await pairCall('/api/players/add-real');
+                await pairCall('/api/players/add-real', { address: pair.job && pair.job.device ? pair.job.device.address : null });
                 pair.showResult = false;
                 if (!pair.error) { pair.notice = 'Done: that player will use a real Wii Remote.'; }
                 return pairRefresh();
@@ -4358,7 +4413,8 @@
                     if (now - lastInputTime > 180) {
                         if (st.a) { confirmPress(); lastInputTime = now + 300; }
                         else if (st.b) { confirmClose(); lastInputTime = now + 400; }
-                        else if (st.left || st.right || st.up || st.down) { confirmMove(1); lastInputTime = now; }
+                        else if (st.left || st.up) { confirmMove(-1); lastInputTime = now; }
+                        else if (st.right || st.down) { confirmMove(1); lastInputTime = now; }
                     }
                 } else if (pm.open) {
                     if (now - lastInputTime > 150) {
@@ -4442,7 +4498,8 @@
             if (cf.open) {
                 if (e.key === 'Escape') confirmClose();
                 else if (e.key === 'Enter' || e.key === ' ') confirmPress();
-                else if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Tab'].includes(e.key)) confirmMove(1);
+                else if (['ArrowLeft', 'ArrowUp'].includes(e.key) || (e.key === 'Tab' && e.shiftKey)) confirmMove(-1);
+                else if (['ArrowRight', 'ArrowDown', 'Tab'].includes(e.key)) confirmMove(1);
                 return e.preventDefault();
             }
             if (pm.open) {

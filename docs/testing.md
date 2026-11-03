@@ -57,6 +57,17 @@ Linux needs Bluetooth (the menu offers to install it) and kernel 5.16 or newer f
   player 3: in the game each must control its own player (check `Device =` in `WiimoteNew.ini`: `SDL/0/Xbox 360 Controller`,
   `SDL/0/Nintendo Switch Joy-Con (L/R)` for a joycond pair). If the remote does nothing in the game, press 1 + 2; if it
   still does not, remove it on the Controllers page (B) and let Dolphin connect it when the game starts, and note it.
+- **Let Dolphin use Wii Remotes:** after the remote connects, press **Let Dolphin use Wii Remotes** (password once). Check that
+  `/etc/udev/rules.d/72-emulator-menu-wiimote.rules` exists and `ls -l /dev/hidraw*` shows a `+` (an ACL) on the remote's
+  device. Then start a Wii game with the remote still connected to the computer: it should work without pressing 1 + 2.
+- **A Wii Remote joining mid-game:** start a Wii game with only an Xbox pad, then turn a paired Wii Remote on (press a button).
+  It should become player 2 in the game, and the pause menu should not ask for a restart. `WiimoteNew.ini` should show
+  `Source = 2` for Wiimote2-4.
+- **Everyone at once:** Connect a controller -> **Everyone at once**; put two Joy-Cons and a Wii Remote in sync mode at the same
+  time. Each should be listed as it connects; press Done. With joycond on, L + R on the pair should make it a player.
+- **Removing:** on a joycond pair press **B** -> **Disconnect**: both Joy-Cons should switch off, the player becomes free, and a
+  button press brings them back. **Forget** should unpair them (`bluetoothctl devices Paired`). A *waiting* Wii Remote tile:
+  **B** -> **Let it go** removes it.
 - If something fails, copy the terminal lines and the text in the Connect screen.
 
 ## 5. Two computers on one network (library sharing, and moving files)

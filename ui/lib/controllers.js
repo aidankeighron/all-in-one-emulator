@@ -100,15 +100,38 @@ function readUsbIds(root = '/sys/bus/usb/devices') {
     return out;
 }
 
+// What a joycond controller takes from the two Joy-Cons it is made of: their addresses, and that it is on Bluetooth
+function joycondHalves(halves) {
+    const addresses = halves.map(h => (h.bus === '0005' ? h.address : null)).filter(Boolean);
+    return addresses.length ? { addresses, connection: 'Bluetooth' } : {};
+}
+
 // Turns raw device lists into the list the menu and the emulator writers work with.
 // Players are numbered in the order the system registered the devices (the order they were plugged in).
 function build(procDevices, usbIds = []) {
     const adapter = hasGcAdapter(usbIds);
     // joycond joins two Joy-Cons into one "Combined Joy-Cons" controller and grabs the halves: only the combined one counts
-    const combinedCount = procDevices.filter(d => /combined joy-?cons/i.test(d.name)).length;
-    let halvesToDrop = combinedCount * 2;
-    const found = procDevices
-        .filter(d => !(halvesToDrop > 0 && /joy-?con/i.test(d.name) && !/combined/i.test(d.name) && halvesToDrop--))
+    const combinedDevs = procDevices.filter(d => /combined joy-?cons/i.test(d.name));
+    let halvesToDrop = combinedDevs.length * 2;
+    const dropped = [];
+    const halfOf = d => {
+        if (!(halvesToDrop > 0 && /joy-?con/i.test(d.name) && !/combined/i.test(d.name))) return false;
+        halvesToDrop--;
+        dropped.push(d);
+        return true;
+    };
+    const kept = procDevices.filter(d => !halfOf(d));
+    // joycond's controller is made by the computer and has no Bluetooth address of its own: it is removed through its two
+    // Joy-Cons, the latest left and right ones that connected before it was made
+    const halvesOf = new Map();
+    const side = (d, s) => (s === 'L' ? /\(l\)|left/i : /\(r\)|right/i).test(d.name);
+    for (const c of [...combinedDevs].sort((a, b) => (a.event ?? 0) - (b.event ?? 0))) {
+        const free = dropped.filter(d => ![...halvesOf.values()].some(h => h.includes(d)));
+        const before = free.filter(d => (d.event ?? 0) < (c.event ?? Infinity));
+        const pick = s => [...before].reverse().find(d => side(d, s)) || free.find(d => side(d, s));
+        halvesOf.set(c, [pick('L'), pick('R')].filter(Boolean));
+    }
+    const found = kept
         // The kernel may also expose the adapter as a gamepad; it is shown once, as the adapter
         .filter(d => !(adapter && d.vendor === NINTENDO && d.product === GC_ADAPTER_PRODUCT))
         .filter(d => isController(d) || /^nintendo wii remote$/i.test(d.name))
@@ -132,6 +155,7 @@ function build(procDevices, usbIds = []) {
             bus: d.bus,
             version: d.version,
             address: d.bus === '0005' ? d.address || null : null,
+            ...(halvesOf.has(d) ? joycondHalves(halvesOf.get(d)) : {}),
             keys: d.keys || [],
             js: d.js,
             sdlIndex: d.js !== null ? sdlOrder.indexOf(d) : null,

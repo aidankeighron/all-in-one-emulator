@@ -137,8 +137,10 @@ Nothing else to install: the AppImage already contains the menu and its runtime.
    The combo is found per controller: **Back + Start** on an Xbox-style pad, **− + +** on a Switch controller or Joy-Con pair,
    and **− and +** on a real Wii Remote. Controllers connected while the game runs are watched too.
    Controllers can be connected and changed from the pause menu. A controller that drops out and comes back, or a real Wii Remote
-   connecting, is picked up by the running game by itself. Anything else (a new controller on a player, another mapping) needs the
-   game to start again: the pause screen then says so and puts the focus on **Reset**, which ends the game (the save is uploaded as
+   connecting, is picked up by the running game by itself: once a Wii Remote is paired with the computer, every player without a
+   controller is left open for a Wii Remote in Dolphin, so a remote that connects mid-game (press a button, or 1 + 2) just joins as
+   the next player. Anything else (a new gamepad or Switch controller on a player, another mapping) needs the
+   game to start again, because Dolphin and Ryujinx only read which controller each player has when a game starts: the pause screen then says so and puts the focus on **Reset**, which ends the game (the save is uploaded as
    usual) and starts it again on the same save. The emulator's settings files are left alone while it runs and written when it closes.
    Dolphin is started with its "confirm on stop" question off, so **Quit to menu** closes it without a second prompt. **Quit to menu** ends the game like closing the emulator, so save first. In the app the pause menu is its own
    transparent window above everything, so the frozen game stays visible behind it; in a plain browser it shows inside the page. The menu reads the controller
@@ -184,6 +186,7 @@ controller on the selected tile:
 | **A** | Change its player slot: pick Player 1 to 4; whoever was there takes its old place, and each controller keeps the mappings it had |
 | **X** | Change its mapping: one list with the Wii, GameCube and Switch mappings made for this kind of controller (or *Automatic*) |
 | **Y** | Switch controllers only: combine it with another Switch controller (a left and a right Joy-Con are combined by themselves), or split a pair again |
+| **B** | Remove it. **Disconnect** drops its Bluetooth connection but keeps it paired (a button press connects it again, like the Switch's *Disconnect controllers*); **Forget** unpairs it. Either way its player is free for the next controller. A Joy-Con pair joined by joycond disconnects both Joy-Cons. On a Wii Remote tile that only says *waiting* (a player kept for a remote that is not connected), **B** lets that player go |
 
 The **Connect a controller** and **Mappings** tiles open the two screens that stay separate: pairing, and the mapping
 editor. (The older **Players and mappings** table is still there from the pause menu's **Change controllers**.)
@@ -396,6 +399,15 @@ BetterJoy or joycond, rumble goes through the same way.
 Everything is done from the menu: on the Controllers page (LB from the first page, or click the controller
 chip at the top right) choose **Connect a controller**.
 
+**Everyone at once** works like the Switch's controller screen: open it once and everyone pairs at the same time. Switch
+controllers hold their sync button, Wii Remotes press 1 + 2, and the menu pairs, trusts and connects each one as it turns up
+(one after another, so a crowd takes a few seconds each) until you press **Done** (or nothing new turns up for three minutes).
+Then each player takes their place: with joycond on, two Joy-Cons together press **L** on the left one and **R** on the right
+one, a single Joy-Con held sideways presses **SL + SR**, and the players are numbered in the order they do it; a Pro Controller
+or Wii Remote takes the next player as soon as it connects. Without joycond every Joy-Con is a controller of its own, and two
+are joined by pressing L on one and R on the other on the Controllers page. Controllers that were paired before need none of
+this: a button press connects them again.
+
 - **Linux:** if Bluetooth is not installed or switched off, the menu offers to install and start it (it uses
   `pkexec`, so you get one password prompt; `apt`, `dnf`, `pacman` and `zypper` are supported). Then:
   - **Switch Pro Controller / Joy-Con:** hold the sync button; the menu finds the controller, pairs, trusts
@@ -411,8 +423,15 @@ chip at the top right) choose **Connect a controller**.
     Start). The kernel shows its D-pad as arrow keys, which the browser's gamepad support leaves out, so the menu reads the
     remote itself (`ui/lib/wiimote.js`, from `/dev/input/event*`). In a game Dolphin uses it as a real Wii Remote (press
     1 + 2 if it does not answer). If the remote cannot be connected to the computer, the menu says so and Dolphin connects
-    it itself when a game starts, as before. If Dolphin cannot reach a remote the computer holds (Dolphin needs read access
-    to its `/dev/hidraw*` device for that), remove it on the Controllers page (**B**) and let Dolphin connect it.
+    it itself when a game starts, as before.
+  - **Let Dolphin use Wii Remotes (once):** Dolphin reaches a remote the computer holds through its raw device
+    (`/dev/hidraw*`), which only the administrator may open out of the box, so in a game the remote did nothing until it was
+    connected again. After a Wii Remote connects, the menu offers **Let Dolphin use Wii Remotes**: one password prompt, and it
+    writes `/etc/udev/rules.d/72-emulator-menu-wiimote.rules`, which gives the person signed in at the computer (and so
+    Dolphin) the raw device of a Wii Remote or Wii Remote Plus, the way the system already gives them their gamepads. Delete
+    the file to undo it.
+  - Giving a remote the computer could not connect to "the next player" twice (pairing it again) keeps the one player it had,
+    instead of keeping a second player for a remote that is already there.
 - **Windows:** Windows owns pairing, so the menu opens its Bluetooth page and lists the steps; the Wii Remote
   count works the same way.
 - Without joycond, Joy-Cons are paired one at a time and appear as two controllers (see *Two Switch controllers as one*).
@@ -448,6 +467,11 @@ If an install fails, check the Flatpak ID there against [flathub.org](https://fl
 
 [docs/testing.md](docs/testing.md) lists what needs real hardware (multiple controllers, the pause menu, saves,
 Bluetooth) and how to try each, plus how to get two computers talking (Windows firewall, Tailscale).
+
+# Credits
+
+The controller pictures are from Kenney's [Input Prompts](https://kenney.nl/assets/input-prompts) pack (CC0, no credit
+required), coloured in by the menu (`ui/assets/padart.js`).
 
 # Ideas for later
 

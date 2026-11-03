@@ -9,6 +9,7 @@ const { createRunner } = require('./lib/runner');
 const roms = require('./lib/roms');
 const hotkey = require('./lib/hotkey');
 const wiimoteLib = require('./lib/wiimote');
+const wiimoteAccessLib = require('./lib/wiimoteaccess');
 const procs = require('./lib/procs');
 const controllers = require('./lib/controllers');
 const inputconfig = require('./lib/inputconfig');
@@ -195,7 +196,13 @@ const pendingSetup = new Set();
 function controllerPlan(emulatorId) {
     const view = inputconfig.describe(detectPads(), { players: config.getPlayers(), wiiRemotes: config.getWiiRemotes() }, mappings);
     const field = emulatorId === 'ryujinx' ? ['sw'] : ['wii', 'gc'];
-    return JSON.stringify(view.slots.map(s => [s.mode, s.controller ? playersLib.padKey(s.controller) : null, ...field.map(f => s[f] && s[f].id)]));
+    // Dolphin: a real Wii Remote has nothing to map, and a free player is written as a real Wii Remote too when this computer
+    // has one paired, so a remote that connects there during the game is the same plan (Dolphin picks it up by itself)
+    const dolphin = emulatorId !== 'ryujinx';
+    return JSON.stringify(view.slots.map(s => {
+        if (dolphin && (s.mode === 'real' || (s.mode === 'empty' && wiimotesPaired))) return ['real'];
+        return [s.mode, s.controller ? playersLib.padKey(s.controller) : null, ...field.map(f => s[f] && s[f].id)];
+    }));
 }
 
 function setupControllers(emulatorIds) {
@@ -206,7 +213,7 @@ function setupControllers(emulatorIds) {
     }
     const connected = detectPads();
     const results = emulatorIds.map(id => {
-        const result = inputconfig.apply(id, connected, { ...platformCtx, wiiRemotes: config.getWiiRemotes(), players: config.getPlayers(), profiles: mappings, betterjoyMotion: betterjoyOn() ? betterjoyLib.MOTION_PORT : 0, joyconsSplit: config.getJoyconPairs().splits.length > 0 });
+        const result = inputconfig.apply(id, connected, { ...platformCtx, wiiRemotes: config.getWiiRemotes(), spareRemotes: wiimotesPaired, players: config.getPlayers(), profiles: mappings, betterjoyMotion: betterjoyOn() ? betterjoyLib.MOTION_PORT : 0, joyconsSplit: config.getJoyconPairs().splits.length > 0 });
         console.log(`[PADS] ${id}: ${result.status}${result.message ? ` (${result.message})` : ''}`);
         return result;
     });
@@ -282,6 +289,7 @@ async function startGame(relPath, slotId, onGameState) {
 
     await runner.grantAccess(emu, romsDir);
     await ensureBetterJoy();
+    if (emu.id === 'dolphin') await refreshPaired();
     if (config.getAutoControllers() && !skipSetup.delete(emu.id)) setupControllers([emu.id]);
     let args = emu.args.map(a => a === '{rom}' ? abs : a);
 
@@ -446,19 +454,34 @@ function readJson(req) {
 }
 
 const bluetooth = bluetoothLib.createBluetooth({ log: console.log });
+const wiimoteAccess = wiimoteAccessLib.createWiimoteAccess({ platform: runner.platform });
+
+// Whether a Wii Remote is paired with this computer (then free players in Dolphin wait for one, see inputconfig)
+let wiimotesPaired = false;
+async function refreshPaired() {
+    try { wiimotesPaired = (await bluetooth.paired()).some(d => d.type === 'wiimote'); } catch { /* keep what was known */ }
+    return wiimotesPaired;
+}
 
 // /api/bluetooth/*. Returns true when it sent a response.
 async function handleBluetooth(route, req, res) {
     try {
         if (route === 'GET /api/bluetooth') {
             const [status, paired] = await Promise.all([bluetooth.status(), bluetooth.paired()]);
-            return sendJson(res, 200, { ...status, paired, wiiRemotes: config.getWiiRemotes() }), true;
+            wiimotesPaired = paired.some(d => d.type === 'wiimote');
+            return sendJson(res, 200, { ...status, paired, wiiRemotes: config.getWiiRemotes(), wiimoteAccess: wiimoteAccess.status() }), true;
+        }
+        if (route === 'POST /api/bluetooth/wiimote-access') {
+            // One password prompt: Dolphin may use Wii Remotes the computer holds (see lib/wiimoteaccess.js)
+            const status = await wiimoteAccess.install({ onLine: line => console.log(`[WIIMOTE] ${line}`) });
+            return sendJson(res, 200, { wiimoteAccess: status }), true;
         }
         if (route === 'GET /api/bluetooth/job') return sendJson(res, 200, { job: bluetooth.snapshot() }), true;
         if (route === 'POST /api/bluetooth/setup') return sendJson(res, 200, { job: await bluetooth.setup() }), true;
         if (route === 'POST /api/bluetooth/pair') return sendJson(res, 200, { job: bluetooth.startPairing((await readJson(req)).kind) }), true;
         if (route === 'POST /api/bluetooth/cancel') return sendJson(res, 200, { job: bluetooth.cancel() }), true;
         if (route === 'POST /api/bluetooth/forget') return sendJson(res, 200, await bluetooth.forget((await readJson(req)).address)), true;
+        if (route === 'POST /api/bluetooth/disconnect') return sendJson(res, 200, await bluetooth.disconnect((await readJson(req)).address)), true;
         if (route === 'POST /api/bluetooth/open-settings') return sendJson(res, 200, { ok: bluetooth.openSystemSettings() }), true;
         if (route === 'POST /api/bluetooth/wiiremotes') {
             const n = (await readJson(req)).count;
@@ -580,6 +603,9 @@ async function handleBetterJoy(route, req, res) {
         return sendJson(res, 500, { error: 'failed', message: err.message }), true;
     }
 }
+
+// Which player "Use it for the next player" gave each Wii Remote (by its Bluetooth address) while the menu runs
+const realFor = new Map();
 
 // What the Players screen shows
 function playersView() {
@@ -719,13 +745,56 @@ async function handlePlayers(route, req, res) {
             return sendJson(res, 200, controllersView()), true;
         }
         if (route === 'POST /api/players/add-real') {
-            // "Use this Wii Remote": the first player who has no controller right now gets it (the others keep theirs)
+            // "Use this Wii Remote": the first player who has no controller right now gets it (the others keep theirs). The same
+            // remote asked for again keeps the player it already has, so pairing it twice does not keep two players for it.
+            const body = await readJson(req);
+            const address = typeof body.address === 'string' ? body.address.toUpperCase() : null;
             const { slots } = inputconfig.describe(detectPads(), { players: config.getPlayers(), wiiRemotes: config.getWiiRemotes() }, mappings);
+            const had = address ? realFor.get(address) : undefined;
+            if (had !== undefined && slots[had] && slots[had].mode === 'real') return sendJson(res, 200, { player: had + 1 }), true;
             const done = playersLib.addReal(config.getPlayers(), slots);
             if (!done) return sendJson(res, 409, { error: 'full', message: 'All four players already have a controller. Change one on the Controllers page.' }), true;
             config.setPlayers(done.players);
+            if (address) realFor.set(address, done.player);
             await syncNow();
             return sendJson(res, 200, { player: done.player + 1 }), true;
+        }
+        if (route === 'POST /api/controllers/remove') {
+            // B on the Controllers page. A Bluetooth controller is disconnected (stays paired: a button press connects it again)
+            // or forgotten (has to be paired again); either way its player is free for the next controller. A real Wii Remote
+            // a player was only kept for is let go the same way.
+            const body = await readJson(req);
+            const how = body.how === 'forget' ? 'forget' : 'disconnect';
+            const list = detectPads();
+            const settings = { players: config.getPlayers(), wiiRemotes: config.getWiiRemotes() };
+            const view = inputconfig.describe(list, settings, mappings);
+            let player = null, key = null, addresses = [];
+            if (body.key === 'real') {
+                player = Number(body.player) - 1;
+                if (!Number.isInteger(player) || !view.slots[player] || view.slots[player].mode !== 'real') return sendJson(res, 400, { error: 'bad_player', message: 'That player has no Wii Remote' }), true;
+            } else {
+                const c = list.find(x => playersLib.padKey(x) === body.key);
+                if (!c) return sendJson(res, 404, { error: 'gone', message: 'That controller is not connected any more' }), true;
+                key = playersLib.padKey(c);
+                addresses = c.addresses && c.addresses.length ? c.addresses : c.address ? [c.address] : [];
+                if (!addresses.length) return sendJson(res, 409, { error: 'wired', message: `${c.name} is plugged in. Unplug it to remove it.` }), true;
+                player = view.playerOf[c.id] ? view.playerOf[c.id] - 1 : null;
+            }
+            for (const address of addresses) {
+                const r = await (how === 'forget' ? bluetooth.forget(address) : bluetooth.disconnect(address));
+                if (!r.ok) return sendJson(res, 500, { error: 'failed', message: 'Bluetooth did not let go of it. Turn the controller off, or try Forget.' }), true;
+                realFor.delete(address);
+            }
+            if (player !== null) {
+                // The old "number of real Wii Remotes" setting keeps the first players for remotes: write those out first
+                const wii = config.getWiiRemotes();
+                let players = config.getPlayers();
+                if (wii > 0) { players = players.map((p, i) => (i < wii && p.device === 'auto' ? { ...p, device: 'real' } : p)); config.setWiiRemotes(0); }
+                config.setPlayers(playersLib.release(players, view.slots, player, key));
+            } else if (key) config.setPlayers(playersLib.release(config.getPlayers(), view.slots, -1, key));
+            for (const [a, n] of realFor) if (n === player) realFor.delete(a);
+            await syncNow();
+            return sendJson(res, 200, controllersView()), true;
         }
         if (route === 'GET /api/mappings') {
             // The inputs a mapping can use depend on the console and on the kind of controller it is for
@@ -942,7 +1011,7 @@ function createServer(onGameState) {
                     return sendJson(res, 200, { ok: true });
                 }
                 if (route === 'GET /api/controllers') return sendJson(res, 200, controllersView());
-                if (url.pathname.startsWith('/api/players') || url.pathname.startsWith('/api/mappings') || /^\/api\/controllers\/(combine|split)$/.test(url.pathname)) {
+                if (url.pathname.startsWith('/api/players') || url.pathname.startsWith('/api/mappings') || /^\/api\/controllers\/(combine|split|remove)$/.test(url.pathname)) {
                     if (await handlePlayers(route, req, res)) return;
                 }
                 if (route === 'POST /api/controllers/apply') {
@@ -1073,6 +1142,7 @@ function start({ port = 3000, onGameState, onPause } = {}) {
             processRoms(); // pick up any zips dropped in while the app was closed
             ensureBetterJoy();
             if (helper.supported) setInterval(refreshBetterJoy, 3000).unref();
+            if (runner.platform !== 'win32') refreshPaired();
             applyShareSettings().then(err => err && console.error(`[LIBRARY] ${err}`));
             resolve({ server, port: actual });
         });

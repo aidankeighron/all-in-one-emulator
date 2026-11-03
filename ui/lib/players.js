@@ -88,8 +88,10 @@ function resolve(controllers, settings, getProfile) {
 // What to write as a player's controller so it stays with whoever has it now, even if it was only on automatic
 const pinned = slot => (slot.controller ? padKey(slot.controller) : slot.mode === 'real' ? 'real' : null);
 
-// Everyone keeps what they have now, so that moving one controller does not shuffle the others
-const pinAll = (list, slots) => list.map((p, i) => ({ ...p, device: p.device === 'auto' ? pinned(slots[i]) || 'auto' : p.device }));
+// Everyone keeps the controller they have now, so that moving one controller does not shuffle the others. A Wii Remote found
+// on an automatic player is left automatic: Dolphin hands real remotes out itself, so pinning one only leaves a player kept
+// for a remote after it has gone (the "waiting" Wii Remote that nobody has)
+const pinAll = (list, slots) => list.map((p, i) => ({ ...p, device: p.device === 'auto' && slots[i] && slots[i].controller ? pinned(slots[i]) : p.device }));
 
 // Swaps player a and player b (0-3) with everything they have
 function swap(players, slots, a, b) {
@@ -122,6 +124,15 @@ function place(players, slots, key, to) {
     return list;
 }
 
+// A player lets go of what it has (a controller that was removed, or the real Wii Remote it was kept for): it goes back to
+// automatic and takes the next controller that connects; everyone else keeps what they have. A controller removed this way is
+// also let go by any other player that was keeping a place for it.
+function release(players, slots, index, key = null) {
+    if (!(index >= 0 && index < PLAYERS) && !key) return normalize(players);
+    const list = pinAll(normalize(players), slots);
+    return list.map((p, i) => (i === index || (key && p.device === key) ? { ...p, device: 'auto' } : p));
+}
+
 // A real Wii Remote for the first player who has nothing right now; everyone else keeps what they have
 function addReal(players, slots) {
     const free = slots.findIndex(s => s.mode === 'empty' || s.mode === 'none');
@@ -131,4 +142,4 @@ function addReal(players, slots) {
     return { players: list, player: free };
 }
 
-module.exports = { PLAYERS, defaults, normalize, resolve, swap, place, repin, addReal, padKey };
+module.exports = { PLAYERS, defaults, normalize, resolve, swap, place, repin, release, addReal, padKey };
