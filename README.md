@@ -370,13 +370,13 @@ controller, or splits a pair again (a pair you split stays split).
   sensors are used. Not tested on real Joy-Cons.
 - **Ryujinx** reads one device per player, so a pair is written as its left Joy-Con alone, and the setup message says so.
 
-**One real controller for every emulator (a helper, set up once from the menu).** Pairing → **Connect a controller** →
-**Use two Joy-Cons as one controller** walks through it; after that it runs by itself.
+**One real controller for every emulator (a helper, set up once from the menu).** **Connect a controller** → **2 Joy-Cons**
+→ **Set up joycond** (Windows: **Two Joy-Cons as one**) walks through it; after that it runs by itself.
 
 | | Windows: BetterJoy | Linux: joycond |
 |---|---|---|
 | What it does | Makes Joy-Cons and the Pro Controller look like Xbox 360 controllers and joins a left and a right Joy-Con into one, with rumble and motion (served on port 26760) | Joins a left and a right Joy-Con into one "Nintendo Switch Combined Joy-Cons" controller (press **L** and **R** together; **SL + SR** makes one a sideways controller) |
-| Setup steps | 1. the ViGEmBus driver (its installer asks Windows' permission once, the menu downloads and runs it) 2. BetterJoy (downloaded and unpacked into the menu's emulators folder, its settings set for Xbox pads and the motion server) 3. pair the Joy-Cons in Windows 4. **Turn on** | 1. checks the kernel is 5.16 or newer 2. installs the `joycond` package (`apt`, `dnf` or `zypper`, password once; on other systems the screen links to the build instructions) 3. pair with **Two Joy-Cons as one** (left, right, then L + R) 4. **Turn on** (`systemctl enable --now joycond`, password once) |
+| Setup steps | 1. the ViGEmBus driver (its installer asks Windows' permission once, the menu downloads and runs it) 2. BetterJoy (downloaded and unpacked into the menu's emulators folder, its settings set for Xbox pads and the motion server) 3. pair the Joy-Cons in Windows 4. **Turn on** | 1. checks the kernel is 5.16 or newer 2. installs the `joycond` package (`apt`, `dnf` or `zypper`, password once; on other systems the screen links to the build instructions) 3. connect the Joy-Cons on the Connect screen 4. **Turn on** (`systemctl enable --now joycond`, password once) |
 | Afterwards | The menu starts BetterJoy with itself and before every game, shows its virtual Xbox pads instead of the real Joy-Cons, and uses the Xbox mappings. Ryujinx's motion is pointed at BetterJoy's server | joycond is a system service that starts at boot. The menu shows the combined controller instead of the two halves it joined |
 | Needs | Windows 10/11. Download addresses come from GitHub; set `emulatorUrls.betterjoy` or `emulatorUrls.vigembus` in `config.json` (a web address, or a file on this computer) if they cannot be reached | A distribution that has the `joycond` package |
 
@@ -396,46 +396,49 @@ BetterJoy or joycond, rumble goes through the same way.
 
 ## Connecting Wii Remotes and Switch controllers
 
-Everything is done from the menu: on the Controllers page (LB from the first page, or click the controller
-chip at the top right) choose **Connect a controller**.
+On the Controllers page (LB from the first page, or click the controller chip at the top right) choose **Connect a
+controller**. The screen starts looking at once, like the Switch's controller screen: everyone puts their controller in
+pairing mode at the same time and the menu pairs, trusts and connects each one as it turns up (one after another, a few
+seconds each), until you press **Done** (or nothing new turns up for three minutes; **Look again** starts over). The four
+buttons only show how to put each kind in pairing mode:
 
-**Everyone at once** works like the Switch's controller screen: open it once and everyone pairs at the same time. Switch
-controllers hold their sync button, Wii Remotes press 1 + 2, and the menu pairs, trusts and connects each one as it turns up
-(one after another, so a crowd takes a few seconds each) until you press **Done** (or nothing new turns up for three minutes).
-Then each player takes their place: with joycond on, two Joy-Cons together press **L** on the left one and **R** on the right
-one, a single Joy-Con held sideways presses **SL + SR**, and the players are numbered in the order they do it; a Pro Controller
-or Wii Remote takes the next player as soon as it connects. Without joycond every Joy-Con is a controller of its own, and two
-are joined by pressing L on one and R on the other on the Controllers page. Controllers that were paired before need none of
-this: a button press connects them again.
+| Button | How |
+|---|---|
+| **2 Joy-Cons** | Hold the sync button on each rail until the lights sweep; once both are connected press **L** on the left and **R** on the right together. With joycond on that makes them one controller (players are numbered in the order they do it); without it they are joined the same way on the Controllers page |
+| **1 Joy-Con** | Sync button on the rail; with joycond on, then hold it sideways and press **SL + SR** |
+| **Pro Controller** | Sync button on the top edge |
+| **Wii Remote** | Press **1 + 2** |
 
-- **Linux:** if Bluetooth is not installed or switched off, the menu offers to install and start it (it uses
-  `pkexec`, so you get one password prompt; `apt`, `dnf`, `pacman` and `zypper` are supported). Then:
-  - **Switch Pro Controller / Joy-Con:** hold the sync button; the menu finds the controller, pairs, trusts
-    and connects it. It then works like any gamepad. Needs Linux 5.16 or newer (the menu checks).
-  - **Joy-Cons with joycond on:** **Two Joy-Cons as one** walks through three steps: connect the left Joy-Con, connect the
-    right one, then press **L** on the left and **R** on the right together, which is what joins them (the screen moves on
-    by itself when the joined controller appears). **One Joy-Con** connects a single one, used on its own held sideways
-    (**SL + SR**). Both work at the same time: joycond keeps joined pairs and single Joy-Cons apart.
-  - **Joy-Cons with joycond off:** **Joy-Con** connects one at a time, and each is a controller of its own (they can still
-    be joined inside the menu, see *Two Switch controllers as one*).
-  - **Wii Remote:** press 1 + 2; the menu pairs, trusts and connects it to the computer so it can drive the menu (held
-    upright: D-pad moves, **A** chooses, **B** goes back, **1** / **2** are X / Y, **−** / **+** change page, **Home** is
-    Start). The kernel shows its D-pad as arrow keys, which the browser's gamepad support leaves out, so the menu reads the
-    remote itself (`ui/lib/wiimote.js`, from `/dev/input/event*`). In a game Dolphin uses it as a real Wii Remote (press
-    1 + 2 if it does not answer). If the remote cannot be connected to the computer, the menu says so and Dolphin connects
-    it itself when a game starts, as before.
+A controller paired before needs none of this: a button press connects it again. One that did not connect is shown with ✗
+and is tried again when it is put in pairing mode again.
+
+- **Linux:** if Bluetooth is not installed or switched off, the screen offers to install and start it first (one password
+  prompt through `pkexec`; `apt`, `dnf`, `pacman` and `zypper` are supported), then starts looking. Switch controllers need
+  Linux 5.16 or newer (the menu checks).
+  - **Switch controllers that "failed to connect" (`br-connection-create-socket`):** a Joy-Con often connects to the computer
+    by itself right after pairing, and the menu's own connect request at that moment fails although the controller is there.
+    It now counts as connected as soon as Bluetooth says so, a failed request is tried twice more, and a controller Bluetooth
+    only knew from an old pairing (one it may have forgotten, say after it was used with a Switch) is unpaired and paired
+    afresh once.
+  - **Wii Remote:** connected to the computer so it can drive the menu (held upright: D-pad moves, **A** chooses, **B** goes
+    back, **1** / **2** are X / Y, **−** / **+** change page, **Home** is Start). The kernel shows its D-pad as arrow keys,
+    which the browser's gamepad support leaves out, so the menu reads the remote itself (`ui/lib/wiimote.js`, from
+    `/dev/input/event*`). In a game Dolphin uses it as a real Wii Remote. A remote the computer cannot connect is still
+    listed: Dolphin connects it itself when a game starts (press 1 + 2 then).
   - **Let Dolphin use Wii Remotes (once):** Dolphin reaches a remote the computer holds through its raw device
-    (`/dev/hidraw*`), which only the administrator may open out of the box, so in a game the remote did nothing until it was
-    connected again. After a Wii Remote connects, the menu offers **Let Dolphin use Wii Remotes**: one password prompt, and it
-    writes `/etc/udev/rules.d/72-emulator-menu-wiimote.rules`, which gives the person signed in at the computer (and so
-    Dolphin) the raw device of a Wii Remote or Wii Remote Plus, the way the system already gives them their gamepads. Delete
-    the file to undo it.
-  - Giving a remote the computer could not connect to "the next player" twice (pairing it again) keeps the one player it had,
-    instead of keeping a second player for a remote that is already there.
-- **Windows:** Windows owns pairing, so the menu opens its Bluetooth page and lists the steps; the Wii Remote
-  count works the same way.
-- Without joycond, Joy-Cons are paired one at a time and appear as two controllers (see *Two Switch controllers as one*).
+    (`/dev/hidraw*`), which only the administrator may open out of the box. After a Wii Remote connects, the screen offers
+    **Let Dolphin use Wii Remotes**: one password prompt, and it writes `/etc/udev/rules.d/72-emulator-menu-wiimote.rules`,
+    which gives the person signed in at the computer (and so Dolphin) the raw device of a Wii Remote or Wii Remote Plus, the
+    way the system already gives them their gamepads. Delete the file to undo it.
+- **Windows:** Windows owns pairing, so the screen opens its Bluetooth page and lists the steps.
 - This was tested against a stand-in for `bluetoothctl`, not real Wii Remotes or Switch controllers.
+
+**Batteries.** The system's "game controller battery low" warning does not say which controller it means, so the menu
+does: each controller's tile shows its battery (*Battery 64%*, *Battery high*, *Battery low*, *Charging*), the chip at the top
+right names a controller that is running low, and the menu says so once when it gets low. The pause menu shows it in place
+of the connection. The level comes from `/sys/class/power_supply` (Joy-Cons and the Pro Controller only report a level, a Wii
+Remote a percentage); a USB pad or one the system does not report on has no battery shown. The system's own notification
+cannot be changed from here.
 
 Things to know:
 - In a game, a real Wii Remote is used by Dolphin directly; the menu only sets which players use real remotes.

@@ -80,7 +80,7 @@ function packageCommand(has) {
     return null;
 }
 
-function createBluetooth({ platform = process.platform, execImpl = execFile, spawnImpl = spawn, exists = fs.existsSync, release = os.release(), log = () => {}, scanSeconds = 30, stepSeconds = 20 } = {}) {
+function createBluetooth({ platform = process.platform, execImpl = execFile, spawnImpl = spawn, exists = fs.existsSync, release = os.release(), log = () => {}, scanSeconds = 30, stepSeconds = 20, retryMs = 2500 } = {}) {
     const win = platform === 'win32';
     let job = null;       // the one thing happening now: {kind, phase, message, lines, device}
     let session = null;   // the running bluetoothctl for a pairing job
@@ -234,8 +234,37 @@ function createBluetooth({ platform = process.platform, execImpl = execFile, spa
             return settle(false, message);
         }
 
-        // A step of the pairing conversation waits for one of these lines
-        const expect = (ok, bad, then) => { pending = { ok, bad, then }; };
+        // A step of the pairing conversation waits for one of these lines (onBad: what to do instead of failing)
+        const expect = (ok, bad, then, onBad) => { pending = { ok, bad, then, onBad }; };
+        const repaired = new Set();       // controllers whose old pairing was thrown away once already (never loops)
+        const connectedText = type => (type === 'wiimote' ? 'Wii Remote connected. Use the D-pad and A in the menu; in a game Dolphin uses it as a real Wii Remote.' : `${TYPE_LABELS[type]} connected`);
+
+        // The last step. A Switch controller often connects to the computer by itself right after pairing, and an explicit
+        // "connect" at that moment fails ("br-connection-create-socket") although the controller is there: so it counts as
+        // connected as soon as BlueZ says so, a failed attempt is tried again a little later, and a controller BlueZ only knew
+        // from an old pairing (one it may have forgotten, say after it was used with a Switch) is unpaired and paired afresh.
+        function connectStep(device, attempt = 1) {
+            if (mine.device !== device || finished) return;
+            if (device.linked) return settle(true, connectedText(device.type));
+            mine.stage = 'connecting';
+            send(`connect ${device.address}`);
+            arm(stepSeconds, 'Paired, but it did not connect. Press a button on the controller, or retry.');
+            expect(/Connection successful/i, /Failed to connect/i, () => settle(true, connectedText(device.type)), line => {
+                if (device.linked) return settle(true, connectedText(device.type));
+                if (attempt < 3) { pending = null; setTimeout(() => connectStep(device, attempt + 1), retryMs); return; }
+                if (device.stale && !repaired.has(device.address)) {
+                    repaired.add(device.address);
+                    add(`${device.label}: old pairing did not work, pairing it again`);
+                    pending = null;
+                    send(`remove ${device.address}`);
+                    mine.device = null;
+                    mine.stage = 'scanning';
+                    send('scan on');
+                    return multi ? idle() : arm(scanSeconds, 'The controller did not connect. Hold its sync button until the lights sweep, then try again.');
+                }
+                return fail(line.replace(/^.*Failed to \w+:?\s*/i, 'Failed: '));
+            });
+        }
 
         function found(address, name) {
             const type = classifyDevice(name);
@@ -244,8 +273,11 @@ function createBluetooth({ platform = process.platform, execImpl = execFile, spa
                 if (multi && mine.device.address !== address && !queue.some(q => q.address === address)) queue.push({ address, name });
                 return;
             }
-            if (multi && mine.devices.some(d => d.address === address)) return;
-            mine.device = { address, name, type, label: TYPE_LABELS[type] };
+            // a controller that connected is done; one that did not is tried again when it turns up again
+            if (multi && mine.devices.some(d => d.address === address && d.ok)) return;
+            if (multi) mine.devices = mine.devices.filter(d => d.address !== address);
+            mine.device = { address, name, type, label: TYPE_LABELS[type], linked: false, stale: false };
+            const device = mine.device;
             // A Wii Remote is connected to the computer too (BlueZ knows how to pair one), so it can drive the menu; Dolphin
             // still finds it when a game starts
             mine.stage = 'pairing';
@@ -255,11 +287,7 @@ function createBluetooth({ platform = process.platform, execImpl = execFile, spa
             arm(stepSeconds, type === 'wiimote' ? 'The Wii Remote did not finish pairing. Press 1 + 2 again and retry.' : 'The controller did not finish pairing. Hold its sync button again and retry.');
             expect(/Pairing successful|AlreadyExists|Already Exists/i, /Failed to pair/i, () => {
                 send(`trust ${address}`);
-                expect(/trust succeeded|trusted: yes/i, /Failed to trust/i, () => {
-                    send(`connect ${address}`);
-                    arm(stepSeconds, 'Paired, but it did not connect. Press a button on the controller, or retry.');
-                    expect(/Connection successful/i, /Failed to connect/i, () => settle(true, type === 'wiimote' ? 'Wii Remote connected. Use the D-pad and A in the menu; in a game Dolphin uses it as a real Wii Remote.' : `${TYPE_LABELS[type]} connected`));
-                });
+                expect(/trust succeeded|trusted: yes/i, /Failed to trust/i, () => connectStep(device));
             });
             send(`pair ${address}`);
         }
@@ -275,10 +303,12 @@ function createBluetooth({ platform = process.platform, execImpl = execFile, spa
                 // Confirmation prompts from the pairing agent are answered for the user
                 if (/Confirm passkey|Request confirmation|Authorize service|Accept pairing/i.test(line)) send('yes');
                 if (pending) {
+                    if (/AlreadyExists|Already Exists/i.test(line) && mine.device) mine.device.stale = true;
                     if (pending.ok.test(line)) { const next = pending.then; pending = null; next(); continue; }
                     if (pending.bad.test(line)) {
                         // A controller that is already paired is fine: carry on to connecting it
                         if (/AlreadyExists|Already Exists/i.test(line)) { const next = pending.then; pending = null; next(); continue; }
+                        if (pending.onBad) { pending.onBad(line); continue; }
                         return fail(line.replace(/^.*Failed to \w+:?\s*/i, 'Failed: '));
                     }
                 }
@@ -304,7 +334,16 @@ function createBluetooth({ platform = process.platform, execImpl = execFile, spa
                 const ev = parseLine(line);
                 if (!ev) continue;
                 // Anything a known controller reports means it is in range right now
-                if (ev.event === 'prop' && /Connected: yes/i.test(ev.text)) { connected.add(ev.address); continue; }
+                if (ev.event === 'prop' && /Connected: yes/i.test(ev.text)) {
+                    // the controller being paired connected by itself: that is the last step done
+                    if (mine.device && mine.device.address === ev.address) {
+                        mine.device.linked = true;
+                        if (mine.stage === 'connecting') settle(true, connectedText(mine.device.type));
+                        continue;
+                    }
+                    connected.add(ev.address);
+                    continue;
+                }
                 if (ev.event === 'prop' && /Connected: no/i.test(ev.text)) connected.delete(ev.address);
                 if (ev.event === 'prop' && names.has(ev.address) && /RSSI:/i.test(ev.text)) { found(ev.address, names.get(ev.address)); continue; }
                 if (ev.event === 'new') { names.set(ev.address, ev.name); found(ev.address, ev.name); }

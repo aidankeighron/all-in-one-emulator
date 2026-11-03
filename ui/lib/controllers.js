@@ -409,4 +409,41 @@ function createOrder() {
     };
 }
 
-module.exports = { createOrder, parseProc, classify, build, detect, hasGcAdapter, fromGamepadApi, report, combine, keyOf, joyconSide, sdlName, crc16, KIND_LABELS, PAD_KINDS, JOYCON_PAIR_SDL_NAME };
+// ---------- Batteries ----------
+// Linux lists the battery of a Bluetooth controller under /sys/class/power_supply, named after the controller's address:
+// nintendo_switch_controller_battery_<address> (Joy-Con, Pro Controller), wiimote_battery_<address> (Wii Remote),
+// hid-<address>-battery (other Bluetooth pads). Some give a percentage, the Switch ones only a level.
+// Returns a Map address -> {percent, level: 'critical' | 'low' | 'normal' | 'high' | 'full', charging, low}
+const LEVELS = ['critical', 'low', 'normal', 'high', 'full'];
+function batteries({ root = '/sys/class/power_supply', read = f => fs.readFileSync(f, 'utf8'), list = d => fs.readdirSync(d) } = {}) {
+    const out = new Map();
+    let names = [];
+    try { names = list(root); } catch { return out; }
+    const get = (dir, file) => { try { return read(path.join(root, dir, file)).trim(); } catch { return null; } };
+    for (const name of names) {
+        let mac = name.match(/((?:[0-9a-f]{2}[:_-]){5}[0-9a-f]{2})/i);
+        if (!mac) { const uniq = /HID_UNIQ=((?:[0-9a-f]{2}:){5}[0-9a-f]{2})/i.exec(get(name, 'device/uevent') || ''); mac = uniq; }
+        if (!mac) continue;
+        if ((get(name, 'scope') || 'Device').toLowerCase() !== 'device') continue;       // a laptop's own battery is "System"
+        const address = mac[1].replace(/[_-]/g, ':').toUpperCase();
+        const raw = Number(get(name, 'capacity'));
+        const percent = Number.isFinite(raw) && get(name, 'capacity') !== null ? Math.max(0, Math.min(100, raw)) : null;
+        let level = (get(name, 'capacity_level') || '').toLowerCase();
+        if (!LEVELS.includes(level)) level = percent === null ? null : percent <= 5 ? 'critical' : percent <= 20 ? 'low' : percent <= 60 ? 'normal' : percent < 95 ? 'high' : 'full';
+        if (!level) continue;
+        const status = (get(name, 'status') || '').toLowerCase();
+        const charging = status === 'charging';
+        out.set(address, { percent, level, charging, low: !charging && (level === 'low' || level === 'critical') });
+    }
+    return out;
+}
+
+// The battery of a controller (a pair: the emptier of its two Joy-Cons), or null when the system does not say
+function batteryOf(c, all) {
+    const addresses = c.addresses && c.addresses.length ? c.addresses : c.address ? [c.address] : [];
+    const found = addresses.map(a => all.get(String(a).toUpperCase())).filter(Boolean);
+    if (!found.length) return null;
+    return found.sort((a, b) => LEVELS.indexOf(a.level) - LEVELS.indexOf(b.level) || (a.percent ?? 101) - (b.percent ?? 101))[0];
+}
+
+module.exports = { batteries, batteryOf, createOrder, parseProc, classify, build, detect, hasGcAdapter, fromGamepadApi, report, combine, keyOf, joyconSide, sdlName, crc16, KIND_LABELS, PAD_KINDS, JOYCON_PAIR_SDL_NAME };

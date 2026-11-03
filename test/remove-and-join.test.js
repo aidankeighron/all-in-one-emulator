@@ -122,11 +122,12 @@ function fakeCrowd() {
 }
 
 test('everyone at once connects every controller that turns up, one after another, until it is told to stop', async () => {
-    const b = bt.createBluetooth({ platform: 'linux', spawnImpl: fakeCrowd(), exists: () => false });
+    const b = bt.createBluetooth({ platform: 'linux', spawnImpl: fakeCrowd(), exists: () => false, retryMs: 20 });
     b.startPairing('all');
     const end = Date.now() + 4000;
     while (Date.now() < end && (b.snapshot().devices || []).length < 3) await new Promise(r => setTimeout(r, 20));
     let job = b.snapshot();
+    if (job.phase === 'running' && job.devices.length < 3) b.cancel();
     assert.strictEqual(job.phase, 'running', 'it keeps waiting for more');
     assert.deepStrictEqual(job.devices.map(d => [d.label, d.ok]), [['Joy-Con (L)', true], ['Wii Remote', true], ['Joy-Con (R)', true]]);
     assert.match(job.devices[1].note, /Dolphin/);
@@ -157,4 +158,81 @@ test('Dolphin access to Wii Remotes: found from the raw devices, and the rule is
     assert.ok(RULES.every(l => ran[0][3].includes(l)), 'every line of the rule is written');
     assert.match(ran[0][3], /udevadm trigger --subsystem-match=hidraw/);
     assert.strictEqual(createWiimoteAccess({ platform: 'win32' }).status().needed, false);
+});
+
+// bluetoothctl where the Joy-Con connects itself right after pairing, so the menu's own "connect" fails
+function fakeSelfConnecting({ stale = false } = {}) {
+    const calls = [];
+    const spawnImpl = () => {
+        const child = new EventEmitter();
+        child.stdout = new EventEmitter();
+        child.stderr = new EventEmitter();
+        let paired = false;
+        const say = (line, ms = 5) => setTimeout(() => child.stdout.emit('data', `${line}\n`), ms);
+        child.stdin = {
+            write(text) {
+                for (const l of String(text).split('\n').filter(Boolean)) {
+                    const [cmd, addr] = l.trim().split(' ');
+                    calls.push(cmd);
+                    if (cmd === 'scan' && addr === 'on') say('[NEW] Device 22:00:00:00:00:01 Joy-Con (R)', 10);
+                    if (cmd === 'remove') { paired = false; say('[DEL] Device 22:00:00:00:00:01 Joy-Con (R)'); }
+                    if (cmd === 'pair') {
+                        // stale: BlueZ still has an old pairing the Joy-Con forgot, so nothing connects until it is paired afresh
+                        if (stale && !calls.includes('remove')) say('Failed to pair: org.bluez.Error.AlreadyExists');
+                        else { paired = true; say('Pairing successful'); }
+                    }
+                    if (cmd === 'trust') say(`Changing ${addr} trust succeeded`);
+                    if (cmd === 'connect') {
+                        if (paired && stale) say('Connection successful');
+                        else say('Failed to connect: org.bluez.Error.Failed br-connection-create-socket');
+                        if (paired && !stale) say(`[CHG] Device ${addr} Connected: yes`, 15);
+                    }
+                }
+            }
+        };
+        child.kill = () => {};
+        return child;
+    };
+    return { spawnImpl, calls };
+}
+
+async function settled(b, ms = 4000) {
+    const end = Date.now() + ms;
+    while (Date.now() < end) { const j = b.snapshot(); if (j && (j.devices || []).some(d => d.ok)) return j; await new Promise(r => setTimeout(r, 20)); }
+    return b.snapshot();
+}
+
+test('a Joy-Con that connects by itself after pairing counts as connected, although "connect" failed', async () => {
+    const { spawnImpl } = fakeSelfConnecting();
+    const b = bt.createBluetooth({ platform: 'linux', spawnImpl, exists: () => false, retryMs: 30 });
+    b.startPairing('all');
+    const job = await settled(b);
+    b.cancel();
+    assert.deepStrictEqual(job.devices.map(d => [d.label, d.ok]), [['Joy-Con (R)', true]]);
+});
+
+test('a Joy-Con BlueZ only knew from an old pairing is unpaired and paired afresh when it will not connect', async () => {
+    const { spawnImpl, calls } = fakeSelfConnecting({ stale: true });
+    const b = bt.createBluetooth({ platform: 'linux', spawnImpl, exists: () => false, retryMs: 30 });
+    b.startPairing('all');
+    const job = await settled(b);
+    b.cancel();
+    assert.deepStrictEqual(job.devices.map(d => [d.label, d.ok]), [['Joy-Con (R)', true]]);
+    assert.strictEqual(calls.filter(c => c === 'connect').length, 4, 'three tries, then one after pairing again');
+    assert.ok(calls.includes('remove'));
+});
+
+test('controller batteries are read from the system, matched by Bluetooth address (a Joy-Con pair shows its emptier half)', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'power-'));
+    const put = (dir, files) => { fs.mkdirSync(path.join(root, dir, 'device'), { recursive: true }); for (const [f, v] of Object.entries(files)) fs.writeFileSync(path.join(root, dir, f), `${v}\n`); };
+    put('nintendo_switch_controller_battery_aa:00:00:00:00:01', { scope: 'Device', capacity_level: 'Low', status: 'Discharging' });
+    put('nintendo_switch_controller_battery_aa:00:00:00:00:02', { scope: 'Device', capacity_level: 'High', status: 'Discharging' });
+    put('wiimote_battery_bb:00:00:00:00:01', { scope: 'Device', capacity: '64', status: 'Discharging' });
+    put('BAT0', { scope: 'System', capacity: '10', status: 'Discharging' });         // the laptop's own battery
+    const all = controllers.batteries({ root });
+    assert.strictEqual(all.size, 3);
+    const pair = controllers.batteryOf({ addresses: ['AA:00:00:00:00:01', 'AA:00:00:00:00:02'] }, all);
+    assert.deepStrictEqual(pair, { percent: null, level: 'low', charging: false, low: true });
+    assert.deepStrictEqual(controllers.batteryOf({ address: 'BB:00:00:00:00:01' }, all), { percent: 64, level: 'high', charging: false, low: false });
+    assert.strictEqual(controllers.batteryOf({ address: null }, all), null);
 });

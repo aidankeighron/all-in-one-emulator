@@ -633,6 +633,7 @@ function controllersView() {
     // what the player picked for each console ('auto' or a mapping id) and what automatic means for this controller
     const choicesOf = s => (s ? { choice: { wii: s.request.wii, gc: s.request.gc, sw: s.request.sw }, auto: s.auto } : { choice: null, auto: null });
     const mapOf = s => ({ wii: { id: s.wii.id, name: s.wii.name }, gc: { id: s.gc.id, name: s.gc.name }, sw: { id: s.sw.id, name: s.sw.name } });
+    const charge = runner.platform === 'win32' ? new Map() : controllers.batteries();
     const shown = list.map(c => {
         const slot = slotOf(c.id);
         const s = slot === null ? null : view.slots[slot];
@@ -640,7 +641,8 @@ function controllersView() {
         return {
             ...c, key: playersLib.padKey(c), roles: view.roles[c.id], family,
             slot, player: slot === null ? null : slot + 1, maps: s ? mapOf(s) : null, ...choicesOf(s),
-            canCombine: c.pad && !c.adapter && c.kind === 'switch'
+            canCombine: c.pad && !c.adapter && c.kind === 'switch',
+            battery: controllers.batteryOf(c, charge)
         };
     });
     // Real Wii Remotes a player is set to use but that are not connected yet: Dolphin connects them itself

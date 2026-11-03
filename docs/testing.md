@@ -46,12 +46,11 @@ next to the menu: lines starting `[SAVES]`, `[PADS]`, `[PAUSE]`, `[LIBRARY]` and
 
 Linux needs Bluetooth (the menu offers to install it) and kernel 5.16 or newer for Switch controllers.
 
-- **Switch Pro Controller / Joy-Con:** Controllers page -> **Connect a controller**; hold the sync button; the menu pairs and
-  connects it. It should then appear as a controller card. A left and a right Joy-Con show as one **Joy-Con pair**; **Y** splits
-  and combines them. In Dolphin check that both halves work as one pad (`SDL_JOYSTICK_HIDAPI_COMBINE_JOY_CONS = 1` in `Dolphin.ini`), and
-  that the gyro mapping moves the pointer-less remote (needs a Dolphin with SDL motion support).
-- **Joy-Cons with joycond on:** **Two Joy-Cons as one**: left (the screen asks for it), then right, then press L + R; the
-  screen should move to *All set* by itself. **One Joy-Con**: connect one, hold it sideways, SL + SR.
+- **Switch Pro Controller / Joy-Con:** Controllers page -> **Connect a controller**: it should say *Looking for
+  controllers…* straight away. Hold the sync button; the controller should be listed with ✓ (no `br-connection-create-socket`
+  failure) and appear as a controller card. Try a Joy-Con that was used with a real Switch since it was paired here: it should
+  be paired afresh by itself. In Dolphin check that both halves of a pair work as one pad.
+- **Joy-Cons with joycond on:** connect both, then press L + R: they should become one controller card.
 - **Wii Remote:** press 1 + 2; the menu connects it (*Wii Remote connected*). In the menu, hold it upright: the D-pad moves,
   A chooses, B goes back. Start a Wii game with an Xbox pad on player 1, the Wii Remote on player 2 and a Switch controller on
   player 3: in the game each must control its own player (check `Device =` in `WiimoteNew.ini`: `SDL/0/Xbox 360 Controller`,
@@ -63,8 +62,11 @@ Linux needs Bluetooth (the menu offers to install it) and kernel 5.16 or newer f
 - **A Wii Remote joining mid-game:** start a Wii game with only an Xbox pad, then turn a paired Wii Remote on (press a button).
   It should become player 2 in the game, and the pause menu should not ask for a restart. `WiimoteNew.ini` should show
   `Source = 2` for Wiimote2-4.
-- **Everyone at once:** Connect a controller -> **Everyone at once**; put two Joy-Cons and a Wii Remote in sync mode at the same
-  time. Each should be listed as it connects; press Done. With joycond on, L + R on the pair should make it a player.
+- **Everyone at once:** open Connect a controller and put two Joy-Cons and a Wii Remote in sync mode at the same time. Each
+  should be listed as it connects; press Done. With joycond on, L + R on the pair should make it a player.
+- **Batteries:** with Joy-Cons connected, their tile should show *Battery …*; `ls /sys/class/power_supply` should list
+  `nintendo_switch_controller_battery_<address>`. Let one run low: the tile and the top-right chip turn red and the menu
+  names it once.
 - **Removing:** on a joycond pair press **B** -> **Disconnect**: both Joy-Cons should switch off, the player becomes free, and a
   button press brings them back. **Forget** should unpair them (`bluetoothctl devices Paired`). A *waiting* Wii Remote tile:
   **B** -> **Let it go** removes it.
