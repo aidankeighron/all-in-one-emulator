@@ -8,6 +8,7 @@
 //   running    its service is active; "start" turns it on now and at every boot
 //   driver     the kernel has the Nintendo driver (hid-nintendo, Linux 5.16 or newer)
 const fs = require('fs');
+const admin = require('./admin');
 const os = require('os');
 const childProcess = require('child_process');
 
@@ -48,7 +49,7 @@ function createJoycond({ platform = process.platform === 'win32' ? 'win32' : 'li
     // Runs commands as an administrator through the system's password prompt (pkexec)
     function asAdmin(steps, onLine) {
         return new Promise(resolve => {
-            const child = spawnImpl('pkexec', ['sh', '-c', steps.join(' ; ')], { stdio: ['ignore', 'pipe', 'pipe'] });
+            const child = admin.spawn(spawnImpl, steps.join(' ; '));
             const feed = d => String(d).split(/[\r\n]+/).filter(Boolean).forEach(onLine);
             child.stdout.on('data', feed);
             child.stderr.on('data', feed);

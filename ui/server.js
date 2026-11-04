@@ -12,6 +12,9 @@ const wiimoteLib = require('./lib/wiimote');
 const wiimoteAccessLib = require('./lib/wiimoteaccess');
 const dolphinLog = require('./lib/dolphinlog');
 const updaterLib = require('./lib/updater');
+const admin = require('./lib/admin');
+const audioLib = require('./lib/audio');
+const cecLib = require('./lib/cec');
 const procs = require('./lib/procs');
 const controllers = require('./lib/controllers');
 const inputconfig = require('./lib/inputconfig');
@@ -516,6 +519,8 @@ async function handleBluetooth(route, req, res) {
 const system = systemLib.createSystem({ platform: runner.platform, configDir: path.dirname(config.configFile) });
 let systemJob = null;
 const updater = updaterLib.createUpdater();
+const audio = audioLib.createAudio({ platform: runner.platform });
+const tv = cecLib.createCec({ platform: runner.platform });
 const wifi = wifiLib.createWifi({ platform: runner.platform });
 let wifiJob = null;
 
@@ -541,12 +546,28 @@ async function handleSystem(route, req, res) {
             return sendJson(res, 200, { ok: true }), true;
         }
         if (route === 'POST /api/system/power') {
-            const { action } = await readJson(req);
-            if (!['restart', 'shutdown'].includes(action)) return sendJson(res, 400, { error: 'bad_action', message: 'Choose restart or shut down' }), true;
-            console.log(`[SYSTEM] ${action}`);
-            sendJson(res, 200, { ok: true });
-            setTimeout(() => system.power(action), 400);     // the answer gets out first
-            return true;
+            const { action, admin: asAdmin } = await readJson(req);
+            if (!['restart', 'shutdown', 'sleep'].includes(action)) return sendJson(res, 400, { error: 'bad_action', message: 'Choose restart, sleep or shut down' }), true;
+            console.log(`[SYSTEM] ${action}${asAdmin ? ' (as administrator)' : ''}`);
+            const r = await system.power(action, { asAdmin: !!asAdmin });
+            if (!r.ok) console.error(`[SYSTEM] ${action}: ${r.message}`);
+            return sendJson(res, r.ok ? 200 : 409, r.ok ? { ok: true } : { error: r.admin ? 'needs_admin' : 'failed', message: r.message }), true;
+        }
+        if (route === 'GET /api/system/sound') return sendJson(res, 200, { audio: await audio.status(), tv: await tv.status() }), true;
+        if (route === 'POST /api/system/sound') {
+            const body = await readJson(req);
+            if (body.output !== undefined) await audio.setOutput(String(body.output));
+            if (body.mute !== undefined) await audio.setMute(!!body.mute);
+            if (body.volume !== undefined) await audio.setVolume(body.volume);
+            return sendJson(res, 200, { audio: await audio.status(), tv: await tv.status() }), true;
+        }
+        if (route === 'POST /api/system/tv') {
+            await tv.press((await readJson(req)).key);
+            return sendJson(res, 200, { ok: true }), true;
+        }
+        if (route === 'POST /api/system/tv/install') {
+            await tv.install({ onLine: line => console.log(`[TV] ${line}`) });
+            return sendJson(res, 200, { audio: await audio.status(), tv: await tv.status() }), true;
         }
         if (route === 'GET /api/system/update') return sendJson(res, 200, { ...(await updater.status()), canRestart: !!restartHook }), true;
         if (route === 'POST /api/system/update/check') return sendJson(res, 200, { ...(await updater.check()), canRestart: !!restartHook }), true;
@@ -1070,6 +1091,12 @@ function createServer(onGameState) {
                 if (url.pathname.startsWith('/api/saves')) {
                     const handled = await handleSaves(route, url, req, res);
                     if (handled) return;
+                }
+                if (route === 'GET /api/admin') return sendJson(res, 200, admin.status({ platform: runner.platform }));
+                if (route === 'POST /api/admin/password') {
+                    // The administrator password from the menu's own keyboard (no keyboard needed); kept in memory for a while
+                    const ok = await admin.remember((await readJson(req)).password);
+                    return sendJson(res, ok ? 200 : 403, ok ? admin.status({ platform: runner.platform }) : { error: 'bad_password', message: 'That is not the password (or this user may not run administrator commands).' });
                 }
                 if (url.pathname.startsWith('/api/system')) {
                     if (await handleSystem(route, req, res)) return;

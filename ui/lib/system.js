@@ -7,6 +7,7 @@
 //   3. automatic sign-in in the display manager (GDM on Ubuntu, or LightDM): the only part that needs an administrator,
 //      done through the system's password prompt (pkexec) once, with the original file kept next to it
 const fs = require('fs');
+const admin = require('./admin');
 const os = require('os');
 const path = require('path');
 const childProcess = require('child_process');
@@ -78,16 +79,38 @@ function createSystem({
 
     const run = (file, args) => new Promise(resolve => execImpl(file, args, { timeout: 10000 }, (err, stdout) => resolve({ ok: !err, out: String(stdout || '').trim() })));
 
-    // Restart or shut down. Both run for a signed-in person without a password (Ubuntu and Windows).
-    function power(action) {
-        if (!['restart', 'shutdown'].includes(action)) throw new Error('Unknown power action');
-        const [file, args] = platform === 'win32'
-            ? ['shutdown', [action === 'restart' ? '/r' : '/s', '/t', '0']]
-            : ['systemctl', [action === 'restart' ? 'reboot' : 'poweroff']];
-        const child = spawnImpl(file, args, { detached: true, stdio: 'ignore' });
-        if (child && child.unref) child.unref();
-        if (child && child.on) child.on('error', () => {});
-        return true;
+    // Restart, shut down or sleep. Resolves {ok} once the system took it, or {ok: false, admin, message}: Ubuntu lets the
+    // signed-in person do these without a password only while theirs is the one session (the sign-in screen's own session,
+    // or a program holding a block on it, can count against that), and otherwise wants the administrator, which systemctl
+    // would ask for in a dialog the full-screen menu may hide. So it is asked not to ask (--no-ask-password) and says so;
+    // with asAdmin it runs as the administrator (the password from the menu's keyboard, see lib/admin.js).
+    function power(action, { asAdmin = false } = {}) {
+        if (!['restart', 'shutdown', 'sleep'].includes(action)) return Promise.reject(new Error('Unknown power action'));
+        if (platform === 'win32') {
+            const [file, args] = action === 'sleep' ? ['rundll32.exe', ['powrprof.dll,SetSuspendState', '0,1,0']] : ['shutdown', [action === 'restart' ? '/r' : '/s', '/t', '0']];
+            const child = spawnImpl(file, args, { detached: true, stdio: 'ignore' });
+            if (child && child.unref) child.unref();
+            if (child && child.on) child.on('error', () => {});
+            return Promise.resolve({ ok: true });
+        }
+        const verb = { restart: 'reboot', shutdown: 'poweroff', sleep: 'suspend' }[action];
+        return new Promise(resolve => {
+            const child = asAdmin ? admin.spawn(spawnImpl, `systemctl ${verb}`) : spawnImpl('systemctl', ['--no-ask-password', verb], { stdio: ['ignore', 'pipe', 'pipe'] });
+            let text = '';
+            const keep = d => { text += String(d); };
+            if (child.stdout) child.stdout.on('data', keep);
+            if (child.stderr) child.stderr.on('data', keep);
+            // a restart that goes ahead may never answer: the menu is closed with everything else
+            const quiet = setTimeout(() => resolve({ ok: true }), 5000);
+            child.on('error', err => { clearTimeout(quiet); resolve({ ok: false, message: err.message }); });
+            child.on('close', code => {
+                clearTimeout(quiet);
+                if (code === 0) return resolve({ ok: true });
+                const why = text.trim().split('\n').pop() || `exit code ${code}`;
+                const needsAdmin = !asAdmin && /interactive authentication required|access denied|not authorized|inhibit|other users/i.test(text);
+                resolve({ ok: false, admin: needsAdmin, message: needsAdmin ? 'The computer wants the administrator password for this.' : `It did not work: ${why}` });
+            });
+        });
     }
 
     function displayManager() {
@@ -113,7 +136,7 @@ function createSystem({
     // Runs a script as an administrator through the system's password prompt
     function asAdmin(script, onLine) {
         return new Promise(resolve => {
-            const child = spawnImpl('pkexec', ['sh', '-c', script], { stdio: ['ignore', 'pipe', 'pipe'] });
+            const child = admin.spawn(spawnImpl, script);
             const feed = d => String(d).split(/[\r\n]+/).filter(Boolean).forEach(onLine);
             child.stdout.on('data', feed);
             child.stderr.on('data', feed);

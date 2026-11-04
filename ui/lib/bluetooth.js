@@ -9,6 +9,7 @@
 // Windows: Windows owns Bluetooth pairing and has no command line for it, so the menu opens its Bluetooth page
 //   and shows the steps.
 const fs = require('fs');
+const admin = require('./admin');
 const os = require('os');
 const { spawn, execFile } = require('child_process');
 
@@ -138,7 +139,7 @@ function createBluetooth({ platform = process.platform, execImpl = execFile, spa
             steps.push('systemctl enable --now bluetooth', 'rfkill unblock bluetooth');
             add('Asking for permission to install and turn on Bluetooth…');
             const code = await new Promise(resolve => {
-                const child = spawnImpl('pkexec', ['sh', '-c', steps.join(' ; ')], { stdio: ['ignore', 'pipe', 'pipe'] });
+                const child = admin.spawn(spawnImpl, steps.join(' ; '));
                 const feed = d => String(d).split(/[\r\n]+/).filter(Boolean).forEach(add);
                 child.stdout.on('data', feed);
                 child.stderr.on('data', feed);

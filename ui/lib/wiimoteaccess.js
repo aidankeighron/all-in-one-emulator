@@ -6,6 +6,7 @@
 // access to the raw device of a Wii Remote, the same way the system already gives them their gamepads. Installing it asks for
 // the administrator password once (pkexec).
 const fs = require('fs');
+const admin = require('./admin');
 const path = require('path');
 const childProcess = require('child_process');
 
@@ -53,7 +54,7 @@ function createWiimoteAccess({ platform = process.platform, sysRoot = '/sys/clas
         const quoted = RULES.map(l => `'${l}'`).join(' ');
         const steps = [`printf '%s\\n' ${quoted} > ${ruleFile}`, 'udevadm control --reload-rules', 'udevadm trigger --subsystem-match=hidraw --action=change'];
         return new Promise((resolve, reject) => {
-            const child = spawnImpl('pkexec', ['sh', '-c', steps.join(' && ')], { stdio: ['ignore', 'pipe', 'pipe'] });
+            const child = admin.spawn(spawnImpl, steps.join(' && '));
             const feed = d => String(d).split(/[\r\n]+/).filter(Boolean).forEach(onLine);
             child.stdout.on('data', feed);
             child.stderr.on('data', feed);

@@ -65,8 +65,27 @@ Not tested on a real Ubuntu install (the file edits and commands are tested agai
 
 The fourth tab of Settings (LB / RB reach it with the others), for Windows and Linux:
 
-- **Restart** and **Shut down**: press twice to confirm. They need no password for the signed-in person
-  (`systemctl reboot` / `poweroff` on Ubuntu, `shutdown /r` / `/s` on Windows).
+Everything in it works with a controller alone, so a kiosk needs no keyboard or mouse at all:
+
+- **Restart**, **Sleep** and **Shut down**: press twice to confirm (`systemctl reboot` / `suspend` / `poweroff` on Ubuntu,
+  `shutdown /r` / `/s` and `SetSuspendState` on Windows). Ubuntu allows them without a password only while the signed-in
+  person's is the one session (the sign-in screen's own session, or a program holding them back, can count against
+  that); the menu then asks for the administrator password on screen and does it as the administrator, instead of the
+  system's password dialog, which the full-screen menu could hide (Restart used to do nothing then). Wake a sleeping
+  computer with its power button; a USB controller or keyboard may wake it too, Bluetooth controllers usually cannot.
+- **The administrator password, with a controller.** Everything that needs it (leaving or turning on kiosk mode, setting
+  up Bluetooth, joycond, the Wii Remote permission, Wi-Fi repair, restart when Ubuntu asks) asks for it on screen with the
+  menu's own keyboard (D-pad, A types, X deletes, Y shift, B cancels; a real keyboard types too). It is checked with
+  `sudo`, kept in memory for 10 minutes and never written anywhere; commands then run through `sudo -S` with it
+  (`ui/lib/admin.js`). Without sudo (or on Windows) the system's own prompt is used as before.
+- **Sound**: the computer's **Volume** (a slider: left and right change it) and **Mute**, and **Sound comes out of**, which
+  switches between the outputs (the TV over HDMI, speakers, headphones) and moves what is playing over. Through `pactl`
+  (PipeWire or PulseAudio; Ubuntu has it), else `wpctl` (volume and mute only). When the sound goes to the TV over HDMI,
+  this is the TV's sound too.
+- **TV volume**: the TV's own volume and mute over HDMI-CEC, like its remote. Most PC graphics cards cannot send CEC; it
+  works on computers that show a `/dev/cec*` device (some laptops and mini PCs, USB-C/DisplayPort to HDMI adapters with
+  CEC; needs `v4l-utils`, which the menu offers to install) or with a USB-CEC adapter (Pulse-Eight, `cec-utils`).
+  Otherwise the card says so; use the computer volume.
 - **Close menu**: quits the menu (to the desktop). In kiosk mode the menu starts again at the next start.
 - **Software update** (a copy run from a git checkout: `npm start`, and kiosk mode, which starts that same checkout with
   Electron): **Check for updates** fetches from GitHub and lists what is new; **Update and restart** runs `git pull --ff-only`,

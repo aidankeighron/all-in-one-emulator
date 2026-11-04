@@ -1117,6 +1117,13 @@
                 </div>
                 <div class="emu-row">
                     <div class="info">
+                        <div class="name">Sleep</div>
+                        <div class="desc">Puts the computer to sleep. Wake it with its power button (a USB controller or keyboard may wake it too; Bluetooth controllers usually cannot).</div>
+                    </div>
+                    <button class="btn" id="sys-sleep" onclick="sysPower('sleep')">Sleep</button>
+                </div>
+                <div class="emu-row">
+                    <div class="info">
                         <div class="name">Shut down</div>
                         <div class="desc">Turns the computer off. Press twice to confirm.</div>
                     </div>
@@ -1128,6 +1135,35 @@
                         <div class="desc">Quits the menu and goes to the desktop. In kiosk mode the menu starts again at the next start.</div>
                     </div>
                     <button class="btn" id="sys-quit" onclick="sysQuit()">Close menu</button>
+                </div>
+
+                </section>
+                <section class="set-card">
+                <h3>Sound</h3>
+                <div class="emu-row" style="border-top:none">
+                    <div class="info">
+                        <div class="name">Volume <span id="vol-value"></span></div>
+                        <div class="desc" id="vol-desc">Checking…</div>
+                    </div>
+                    <div class="slider-box" style="width:180px;flex:none"><input type="range" id="vol-range" min="0" max="100" step="5" aria-label="Volume" disabled></div>
+                    <button class="btn" id="vol-mute" onclick="volumeSet({ mute: !(snd.data && snd.data.audio.muted) })" disabled>Mute</button>
+                </div>
+                <div class="emu-row" id="out-row">
+                    <div class="info">
+                        <div class="name">Sound comes out of</div>
+                        <div class="desc" id="out-desc">…</div>
+                    </div>
+                    <button class="btn" id="out-button" onclick="volumeNextOutput()" disabled>Change</button>
+                </div>
+                <div class="emu-row">
+                    <div class="info">
+                        <div class="name">TV volume</div>
+                        <div class="desc" id="tv-desc">Checking…</div>
+                    </div>
+                    <button class="btn" id="tv-down" onclick="tvKey('down')" disabled>−</button>
+                    <button class="btn" id="tv-up" onclick="tvKey('up')" disabled>+</button>
+                    <button class="btn" id="tv-mute" onclick="tvKey('mute')" disabled>Mute</button>
+                    <button class="btn" id="tv-install" onclick="tvInstall()" style="display:none">Install</button>
                 </div>
 
                 </section>
@@ -1243,6 +1279,17 @@
                 <span class="desc">D-pad: move &nbsp; A: choose &nbsp; B: close</span>
                 <button class="btn" onclick="closePadMap()">Close (B)</button>
             </div>
+        </div>
+    </div>
+
+    <div class="overlay" id="pw-overlay" style="z-index:85">
+        <div class="panel guide" style="min-height:0;width:min(900px,96vw)">
+            <div class="eyebrow">Administrator</div>
+            <h2 id="pw-title" style="margin-top:4px">Password</h2>
+            <p id="pw-text" style="font-size:15px;margin-top:0"></p>
+            <div class="kb-field"><div class="text" id="pw-field"></div></div>
+            <div class="kb-rows" id="pw-keys"></div>
+            <p style="font-size:13px;text-align:center;color:var(--tx-8a9199);margin-bottom:0">D-pad: move · A: type · X: delete · Y: shift · B: cancel</p>
         </div>
     </div>
 
@@ -1681,8 +1728,8 @@
         }
 
         // One password prompt, then Dolphin can use the Wii Remotes connected to this computer
-        async function allowWiimotes() {
-            showToast('Asking for your password…');
+        function allowWiimotes() { return withAdmin(allowWiimotesNow); }
+        async function allowWiimotesNow() {
             try {
                 await padPost('/api/bluetooth/wiimote-access', {});
                 Sfx.play('select');
@@ -1711,6 +1758,81 @@
                 { label: 'Disconnect', run: () => call({ key: c.key, how: 'disconnect' }, `${c.name} disconnected`) },
                 { label: 'Forget', run: () => call({ key: c.key, how: 'forget' }, `${c.name} forgotten`) }
             ]);
+        }
+
+        // ---- The administrator password, typed with the controller (no keyboard in kiosk mode; see lib/admin.js) ----
+        // withAdmin(fn): runs fn once the menu has the password (asks for it with this keyboard first when needed). Where the
+        // menu cannot ask itself (Windows, no sudo) fn runs straight away and the system asks in its own way.
+        const PW_ROWS = [
+            [...'1234567890'].map(ch => ({ ch })),
+            [...'qwertyuiop'].map(ch => ({ ch })),
+            [...'asdfghjkl'].map(ch => ({ ch })),
+            [...'zxcvbnm'].map(ch => ({ ch })),
+            [...'!@#$%&*-_.?'].map(ch => ({ ch })),
+            [{ type: 'shift', label: 'Shift' }, { type: 'show', label: 'Show' }, { type: 'space', label: 'space' }, { type: 'delete', label: 'Delete' }, { type: 'cancel', label: 'Cancel' }, { type: 'ok', label: 'OK' }]
+        ];
+        const pw = { open: false, text: '', shift: false, show: false, r: 1, c: 0, then: null, busy: false };
+        function pwRender() {
+            document.getElementById('pw-field').textContent = pw.show ? pw.text : '•'.repeat(pw.text.length);
+            document.getElementById('pw-keys').innerHTML = PW_ROWS.map((row, r) => `<div class="kb-row">${row.map((k, c) => {
+                const label = k.ch ? (pw.shift ? k.ch.toUpperCase() : k.ch) : k.label;
+                const cls = ['kb-key', k.type === 'ok' ? 'primary wide' : k.type === 'delete' ? 'warn wide' : k.type === 'space' ? 'space' : k.type ? 'wide' : '',
+                    (k.type === 'shift' && pw.shift) || (k.type === 'show' && pw.show) ? 'on' : '', pw.r === r && pw.c === c ? 'focus' : ''].join(' ');
+                return `<button type="button" class="${cls}" data-r="${r}" data-c="${c}">${escapeHtml(label)}</button>`;
+            }).join('')}</div>`).join('');
+            document.querySelectorAll('#pw-keys .kb-key').forEach(el => el.addEventListener('click', () => { pw.r = Number(el.dataset.r); pw.c = Number(el.dataset.c); pwPress(); }));
+        }
+        function askPassword(text, then) {
+            Object.assign(pw, { open: true, text: '', shift: false, show: false, r: 1, c: 0, then, busy: false });
+            document.getElementById('pw-title').textContent = 'Administrator password';
+            document.getElementById('pw-text').textContent = text;
+            document.getElementById('pw-overlay').classList.add('open');
+            Sfx.play('open');
+            pwRender();
+        }
+        function pwClose(quiet) {
+            pw.open = false; pw.text = '';
+            document.getElementById('pw-overlay').classList.remove('open');
+            lastInputTime = Date.now() + 400;
+            if (!quiet) Sfx.play('back');
+        }
+        function pwType(ch) { if (pw.text.length < 128) pw.text += pw.shift ? ch.toUpperCase() : ch; }
+        async function pwSubmit() {
+            if (pw.busy || !pw.text) return;
+            pw.busy = true;
+            try {
+                const res = await fetch('/api/admin/password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: pw.text }) });
+                const data = await res.json();
+                if (!res.ok) { pw.busy = false; pw.text = ''; Sfx.play('error'); document.getElementById('pw-text').textContent = data.message || 'That did not work.'; return pwRender(); }
+                const then = pw.then;
+                pwClose(true);
+                Sfx.play('select');
+                if (then) then();
+            } catch { pw.busy = false; showToast('The menu could not be reached.'); }
+        }
+        function pwPress() {
+            const k = PW_ROWS[pw.r][pw.c];
+            if (k.ch) pwType(k.ch);
+            else if (k.type === 'space') pwType(' ');
+            else if (k.type === 'delete') pw.text = pw.text.slice(0, -1);
+            else if (k.type === 'shift') pw.shift = !pw.shift;
+            else if (k.type === 'show') pw.show = !pw.show;
+            else if (k.type === 'cancel') return pwClose();
+            else if (k.type === 'ok') return pwSubmit();
+            Sfx.play('move');
+            pwRender();
+        }
+        function pwMove(dr, dc) {
+            if (dr) { pw.r = (pw.r + dr + PW_ROWS.length) % PW_ROWS.length; pw.c = Math.min(pw.c, PW_ROWS[pw.r].length - 1); }
+            if (dc) pw.c = (pw.c + dc + PW_ROWS[pw.r].length) % PW_ROWS[pw.r].length;
+            Sfx.play('move');
+            pwRender();
+        }
+        async function withAdmin(fn, why = 'This needs the administrator password (the one you sign in to the computer with). It is kept for 10 minutes.') {
+            let a = null;
+            try { a = await (await fetch('/api/admin')).json(); } catch { /* ask the system's own way */ }
+            if (!a || !a.supported || a.ready) return fn();
+            askPassword(why, fn);
         }
 
         // A question in the style of the menu: one or more choices and Cancel. A (or Enter) picks the highlighted one,
@@ -2791,7 +2913,7 @@
             settingsTab = name;
             document.querySelectorAll('#settings-overlay .tab-pane').forEach(p => { p.hidden = p.dataset.pane !== name; });
             document.querySelectorAll('#settings-overlay .tab').forEach(t => { t.classList.toggle('active', t.dataset.tab === name); t.setAttribute('aria-selected', String(t.dataset.tab === name)); });
-            if (name === 'system') { sysRefresh().then(() => wifiRefresh(false)); updateRefresh(); }
+            if (name === 'system') { sysRefresh().then(() => wifiRefresh(false)); updateRefresh(); volumeRefresh(); }
             if (!quiet) { Sfx.play('page'); setPadFocus(document.querySelector('#settings-overlay .tab.active')); }
         }
 
@@ -2879,8 +3001,11 @@
             upd.checking = false; renderUpdate();
         }
 
-        async function sysKiosk() {
+        function sysKiosk() {
             if (!sys.data || !sys.data.kiosk.supported) return;
+            withAdmin(sysKioskNow, sys.data.kiosk.enabled ? 'Leaving kiosk mode changes the sign-in screen, which needs the administrator password. It is kept for 10 minutes.' : undefined);
+        }
+        async function sysKioskNow() {
             const enabled = !sys.data.kiosk.enabled;
             Sfx.play('select');
             try {
@@ -2938,7 +3063,8 @@
             job.classList.toggle('off', !!(j && j.phase === 'failed'));
         }
 
-        async function wifiPost(path, body) {
+        function wifiPost(path, body) { return withAdmin(() => wifiPostNow(path, body)); }
+        async function wifiPostNow(path, body) {
             Sfx.play('select');
             try {
                 const res = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
@@ -2954,20 +3080,94 @@
         function sysConfirm(id, label, sure, action) {
             const el = document.getElementById(id);
             if (sys.confirm === id) { sys.confirm = null; clearTimeout(sys.timer); el.textContent = label; return action(); }
-            ['sys-restart', 'sys-shutdown', 'sys-quit'].forEach(x => { const b = document.getElementById(x); if (b && x !== id) b.textContent = b.dataset.label || b.textContent; });
+            ['sys-restart', 'sys-shutdown', 'sys-sleep', 'sys-quit'].forEach(x => { const b = document.getElementById(x); if (b && x !== id) b.textContent = b.dataset.label || b.textContent; });
             el.dataset.label = label;
             sys.confirm = id; el.textContent = sure; Sfx.play('select');
             clearTimeout(sys.timer);
             sys.timer = setTimeout(() => { sys.confirm = null; el.textContent = label; }, 4000);
         }
 
+        // Restart, shut down, sleep. The computer may want the administrator for them (more than one session signed in, or a
+        // program holding them back): then the password is asked for with the controller, and it is tried again as the administrator.
         function sysPower(action) {
-            const restart = action === 'restart';
-            sysConfirm(restart ? 'sys-restart' : 'sys-shutdown', restart ? 'Restart' : 'Shut down', 'Press again to confirm', async () => {
-                try { await fetch('/api/system/power', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action }) }); showToast(restart ? 'Restarting…' : 'Shutting down…'); }
-                catch { showToast('The menu could not be reached.'); }
+            const labels = { restart: ['sys-restart', 'Restart', 'Restarting…'], shutdown: ['sys-shutdown', 'Shut down', 'Shutting down…'], sleep: ['sys-sleep', 'Sleep', 'Going to sleep…'] }[action];
+            const send = async asAdmin => {
+                try {
+                    const res = await fetch('/api/system/power', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, admin: !!asAdmin }) });
+                    const data = await res.json().catch(() => ({}));
+                    if (res.ok) return showToast(labels[2]);
+                    if (data.error === 'needs_admin' && !asAdmin) return withAdmin(() => send(true), `${data.message} It is kept for 10 minutes.`);
+                    Sfx.play('error'); showToast(data.message || 'That did not work');
+                } catch { showToast(labels[2]); /* the computer is going */ }
+            };
+            sysConfirm(labels[0], labels[1], 'Press again to confirm', () => send(false));
+        }
+
+        // ---- Sound: the computer's volume and output, and the TV's own volume over HDMI-CEC ----
+        const snd = { data: null };
+        async function volumeRefresh() {
+            try { snd.data = await (await fetch('/api/system/sound')).json(); } catch { snd.data = null; }
+            renderVolume();
+        }
+        function renderVolume() {
+            const d = snd.data, a = d && d.audio, t = d && d.tv;
+            const range = document.getElementById('vol-range'), mute = document.getElementById('vol-mute');
+            const ok = !!(a && a.supported && a.volume !== null);
+            range.disabled = mute.disabled = !ok;
+            document.getElementById('vol-desc').textContent = !a ? 'The menu could not be reached.' : !a.supported ? a.reason : 'This computer’s sound (the TV’s speakers too, when the sound goes out over HDMI). Left and right change it.';
+            if (ok && document.activeElement !== range) { range.value = a.volume; range.style.setProperty('--fill', `${a.volume}%`); }
+            document.getElementById('vol-value').textContent = ok ? `· ${a.muted ? 'muted' : `${a.volume}%`}` : '';
+            mute.textContent = a && a.muted ? 'Unmute' : 'Mute';
+            const outs = (a && a.outputs) || [];
+            document.getElementById('out-row').style.display = outs.length ? '' : 'none';
+            const cur = outs.find(o => o.name === a.output);
+            document.getElementById('out-desc').textContent = cur ? cur.description : '…';
+            document.getElementById('out-button').disabled = outs.length < 2;
+            const tvOk = !!(t && t.supported);
+            ['tv-down', 'tv-up', 'tv-mute'].forEach(id => { const b = document.getElementById(id); b.disabled = !tvOk; b.style.display = t && t.install ? 'none' : ''; });
+            const inst = document.getElementById('tv-install');
+            inst.style.display = t && t.install ? '' : 'none';
+            document.getElementById('tv-desc').textContent = !t ? '' : tvOk ? 'Sent to the TV over HDMI (CEC), like its own remote.' : t.reason;
+        }
+        async function volumeSet(body) {
+            try {
+                const res = await fetch('/api/system/sound', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+                const data = await res.json();
+                if (!res.ok) { Sfx.play('error'); return showToast(data.message || 'That did not work'); }
+                snd.data = data;
+                renderVolume();
+            } catch { showToast('The menu could not be reached.'); }
+        }
+        function volumeNextOutput() {
+            const a = snd.data && snd.data.audio;
+            if (!a || !a.outputs.length) return;
+            const i = a.outputs.findIndex(o => o.name === a.output);
+            const next = a.outputs[(i + 1) % a.outputs.length];
+            volumeSet({ output: next.name }).then(() => showToast(`Sound: ${next.description}`));
+        }
+        async function tvKey(key) {
+            try {
+                const res = await fetch('/api/system/tv', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key }) });
+                if (!res.ok) { Sfx.play('error'); showToast((await res.json()).message || 'The TV did not take it'); }
+            } catch { showToast('The menu could not be reached.'); }
+        }
+        function tvInstall() {
+            withAdmin(async () => {
+                showToast('Installing v4l-utils…');
+                await volumeSet({}).catch(() => {});
+                try {
+                    const res = await fetch('/api/system/tv/install', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+                    const data = await res.json();
+                    if (!res.ok) { Sfx.play('error'); return showToast(data.message || 'Could not install it'); }
+                    snd.data = data; renderVolume(); showToast('Done');
+                } catch { showToast('The menu could not be reached.'); }
             });
         }
+        (() => {
+            const range = document.getElementById('vol-range');
+            range.addEventListener('input', () => { range.style.setProperty('--fill', `${range.value}%`); document.getElementById('vol-value').textContent = `· ${range.value}%`; });
+            range.addEventListener('change', () => volumeSet({ volume: Number(range.value) }));
+        })();
 
         function sysQuit() {
             sysConfirm('sys-quit', 'Close menu', 'Press again to close', async () => {
@@ -3789,7 +3989,9 @@
             }, 800);
         }
 
-        async function helperCall(step) {
+        // joycond's install, on and off need the administrator (BetterJoy on Windows asks in its own way)
+        function helperCall(step) { return withAdmin(() => helperCallNow(step)); }
+        async function helperCallNow(step) {
             try {
                 const res = await fetch(`/api/betterjoy/${step}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
                 const data = await res.json();
@@ -3899,8 +4101,8 @@
             if (act === 'helper-back') return pairBack();
             if (act === 'helper') { pair.focus = 0; return helperCall(arg); }
             if (act === 'refresh') { await pairRefresh(); return autoStart(); }
-            if (act === 'setup') return pairCall('/api/bluetooth/setup');
-            if (act === 'wii-access') { pair.notice = ''; await pairCall('/api/bluetooth/wiimote-access'); if (!pair.error) pair.notice = 'Done: Dolphin can use Wii Remotes now.'; return pairRefresh(); }
+            if (act === 'setup') return withAdmin(() => pairCall('/api/bluetooth/setup'));
+            if (act === 'wii-access') return withAdmin(async () => { pair.notice = ''; await pairCall('/api/bluetooth/wiimote-access'); if (!pair.error) pair.notice = 'Done: Dolphin can use Wii Remotes now.'; return pairRefresh(); });
             if (act === 'open-settings') return pairCall('/api/bluetooth/open-settings');
         }
 
@@ -4432,7 +4634,18 @@
             if (st.pressed.length) Sfx.unlock();
             if (st.pressed.length || st.up || st.down || st.left || st.right) mouseAside();
             if (st.count > 0 && (!gameRunning || pause.open)) {
-                if (cf.open) {
+                if (pw.open) {
+                    if (now - lastInputTime > 150) {
+                        if (st.a) { pwPress(); lastInputTime = now + 220; }
+                        else if (st.b) { pwClose(); lastInputTime = now + 400; }
+                        else if (st.x) { pw.text = pw.text.slice(0, -1); Sfx.play('move'); pwRender(); lastInputTime = now + 200; }
+                        else if (st.y) { pw.shift = !pw.shift; Sfx.play('move'); pwRender(); lastInputTime = now + 250; }
+                        else if (st.up) { pwMove(-1, 0); lastInputTime = now; }
+                        else if (st.down) { pwMove(1, 0); lastInputTime = now; }
+                        else if (st.left) { pwMove(0, -1); lastInputTime = now; }
+                        else if (st.right) { pwMove(0, 1); lastInputTime = now; }
+                    }
+                } else if (cf.open) {
                     if (now - lastInputTime > 180) {
                         if (st.a) { confirmPress(); lastInputTime = now + 300; }
                         else if (st.b) { confirmClose(); lastInputTime = now + 400; }
@@ -4538,6 +4751,13 @@
         window.addEventListener('keydown', () => mouseAside(), true);
 
         window.addEventListener('keydown', e => {
+            if (pw.open) {
+                if (e.key === 'Escape') pwClose();
+                else if (e.key === 'Enter') pwSubmit();
+                else if (e.key === 'Backspace') { pw.text = pw.text.slice(0, -1); pwRender(); }
+                else if (e.key.length === 1) { pw.text += e.key; pwRender(); }
+                return e.preventDefault();
+            }
             if (cf.open) {
                 if (e.key === 'Escape') confirmClose();
                 else if (e.key === 'Enter' || e.key === ' ') confirmPress();

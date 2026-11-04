@@ -100,11 +100,36 @@ test('kiosk mode: a refused password changes nothing; an unknown sign-in screen 
     await assert.rejects(win.enable({}), /Ubuntu/);
 });
 
-test('restart and shut down run the right command on each system, and nothing else', () => {
-    const run = platform => { const calls = []; const sys = systemLib.createSystem({ platform, spawnImpl: (f, a) => { calls.push([f, ...a]); return { unref() {}, on() {} }; } }); return { sys, calls }; };
-    let r = run('linux'); r.sys.power('restart'); r.sys.power('shutdown');
-    assert.deepStrictEqual(r.calls, [['systemctl', 'reboot'], ['systemctl', 'poweroff']]);
-    r = run('win32'); r.sys.power('restart'); r.sys.power('shutdown');
-    assert.deepStrictEqual(r.calls, [['shutdown', '/r', '/t', '0'], ['shutdown', '/s', '/t', '0']]);
-    assert.throws(() => r.sys.power('rm -rf'), /Unknown/);
+test('restart, sleep and shut down run the right command, and say when the computer wants the administrator', async () => {
+    const { EventEmitter } = require('events');
+    // a stand-in for the command: answers with an exit code and what it printed
+    const run = (platform, answer = { code: 0, text: '' }) => {
+        const calls = [];
+        const spawnImpl = (f, a) => {
+            calls.push([f, ...a]);
+            const child = new EventEmitter();
+            child.stdout = new EventEmitter(); child.stderr = new EventEmitter();
+            child.stdin = { write() {}, end() {} };
+            child.unref = () => {};
+            setTimeout(() => { if (answer.text) child.stderr.emit('data', answer.text); child.emit('close', answer.code); }, 5);
+            return child;
+        };
+        return { sys: systemLib.createSystem({ platform, spawnImpl }), calls };
+    };
+    let r = run('linux');
+    assert.deepStrictEqual(await r.sys.power('restart'), { ok: true });
+    await r.sys.power('shutdown'); await r.sys.power('sleep');
+    assert.deepStrictEqual(r.calls, [['systemctl', '--no-ask-password', 'reboot'], ['systemctl', '--no-ask-password', 'poweroff'], ['systemctl', '--no-ask-password', 'suspend']]);
+    // another session signed in (the sign-in screen's, say): Ubuntu wants the administrator, which the menu then asks for
+    r = run('linux', { code: 1, text: 'Call to Reboot failed: Interactive authentication required.\n' });
+    const refused = await r.sys.power('restart');
+    assert.strictEqual(refused.ok, false);
+    assert.strictEqual(refused.admin, true);
+    r = run('linux', { code: 1, text: 'Failed to suspend system via logind: Sleep verb "suspend" not supported\n' });
+    const other = await r.sys.power('sleep');
+    assert.strictEqual(other.admin, false);
+    assert.match(other.message, /not supported/);
+    r = run('win32'); await r.sys.power('restart'); await r.sys.power('shutdown'); await r.sys.power('sleep');
+    assert.deepStrictEqual(r.calls, [['shutdown', '/r', '/t', '0'], ['shutdown', '/s', '/t', '0'], ['rundll32.exe', 'powrprof.dll,SetSuspendState', '0,1,0']]);
+    await assert.rejects(r.sys.power('rm -rf'), /Unknown/);
 });

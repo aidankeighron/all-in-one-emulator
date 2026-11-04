@@ -8,6 +8,7 @@
 //   sleep fix   a small systemd hook: the driver is unloaded before sleep and the ladder runs after waking, plus Wi-Fi power
 //               saving switched off, which is the usual cause. It writes what it did to the system journal (tag emulator-menu-wifi).
 const fs = require('fs');
+const admin = require('./admin');
 const os = require('os');
 const path = require('path');
 const childProcess = require('child_process');
@@ -179,7 +180,7 @@ function createWifi({ platform = process.platform === 'win32' ? 'win32' : 'linux
 
     function asAdmin(script, onLine) {
         return new Promise(resolve => {
-            const child = spawnImpl('pkexec', ['sh', '-c', script], { stdio: ['ignore', 'pipe', 'pipe'] });
+            const child = admin.spawn(spawnImpl, script);
             const feed = d => String(d).split(/[\r\n]+/).filter(Boolean).forEach(onLine);
             child.stdout.on('data', feed);
             child.stderr.on('data', feed);
