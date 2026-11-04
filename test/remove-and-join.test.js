@@ -367,3 +367,19 @@ test('the menu lets go of the Wii Remotes while held, and reads them again after
     assert.strictEqual(opened.length, 2, 'opened again');
     off();
 });
+
+test("Dolphin's Wii Remote log is turned on before a game, and its Wii Remote lines are read back after", () => {
+    const dolphinLog = require('../ui/lib/dolphinlog');
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dlog-'));
+    const base = path.join(home, '.var/app/org.DolphinEmu.dolphin-emu');
+    fs.mkdirSync(path.join(base, 'config/dolphin-emu'), { recursive: true });
+    fs.writeFileSync(path.join(base, 'config/dolphin-emu/Logger.ini'), '[Logs]\nVideo = True\n');
+    assert.ok(dolphinLog.enable({ home, platform: 'linux' }));
+    const ini = Ini.read(path.join(base, 'config/dolphin-emu/Logger.ini'));
+    assert.strictEqual(ini.get('Logs', 'Wiimote'), 'True');
+    assert.strictEqual(ini.get('Logs', 'Video'), 'True', 'the rest is kept');
+    assert.strictEqual(ini.get('Options', 'WriteToFile'), 'True');
+    fs.mkdirSync(path.join(base, 'data/dolphin-emu/Logs'), { recursive: true });
+    fs.writeFileSync(path.join(base, 'data/dolphin-emu/Logs/dolphin.log'), '00:01:000 Core/Boot.cpp:1 N[BOOT]: Booting\n00:02:000 Core/HW/WiimoteReal/IOhidapi.cpp:80 E[Wiimote]: Could not connect to Wii Remote at "/dev/hidraw3". Do you have permission to access the device?\n');
+    assert.deepStrictEqual(dolphinLog.wiimoteLines({ home, platform: 'linux' }), ['00:02:000 Core/HW/WiimoteReal/IOhidapi.cpp:80 E[Wiimote]: Could not connect to Wii Remote at "/dev/hidraw3". Do you have permission to access the device?']);
+});

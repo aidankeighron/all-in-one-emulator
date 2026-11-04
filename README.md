@@ -188,7 +188,7 @@ controller on the selected tile:
 | **A** | Change its player slot: pick Player 1 to 4; whoever was there takes its old place, and each controller keeps the mappings it had |
 | **X** | Change its mapping: one list with the Wii, GameCube and Switch mappings made for this kind of controller (or *Automatic*) |
 | **Y** | Switch controllers only: combine it with another Switch controller (a left and a right Joy-Con are combined by themselves), or split a pair again |
-| **B** | Remove it. **Disconnect** drops its Bluetooth connection but keeps it paired (a button press connects it again, like the Switch's *Disconnect controllers*); **Forget** unpairs it. Either way its player is free for the next controller. A Joy-Con pair joined by joycond disconnects both Joy-Cons. On a Wii Remote tile that only says *waiting* (a player kept for a remote that is not connected), **B** lets that player go |
+| **B** | Remove it. **Disconnect** drops its Bluetooth connection but keeps it paired (a button press connects it again, like the Switch's *Disconnect controllers*); **Forget** unpairs it. Either way its player is free for the next controller, and it works while the controller is on (a Joy-Con switches itself off when it is disconnected). A Joy-Con pair joined by joycond disconnects both Joy-Cons (the pair is made by the computer and has no address of its own, so the menu finds the Joy-Cons Bluetooth has connected for it). On a Wii Remote tile that only says *waiting* (a player kept for a remote that is not connected), **B** lets that player go |
 
 The **Connect a controller** and **Mappings** tiles open the two screens that stay separate: pairing, and the mapping
 editor. (The older **Players and mappings** table is still there from the pause menu's **Change controllers**.)
@@ -431,6 +431,10 @@ and is tried again when it is put in pairing mode again.
   - **Wii Remotes in a game:** connect them before starting the game. Dolphin looks for them once as the game starts (it
     does not keep searching: searching Bluetooth all the time knocks connected Wii Remotes off on many adapters), and while
     Dolphin plays the menu lets go of them so only Dolphin talks to them.
+  - **When a Wii Remote does nothing in a game,** the terminal says why. As a Wii game starts, `[WIIMOTE]` lines list each
+    paired Wii Remote (Bluetooth connected, controller part up, whether Dolphin may open it) and which players Dolphin uses a
+    real Wii Remote for; the menu also turns on Dolphin's own Wii Remote log, and when the game ends prints its lines as
+    `[DOLPHIN]` (from `~/.var/app/org.DolphinEmu.dolphin-emu/data/dolphin-emu/Logs/dolphin.log`).
   - **Connected means really connected:** a controller counts as connected once the system has it as a controller (its HID
     device, found by its Bluetooth address), not when Bluetooth's radio link is up.
   - **Wii Remote:** connected to the computer so it can drive the menu (held upright: D-pad moves, **A** chooses, **B** goes

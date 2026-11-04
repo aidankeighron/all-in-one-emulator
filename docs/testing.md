@@ -59,6 +59,8 @@ Linux needs Bluetooth (the menu offers to install it) and kernel 5.16 or newer f
 - **Let Dolphin use Wii Remotes:** after the remote connects, press **Let Dolphin use Wii Remotes** (password once). Check that
   `/etc/udev/rules.d/72-emulator-menu-wiimote.rules` exists and `ls -l /dev/hidraw*` shows a `+` (an ACL) on the remote's
   device. Then start a Wii game with the remote still connected to the computer: it should work without pressing 1 + 2.
+- **A Wii Remote that does nothing in a game:** copy the `[WIIMOTE]` lines printed as the game starts and the `[DOLPHIN]`
+  lines printed when it ends.
 - **A Wii Remote staying connected in a game:** connect it, start a Wii game and play for a few minutes: it should stay
   connected (`WiimoteContinuousScanning = False` in `Dolphin.ini`). If it still drops, note how long it took and copy the
   `[BT]` lines and Dolphin's log (View -> Show Log, with Wiimote logging on).

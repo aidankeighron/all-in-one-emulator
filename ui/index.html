@@ -1692,7 +1692,8 @@
                     [{ label: 'Let it go', run: () => call({ key: 'real', player: c.player }, `Player ${c.player} is free`) }]);
             }
             const addresses = c.addresses && c.addresses.length ? c.addresses : c.address ? [c.address] : [];
-            if (!addresses.length) return showToast(`${c.name} is plugged in. Unplug it to remove it.`);
+            // (a Switch controller with no address is two joined Joy-Cons: the server finds them)
+            if (!addresses.length && c.kind !== 'switch') return showToast(`${c.name} is plugged in. Unplug it to remove it.`);
             const again = c.kind === 'wiimote' ? 'press a button on it' : 'press any button on it';
             askChoice(`Remove ${c.name}?`, `Disconnect turns it off from this computer; ${again} to connect it again. Forget unpairs it: it has to be paired again (Connect a controller).`, [
                 { label: 'Disconnect', run: () => call({ key: c.key, how: 'disconnect' }, `${c.name} disconnected`) },

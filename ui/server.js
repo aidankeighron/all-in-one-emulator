@@ -10,6 +10,7 @@ const roms = require('./lib/roms');
 const hotkey = require('./lib/hotkey');
 const wiimoteLib = require('./lib/wiimote');
 const wiimoteAccessLib = require('./lib/wiimoteaccess');
+const dolphinLog = require('./lib/dolphinlog');
 const procs = require('./lib/procs');
 const controllers = require('./lib/controllers');
 const inputconfig = require('./lib/inputconfig');
@@ -293,6 +294,10 @@ async function startGame(relPath, slotId, onGameState) {
     // Dolphin plays Wii and GameCube games: each gets only its own console's controllers
     const gameConsole = emu.id === 'dolphin' && ['wii', 'gamecube'].includes(folder) ? folder : null;
     if (config.getAutoControllers() && !skipSetup.delete(emu.id)) setupControllers([emu.id], { game: gameConsole });
+    if (emu.id === 'dolphin' && gameConsole !== 'gamecube' && runner.platform === 'linux') {
+        dolphinLog.enable(platformCtx);
+        await wiimoteReport();
+    }
     let args = emu.args.map(a => a === '{rom}' ? abs : a);
 
     // Pick the save slot: make this computer's copy current, then start the emulator on that slot's own data
@@ -320,6 +325,10 @@ async function startGame(relPath, slotId, onGameState) {
     current.child = runner.launch(emu, args, (code, stderr) => {
         stopWatching();
         wiimoteReader.hold(false);
+        if (emu.id === 'dolphin' && gameConsole !== 'gamecube') {
+            const lines = dolphinLog.wiimoteLines(platformCtx, started);
+            if (lines.length) console.log(`[DOLPHIN] Wii Remote lines from Dolphin's log:\n${lines.map(l => `[DOLPHIN]   ${l}`).join('\n')}`);
+        }
         const wasPaused = !!(current && current.paused);
         const asked = !!(current && current.stopping);
         current = null;
@@ -605,6 +614,31 @@ async function handleBetterJoy(route, req, res) {
     }
 }
 
+// What the computer knows about each Wii Remote as a game starts, for the terminal: is it connected, is its controller part
+// up (only then can the menu or Dolphin use it), may Dolphin open it, and which players Dolphin was told are real Wii Remotes
+async function wiimoteReport() {
+    try {
+        const remotes = (await bluetooth.paired()).filter(d => d.type === 'wiimote');
+        const access = wiimoteAccess.status();
+        const view = inputconfig.describe(detectPads(), { players: config.getPlayers(), wiiRemotes: config.getWiiRemotes() }, mappings);
+        const real = view.slots.filter(sl => sl.mode === 'real').map(sl => sl.index + 1);
+        const yn = v => (v ? 'yes' : 'NO');
+        console.log(`[WIIMOTE] players Dolphin uses a real Wii Remote for: ${real.length ? real.join(', ') : 'none'}`);
+        if (!remotes.length) console.log('[WIIMOTE] no Wii Remote is paired with this computer');
+        for (const r of remotes) console.log(`[WIIMOTE] ${r.name} ${r.address}: Bluetooth connected ${yn(r.connected)}, controller part up ${yn(controllers.hidPresent(r.address))}`);
+        console.log(`[WIIMOTE] Dolphin may open connected Wii Remotes: ${access.remotes ? `${access.remotes - access.blocked} of ${access.remotes}` : 'none connected'}; permission rule installed ${yn(access.installed)}`);
+    } catch (err) { console.log(`[WIIMOTE] could not check: ${err.message}`); }
+}
+
+// The Joy-Cons that make up a controller the computer joined (joycond's): the ones Bluetooth has connected whose address no
+// controller on the list carries as its own
+async function joyconsBehind(list) {
+    const listed = new Set(list.flatMap(c => [c.address, ...(c.addresses || [])]).filter(Boolean));
+    try {
+        return (await bluetooth.paired()).filter(d => d.connected && (d.type === 'joycon-l' || d.type === 'joycon-r') && !listed.has(d.address)).map(d => d.address);
+    } catch { return []; }
+}
+
 // Which player "Use it for the next player" gave each Wii Remote (by its Bluetooth address) while the menu runs
 const realFor = new Map();
 
@@ -803,7 +837,10 @@ async function handlePlayers(route, req, res) {
                 if (!c) return sendJson(res, 404, { error: 'gone', message: 'That controller is not connected any more' }), true;
                 key = playersLib.padKey(c);
                 addresses = c.addresses && c.addresses.length ? c.addresses : c.address ? [c.address] : [];
-                if (!addresses.length) return sendJson(res, 409, { error: 'wired', message: `${c.name} is plugged in. Unplug it to remove it.` }), true;
+                // A Switch controller with no address of its own (two Joy-Cons joycond joined, made by the computer) is removed
+                // through the Joy-Cons Bluetooth has connected that are not on the list as controllers of their own
+                if (!addresses.length && c.kind === 'switch') addresses = await joyconsBehind(list);
+                if (!addresses.length) return sendJson(res, 409, { error: 'wired', message: c.kind === 'switch' ? `${c.name}: Bluetooth has no Joy-Con connected for it. Turn the Joy-Cons off to remove it.` : `${c.name} is plugged in. Unplug it to remove it.` }), true;
                 player = view.playerOf[c.id] ? view.playerOf[c.id] - 1 : null;
             }
             for (const address of addresses) {
