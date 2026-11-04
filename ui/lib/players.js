@@ -42,12 +42,20 @@ function resolve(controllers, settings, getProfile) {
     const claimed = new Set();
     const slots = players.map((p, index) => ({ index, mode: 'empty', controller: null, missing: null, request: p }));
 
-    // Players that asked for a particular controller get it first
+    // Players that asked for a particular controller get it first. Two Joy-Cons joined into one controller are that
+    // controller now: the first player kept for either of them gets the pair, and one kept for the other is free again.
     for (const s of slots) {
         const d = s.request.device;
         if (!d.startsWith('pad:')) continue;
         const hit = pool.find(c => !claimed.has(c) && c.pad && padKey(c) === d);
         if (hit) { claimed.add(hit); s.mode = 'pad'; s.controller = hit; } else { s.mode = 'empty'; s.missing = d; }
+    }
+    for (const s of slots) {
+        if (!s.missing) continue;
+        const pair = pool.find(c => c.pad && Array.isArray(c.memberKeys) && c.memberKeys.includes(s.missing));
+        if (!pair) continue;
+        if (!claimed.has(pair)) { claimed.add(pair); s.mode = 'pad'; s.controller = pair; s.missing = null; }
+        else { s.missing = null; s.request = { ...s.request, device: 'auto' }; }
     }
     for (const s of slots) {
         if (s.request.device === 'real') s.mode = 'real';

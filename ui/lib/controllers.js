@@ -103,9 +103,11 @@ function readUsbIds(root = '/sys/bus/usb/devices') {
 }
 
 // What a joycond controller takes from the two Joy-Cons it is made of: their addresses, and that it is on Bluetooth
-function joycondHalves(halves) {
+function joycondHalves(halves, nameIndexOf) {
     const addresses = halves.map(h => (h.bus === '0005' ? h.address : null)).filter(Boolean);
-    return addresses.length ? { addresses, connection: 'Bluetooth' } : {};
+    // the keys the two Joy-Cons had while they were controllers of their own: a player kept for either one gets the pair
+    const memberKeys = halves.map(h => keyOf({ vendor: h.vendor, product: h.product, name: h.name, nameIndex: nameIndexOf(h) }));
+    return { memberKeys, ...(addresses.length ? { addresses, connection: 'Bluetooth' } : {}) };
 }
 
 // Turns raw device lists into the list the menu and the emulator writers work with.
@@ -113,26 +115,25 @@ function joycondHalves(halves) {
 function build(procDevices, usbIds = []) {
     const adapter = hasGcAdapter(usbIds);
     // joycond joins two Joy-Cons into one "Combined Joy-Cons" controller and grabs the halves: only the combined one counts
-    const combinedDevs = procDevices.filter(d => /combined joy-?cons/i.test(d.name));
-    let halvesToDrop = combinedDevs.length * 2;
-    const dropped = [];
-    const halfOf = d => {
-        if (!(halvesToDrop > 0 && /joy-?con/i.test(d.name) && !/combined/i.test(d.name))) return false;
-        halvesToDrop--;
-        dropped.push(d);
-        return true;
-    };
-    const kept = procDevices.filter(d => !halfOf(d));
-    // joycond's controller is made by the computer and has no Bluetooth address of its own: it is removed through its two
-    // Joy-Cons, the latest left and right ones that connected before it was made
-    const halvesOf = new Map();
+    // Each Joy-Con is two devices: the controller and its motion sensor ("... IMU", no joystick). Only the controllers count:
+    // for every joined controller, the latest left and right Joy-Con that connected before it are its halves, and are hidden.
+    // joycond's controller is made by the computer and has no Bluetooth address of its own, so it takes its halves' addresses
+    // (that is how it is removed).
+    const isImu = d => /\bimu\b/i.test(d.name);
+    const combinedDevs = procDevices.filter(d => /combined joy-?cons/i.test(d.name) && !isImu(d));
     const side = (d, s) => (s === 'L' ? /\(l\)|left/i : /\(r\)|right/i).test(d.name);
-    for (const c of [...combinedDevs].sort((a, b) => (a.event ?? 0) - (b.event ?? 0))) {
-        const free = dropped.filter(d => ![...halvesOf.values()].some(h => h.includes(d)));
+    const halves = procDevices.filter(d => /joy-?con/i.test(d.name) && !/combined/i.test(d.name) && !isImu(d) && d.js !== null && d.js !== undefined);
+    const halvesOf = new Map();
+    const taken = new Set();
+    for (const c of [...combinedDevs].sort((x, y) => (x.event ?? 0) - (y.event ?? 0))) {
+        const free = halves.filter(d => !taken.has(d));
         const before = free.filter(d => (d.event ?? 0) < (c.event ?? Infinity));
         const pick = s => [...before].reverse().find(d => side(d, s)) || free.find(d => side(d, s));
-        halvesOf.set(c, [pick('L'), pick('R')].filter(Boolean));
+        const pair = [pick('L'), pick('R')].filter(Boolean);
+        pair.forEach(d => taken.add(d));
+        halvesOf.set(c, pair);
     }
+    const kept = procDevices.filter(d => !taken.has(d));
     const found = kept
         // The kernel may also expose the adapter as a gamepad; it is shown once, as the adapter
         .filter(d => !(adapter && d.vendor === NINTENDO && d.product === GC_ADAPTER_PRODUCT))
@@ -157,7 +158,7 @@ function build(procDevices, usbIds = []) {
             bus: d.bus,
             version: d.version,
             address: d.bus === '0005' ? d.address || null : null,
-            ...(halvesOf.has(d) ? joycondHalves(halvesOf.get(d)) : {}),
+            ...(halvesOf.has(d) ? joycondHalves(halvesOf.get(d), h => halves.filter(x => x.name === h.name).indexOf(h)) : {}),
             keys: d.keys || [],
             js: d.js,
             sdlIndex: d.js !== null ? sdlOrder.indexOf(d) : null,

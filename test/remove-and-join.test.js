@@ -297,3 +297,53 @@ test('a Wii Remote gets its Bluetooth address from its HID device, which also sa
     assert.strictEqual(controllers.hidPresent('8C:56:C5:AA:BB:CC', { hidRoot }), true);
     assert.strictEqual(controllers.hidPresent('8C:56:C5:AA:BB:CD', { hidRoot }), false);
 });
+
+test('a pair joycond joined takes one place: both Joy-Cons are hidden, not one Joy-Con and a motion sensor', () => {
+    const imu = (name, event) => [`I: Bus=0005 Vendor=057e Product=2006 Version=8001`, `N: Name="${name}"`, 'P: Phys=', 'S: Sysfs=/devices/x', 'U: Uniq=', `H: Handlers=event${event}`, 'B: EV=9', 'B: ABS=3f', ''].join('\n');
+    const proc = [
+        block('Nintendo Switch Left Joy-Con', '0005', 'aa:00:00:00:00:01', 10, 0, '2006'),
+        imu('Nintendo Switch Left Joy-Con IMU', 11),
+        block('Nintendo Switch Right Joy-Con', '0005', 'aa:00:00:00:00:02', 12, 1, '2007'),
+        imu('Nintendo Switch Right Joy-Con IMU', 13),
+        block('Nintendo Switch Combined Joy-Cons', '0006', '', 14, 2, '2008')
+    ].join('\n');
+    const list = controllers.build(controllers.parseProc(proc));
+    assert.deepStrictEqual(list.map(c => c.name), ['Nintendo Switch Combined Joy-Cons']);
+    assert.deepStrictEqual(list[0].addresses, ['AA:00:00:00:00:01', 'AA:00:00:00:00:02']);
+});
+
+test('players kept for two Joy-Cons: once joined, the first one has the pair and the other player is free again', () => {
+    const proc = [
+        block('Nintendo Switch Left Joy-Con', '0005', 'aa:00:00:00:00:01', 10, 0, '2006'),
+        block('Nintendo Switch Right Joy-Con', '0005', 'aa:00:00:00:00:02', 12, 1, '2007')
+    ].join('\n');
+    const before = controllers.build(controllers.parseProc(proc));
+    const players = playersLib.normalize([{ device: playersLib.padKey(before[0]) }, { device: playersLib.padKey(before[1]) }]);
+    // L + R: joycond makes the joined controller and the halves go
+    const after = controllers.build(controllers.parseProc(`${proc}\n${block('Nintendo Switch Combined Joy-Cons', '0006', '', 14, 2, '2008')}`));
+    const xbox = pad({ id: 'js3', js: 3 });
+    const slots = playersLib.resolve([...after, xbox], { players }, () => null);
+    assert.strictEqual(slots[0].controller.name, 'Nintendo Switch Combined Joy-Cons');
+    assert.strictEqual(slots[1].controller, xbox, 'player 2 is free again, so the next controller takes it');
+    assert.ok(slots.every(sl => !sl.missing));
+});
+
+test('Dolphin: a Wii game gets only Wii Remotes and a GameCube game only GameCube controllers, so no gamepad is two players', () => {
+    const two = [pad(), pad({ id: 'js1', js: 1, sdlIndex: 1, name: 'Pro Controller', kind: 'switch', vendor: '057e', product: '2009' })];
+    const read = home => {
+        const dir = path.join(home, '.var/app/org.DolphinEmu.dolphin-emu/config/dolphin-emu');
+        return { main: Ini.read(path.join(dir, 'Dolphin.ini')), wm: Ini.read(path.join(dir, 'WiimoteNew.ini')) };
+    };
+    const wii = fs.mkdtempSync(path.join(os.tmpdir(), 'game-wii-'));
+    inputconfig.apply('dolphin', two, { home: wii, platform: 'linux', game: 'wii' });
+    let { main, wm } = read(wii);
+    assert.deepStrictEqual([1, 2].map(n => wm.get(`Wiimote${n}`, 'Source')), ['1', '1'], 'both are Wii Remotes');
+    assert.deepStrictEqual([0, 1, 2, 3].map(n => main.get('Core', `SIDevice${n}`)), ['0', '0', '0', '0'], 'and no GameCube controller');
+
+    const gc = fs.mkdtempSync(path.join(os.tmpdir(), 'game-gc-'));
+    inputconfig.apply('dolphin', two, { home: gc, platform: 'linux', game: 'gamecube', spareRemotes: true });
+    ({ main, wm } = read(gc));
+    assert.deepStrictEqual([0, 1, 2, 3].map(n => main.get('Core', `SIDevice${n}`)), ['6', '6', '0', '0'], 'both are GameCube controllers');
+    assert.deepStrictEqual([1, 2, 3, 4].map(n => wm.get(`Wiimote${n}`, 'Source')), ['0', '0', '0', '0'], 'and no Wii Remote, not even a waiting one');
+    assert.strictEqual(main.get('Core', 'WiimoteContinuousScanning'), 'False');
+});

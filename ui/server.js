@@ -193,19 +193,21 @@ const pendingSetup = new Set();
 // What a running game was started with, per player: which controller (or real Wii Remote) and which mappings. When this
 // differs from what the players are now, the game has to start again to use it; when it is the same (a controller that
 // dropped out and came back, a real Wii Remote connecting) the emulator picks it up by itself.
-function controllerPlan(emulatorId) {
+function controllerPlan(emulatorId, game = null) {
     const view = inputconfig.describe(detectPads(), { players: config.getPlayers(), wiiRemotes: config.getWiiRemotes() }, mappings);
-    const field = emulatorId === 'ryujinx' ? ['sw'] : ['wii', 'gc'];
+    const field = emulatorId === 'ryujinx' ? ['sw'] : game === 'wii' ? ['wii'] : game === 'gamecube' ? ['gc'] : ['wii', 'gc'];
     // Dolphin: a real Wii Remote has nothing to map, and a free player is written as a real Wii Remote too when this computer
     // has one paired, so a remote that connects there during the game is the same plan (Dolphin picks it up by itself)
     const dolphin = emulatorId !== 'ryujinx';
     return JSON.stringify(view.slots.map(s => {
-        if (dolphin && (s.mode === 'real' || (s.mode === 'empty' && wiimotesPaired))) return ['real'];
+        if (dolphin && game !== 'gamecube' && (s.mode === 'real' || (s.mode === 'empty' && wiimotesPaired))) return ['real'];
+        if (dolphin && game === 'gamecube' && s.mode !== 'pad') return ['none'];      // Wii Remotes play no part in a GameCube game
         return [s.mode, s.controller ? playersLib.padKey(s.controller) : null, ...field.map(f => s[f] && s[f].id)];
     }));
 }
 
-function setupControllers(emulatorIds) {
+// game: the console of the game that is about to start (Dolphin: 'wii' or 'gamecube'), see inputconfig's writeDolphin
+function setupControllers(emulatorIds, { game = null } = {}) {
     const running = current && current.path ? current.emulator : null;
     if (running && emulatorIds.includes(running)) {
         pendingSetup.add(running);
@@ -213,7 +215,7 @@ function setupControllers(emulatorIds) {
     }
     const connected = detectPads();
     const results = emulatorIds.map(id => {
-        const result = inputconfig.apply(id, connected, { ...platformCtx, wiiRemotes: config.getWiiRemotes(), spareRemotes: wiimotesPaired, players: config.getPlayers(), profiles: mappings, betterjoyMotion: betterjoyOn() ? betterjoyLib.MOTION_PORT : 0, joyconsSplit: config.getJoyconPairs().splits.length > 0 });
+        const result = inputconfig.apply(id, connected, { ...platformCtx, wiiRemotes: config.getWiiRemotes(), spareRemotes: wiimotesPaired, game: id === 'dolphin' ? game : null, players: config.getPlayers(), profiles: mappings, betterjoyMotion: betterjoyOn() ? betterjoyLib.MOTION_PORT : 0, joyconsSplit: config.getJoyconPairs().splits.length > 0 });
         console.log(`[PADS] ${id}: ${result.status}${result.message ? ` (${result.message})` : ''}`);
         return result;
     });
@@ -290,7 +292,9 @@ async function startGame(relPath, slotId, onGameState) {
     await runner.grantAccess(emu, romsDir);
     await ensureBetterJoy();
     if (emu.id === 'dolphin') await refreshPaired();
-    if (config.getAutoControllers() && !skipSetup.delete(emu.id)) setupControllers([emu.id]);
+    // Dolphin plays Wii and GameCube games: each gets only its own console's controllers
+    const gameConsole = emu.id === 'dolphin' && ['wii', 'gamecube'].includes(folder) ? folder : null;
+    if (config.getAutoControllers() && !skipSetup.delete(emu.id)) setupControllers([emu.id], { game: gameConsole });
     let args = emu.args.map(a => a === '{rom}' ? abs : a);
 
     // Pick the save slot: make this computer's copy current, then start the emulator on that slot's own data
@@ -309,7 +313,7 @@ async function startGame(relPath, slotId, onGameState) {
     }
     console.log(`[LAUNCH] ${emu.name}: ${abs}${slot ? ` (slot ${slot.id})` : ''}`);
 
-    current = { emulator: emu.id, path: relPath, emu, slotId: slot ? slot.id : null, paused: false, frozenPids: [], plan: controllerPlan(emu.id) };
+    current = { emulator: emu.id, path: relPath, emu, game: gameConsole, slotId: slot ? slot.id : null, paused: false, frozenPids: [], plan: controllerPlan(emu.id, gameConsole) };
     pendingSetup.delete(emu.id);
     lastError = null;
     const started = Date.now();
@@ -320,7 +324,7 @@ async function startGame(relPath, slotId, onGameState) {
         const asked = !!(current && current.stopping);
         current = null;
         // Controller changes made during the game go into the emulator's files now that it has closed
-        if (pendingSetup.delete(emu.id)) setupControllers([emu.id]);
+        if (pendingSetup.delete(emu.id)) setupControllers([emu.id], { game: gameConsole });
         let quickUndone = false;
         if (!asked && Date.now() - started < 8000) {
             // It ended by itself right after starting. If the menu had just changed its controller settings, put them back
@@ -664,7 +668,9 @@ function controllersView() {
         slots: view.slots.map(s => ({ index: s.index, mode: s.mode, controller: s.controller ? s.controller.name : (s.mode === 'real' ? 'Wii Remote' : null) })),
         profiles: mappings.list().map(p => ({ id: p.id, name: p.name, target: p.target, family: p.family, builtin: p.builtin })),
         autoSetup: config.getAutoControllers(),
-        setup: lastSetup
+        setup: lastSetup,
+        // Dolphin may not open a Wii Remote the computer holds until it is allowed once (lib/wiimoteaccess.js)
+        wiimoteAccess: runner.platform === 'linux' ? wiimoteAccess.status() : null
     };
 }
 
@@ -1110,7 +1116,7 @@ function createServer(onGameState) {
                     const error = lastError;
                     lastError = null;
                     // Whether the controllers now differ from what the running game started with (it needs a Reset to use them)
-                    const controllersChanged = !!(current && current.plan && controllerPlan(current.emulator) !== current.plan);
+                    const controllersChanged = !!(current && current.plan && controllerPlan(current.emulator, current.game) !== current.plan);
                     return sendJson(res, 200, { running: !!current || restarting, controllersChanged, game: current && { emulator: current.emulator, path: current.path }, paused: !!(current && current.paused), frozen: !!(current && current.frozenPids && current.frozenPids.length), error, sync: saves.activity() });
                 }
                 if (route === 'POST /api/game/resume') { resumeGame(); return sendJson(res, 200, { ok: true }); }

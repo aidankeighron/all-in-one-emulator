@@ -87,7 +87,14 @@ const JOYCON_HIDAPI_HINT = ['SDL_Hints', 'SDL_JOYSTICK_HIDAPI_JOY_CONS'];
 
 // spareRemotes: players with no controller get a real Wii Remote slot instead of none, so a Wii Remote that connects while
 // the game runs joins it as the next player (Dolphin keeps looking for remotes). Set when this computer has a Wii Remote paired.
-function writeDolphin(controllers, { home, platform, env, exePath, wiiRemotes = 0, players, profiles, joyconsSplit = false, spareRemotes = false }) {
+// game: the console of the game about to start ('wii' or 'gamecube'). Each gamepad is then only that console's controller:
+// in a Wii game an (emulated) Wii Remote and no GameCube port, in a GameCube game a GameCube port and no Wii Remote. Written as
+// both, a Wii game that also takes GameCube controllers (Smash Bros. Brawl) sees every gamepad twice: two players moving
+// together. Without a game (settings changed in the menu) both are written; the game's start writes them again.
+function writeDolphin(controllers, { home, platform, env, exePath, wiiRemotes = 0, players, profiles, joyconsSplit = false, spareRemotes = false, game = null }) {
+    const wiiSide = game !== 'gamecube';
+    const gcSide = game !== 'wii';
+    spareRemotes = spareRemotes && wiiSide;
     const adapter = controllers.some(c => c.adapter);
     const slots = slotsFor(controllers, { players, wiiRemotes }, profiles);
     const anyone = slots.some(s => s.mode === 'pad' || s.mode === 'real' || (s.mode === 'empty' && spareRemotes));
@@ -106,7 +113,9 @@ function writeDolphin(controllers, { home, platform, env, exePath, wiiRemotes = 
     // Wii Remotes keep their player number (a game's player 2 is the second remote)
     for (const s of slots) {
         const i = s.index;
-        if (s.mode === 'pad') {
+        if (!wiiSide) {
+            wm.replaceSection(`Wiimote${i + 1}`, [['Source', String(WIIMOTE_NONE)]]);
+        } else if (s.mode === 'pad') {
             const device = dolphinDevice(s.controller, platform, controllers, sdlOpts);
             wm.replaceSection(`Wiimote${i + 1}`, mappings.dolphinSection(s.wii, device, { pair: !!s.controller.combined }));
             done.push(`Player ${i + 1}: ${s.controller.name} (${s.wii.name})`);
@@ -121,7 +130,7 @@ function writeDolphin(controllers, { home, platform, env, exePath, wiiRemotes = 
     }
     // A real Wii Remote cannot play GameCube games, so the gamepads fill the GameCube ports from the first one, in player
     // order: a pad on player 3 behind a Wii Remote on player 2 is GameCube port 2, not a port with nobody before it
-    const pads = slots.filter(s => s.mode === 'pad');
+    const pads = gcSide ? slots.filter(s => s.mode === 'pad') : [];
     for (let port = 0; port < slots.length; port++) {
         const s = pads[port];
         if (s) {
@@ -129,7 +138,8 @@ function writeDolphin(controllers, { home, platform, env, exePath, wiiRemotes = 
             gc.replaceSection(`GCPad${port + 1}`, mappings.dolphinSection(s.gc, dolphinDevice(s.controller, platform, controllers, sdlOpts), { pair: !!s.controller.combined }));
         } else if (touchPorts) main.set('Core', `SIDevice${port}`, String(adapter ? SI_GC_ADAPTER : SI_NONE));
     }
-    if (slots.some(s => s.mode === 'real' || (s.mode === 'empty' && spareRemotes))) main.set('Core', 'WiimoteContinuousScanning', 'True');
+    if (wiiSide && slots.some(s => s.mode === 'real' || (s.mode === 'empty' && spareRemotes))) main.set('Core', 'WiimoteContinuousScanning', 'True');
+    else if (!wiiSide) main.set('Core', 'WiimoteContinuousScanning', 'False');      // nothing to look for in a GameCube game
     if (spareRemotes && slots.some(s => s.mode === 'empty')) done.push('free players: any Wii Remote that connects');
     if (menuPair) main.set(JOYCON_HINT[0], JOYCON_HINT[1], '1');
     else if (joyconsSplit) main.set(JOYCON_HINT[0], JOYCON_HINT[1], '0');
@@ -258,7 +268,7 @@ const writers = { dolphin: writeDolphin, ryujinx: writeRyujinx };
 // context: {home, platform, env, exePath(id), wiiRemotes, players, profiles}. Defaults to this computer.
 function apply(emulatorId, controllers, context = {}) {
     const ctx = {
-        wiiRemotes: context.wiiRemotes || 0, joyconsSplit: !!context.joyconsSplit, spareRemotes: !!context.spareRemotes, betterjoyMotion: context.betterjoyMotion || 0, players: context.players, profiles: context.profiles || mappings.createStore(''),
+        wiiRemotes: context.wiiRemotes || 0, joyconsSplit: !!context.joyconsSplit, spareRemotes: !!context.spareRemotes, game: context.game || null, betterjoyMotion: context.betterjoyMotion || 0, players: context.players, profiles: context.profiles || mappings.createStore(''),
         home: context.home || os.homedir(), platform: context.platform || platformLib.current(), env: context.env || process.env, exePath: context.exePath || (() => null)
     };
     const write = writers[emulatorId];

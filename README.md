@@ -171,6 +171,10 @@ the highlighted one. While a game runs, the menu ignores the controller and (in 
 of the way. The keyboard works too: arrow keys, **Enter** to select, **PageUp/PageDown** for pages,
 **S** for Settings, **Esc** to close it.
 
+The mouse works too, as a fallback: once a controller or key is used, a mouse resting over a tile no longer takes the
+selection back (the page redraws under it, which the browser counts as entering the tile again); move the mouse and it
+chooses again. Clicks always work.
+
 Only the controller you are actually using steers the menu (the one whose buttons or sticks moved
 last), and a stick that rests off-centre is learned as its centre after a second, so a drifting stick or
 a second device can't take over the menu.
@@ -305,7 +309,7 @@ Settings -> Sound & controls.
 
 | Emulator | What is set up |
 |---|---|
-| Dolphin | GameCube ports 1-4 and Wii Remotes 1-4. A gamepad becomes both a GameCube controller and an emulated Wii Remote, using the player's mappings (below). A connected Wii Remote is set to *Real Wiimote* and keeps its player number; the gamepads fill the GameCube ports from port 1 (a Wii Remote cannot play GameCube games). With an official GameCube adapter, ports without a gamepad use the adapter. |
+| Dolphin | GameCube ports 1-4 and Wii Remotes 1-4. A gamepad is the controller of the game's console, using the player's mappings (below): in a Wii game an emulated Wii Remote, in a GameCube game a GameCube controller, never both at once (a Wii game that also takes GameCube controllers, like Smash Bros. Brawl, would otherwise see every gamepad as two players moving together). A connected Wii Remote is set to *Real Wiimote* and keeps its player number; the gamepads fill the GameCube ports from port 1 (a Wii Remote cannot play GameCube games). With an official GameCube adapter, ports without a gamepad use the adapter. |
 | Ryujinx | Linux: each player's controller is written into Ryujinx's `Config.json` (`input_config`) by its SDL id. Open Ryujinx once first. Windows: a controller is matched to the entry Ryujinx already has for it (set each controller up once with **Open** in Settings; after that the menu keeps it on the right player). The buttons come from the player's Switch mapping; a layout you made in Ryujinx is left alone until you pick a Switch mapping for that player. The gamepads take Ryujinx's players from Player 1 on (a real Wii Remote has no place in a Switch game). |
 
 Players are numbered in the order the controllers were connected. A controller that drops out and comes back while the
@@ -433,7 +437,8 @@ and is tried again when it is put in pairing mode again.
     which the browser's gamepad support leaves out, so the menu reads the remote itself (`ui/lib/wiimote.js`, from
     `/dev/input/event*`). In a game Dolphin uses it as a real Wii Remote. A remote the computer cannot connect is still
     listed: Dolphin connects it itself when a game starts (press 1 + 2 then).
-  - **Let Dolphin use Wii Remotes (once):** Dolphin reaches a remote the computer holds through its raw device
+  - **Let Dolphin use Wii Remotes (once):** until this is done a connected Wii Remote's tile on the Controllers page says
+    *Not in games yet: X*, and **X** on it does it. Dolphin reaches a remote the computer holds through its raw device
     (`/dev/hidraw*`), which only the administrator may open out of the box. After a Wii Remote connects, the screen offers
     **Let Dolphin use Wii Remotes**: one password prompt, and it writes `/etc/udev/rules.d/72-emulator-menu-wiimote.rules`,
     which gives the person signed in at the computer (and so Dolphin) the raw device of a Wii Remote or Wii Remote Plus, the

@@ -1573,6 +1573,7 @@
                             <span class="pill ${c.connection === 'Bluetooth' ? 'bt' : ''}">${escapeHtml(c.connection)}</span>
                             ${c.combined ? '<span class="pill pair">Combined</span>' : ''}
                             ${c.battery ? `<span class="pill batt ${c.battery.low ? 'low' : ''}">${escapeHtml(batteryText(c.battery))}</span>` : ''}
+                            ${wiiBlocked(c) ? '<span class="pill fail">Not in games yet: X</span>' : ''}
                         </div>
                         <div class="pad-roles">${roles || 'Not used by an emulator'}</div>`;
                     card.addEventListener('mouseenter', select(i));
@@ -1607,6 +1608,7 @@
             if (c) {
                 chips.push(['A', c.player ? 'Change player slot' : 'Give it a player slot', 'a']);
                 if (c.family !== 'wiimote' && !c.adapter) chips.push(['X', 'Change mapping', 'x']);
+                if (wiiBlocked(c)) chips.push(['X', 'Let Dolphin use Wii Remotes (password once)', 'x']);
                 chips.push(['B', c.virtual ? 'Free this player' : 'Remove this controller', 'b']);
                 if (nintendoUnits().length >= 2) chips.push(['L + R', 'Press both bumpers on two Joy-Cons: join them, or split them again', null]);
             } else if (zone === 'bottom') chips.push(['A', 'Press the button', 'a']);
@@ -1661,8 +1663,20 @@
             const c = padList[selectedIndex];
             if (!c) return;
             if (act === 'a') return padMovePicker(c);
+            if (act === 'x' && wiiBlocked(c)) return allowWiimotes();
             if (act === 'x') return padMapPicker(c);
             if (act === 'b') return padRemove(c);
+        }
+
+        // One password prompt, then Dolphin can use the Wii Remotes connected to this computer
+        async function allowWiimotes() {
+            showToast('Asking for your password…');
+            try {
+                await padPost('/api/bluetooth/wiimote-access', {});
+                Sfx.play('select');
+                showToast('Done: Dolphin can use your Wii Remotes now');
+                refreshControllers();
+            } catch (err) { Sfx.play('error'); showToast(err.message); }
         }
 
         // B (or Delete) on a controller: asks, then disconnects it (it stays paired: a button press connects it again) or
@@ -1866,6 +1880,9 @@
         }
 
         // Takes the server's controller list; true when it differs from what was showing
+        let padAccess = null;       // can Dolphin use the Wii Remotes the computer holds (see lib/wiimoteaccess.js)
+        // A connected Wii Remote Dolphin is not allowed to use yet: in a game it would do nothing
+        const wiiBlocked = c => !!(c && c.kind === 'wiimote' && !c.virtual && padAccess && padAccess.supported && padAccess.blocked > 0);
         function applyControllers(data) {
             const json = JSON.stringify([data.controllers, data.slots]);
             const changed = json !== padJson;
@@ -1874,6 +1891,7 @@
             padSlots = data.slots || [];
             padKeyMap = data.keyMap || {};
             padProfiles = data.profiles || [];
+            padAccess = data.wiimoteAccess || null;
             updateControllerChip();
             return changed;
         }
@@ -4350,6 +4368,7 @@
             const twoSwitchPads = (pairChord || (!gameRunning && onControllers() && !settingsOpen && !dd.open && !pm.open && !pair.open && !plr.open && !mps.open)) && chordPoll(now, pairChord);
 
             if (st.pressed.length) Sfx.unlock();
+            if (st.pressed.length || st.up || st.down || st.left || st.right) mouseAside();
             if (st.count > 0 && (!gameRunning || pause.open)) {
                 if (cf.open) {
                     if (now - lastInputTime > 180) {
@@ -4436,6 +4455,26 @@
         }
 
         // Keyboard works too (handy without a controller, or to check that the menu itself is fine)
+        // The mouse is the fallback, the controller and keyboard come first. Once a controller or a key is used, the mouse
+        // stops choosing things by resting on them until it really moves again: otherwise a mouse left over a tile takes the
+        // selection back every time the page redraws under it (the browser reports the tile under a still mouse as newly
+        // entered), and the controller seems to do nothing. Clicks always work.
+        let mouseLive = true, mouseAt = null;
+        function mouseAside() { mouseLive = false; }
+        window.addEventListener('mousemove', e => {
+            const at = `${e.screenX},${e.screenY}`;
+            if (mouseAt !== null && at !== mouseAt && !mouseLive) {
+                mouseLive = true;
+                // moved again: the tile under it is chosen, as if it had just been entered
+                const tile = document.elementFromPoint(e.clientX, e.clientY);
+                const card = tile && tile.closest('.wii-channel');
+                if (card) card.dispatchEvent(new MouseEvent('mouseenter'));
+            }
+            mouseAt = at;
+        }, true);
+        for (const type of ['mouseenter', 'mouseover']) window.addEventListener(type, e => { if (!mouseLive) e.stopPropagation(); }, true);
+        window.addEventListener('keydown', () => mouseAside(), true);
+
         window.addEventListener('keydown', e => {
             if (cf.open) {
                 if (e.key === 'Escape') confirmClose();
