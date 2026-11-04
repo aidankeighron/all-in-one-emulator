@@ -68,6 +68,13 @@ The fourth tab of Settings (LB / RB reach it with the others), for Windows and L
 - **Restart** and **Shut down**: press twice to confirm. They need no password for the signed-in person
   (`systemctl reboot` / `poweroff` on Ubuntu, `shutdown /r` / `/s` on Windows).
 - **Close menu**: quits the menu (to the desktop). In kiosk mode the menu starts again at the next start.
+- **Software update** (a copy run from a git checkout: `npm start`, and kiosk mode, which starts that same checkout with
+  Electron): **Check for updates** fetches from GitHub and lists what is new; **Update and restart** runs `git pull --ff-only`,
+  runs `npm install` only when `package.json` or `package-lock.json` changed (npm is looked for on the PATH, next to node and
+  under `~/.nvm`), and the app starts again on the new code with the same arguments, so kiosk mode comes back full screen.
+  It is refused while a game runs, when the copy has changes of its own in files git tracks (untracked files such as a
+  `roms` folder do not count) or commits that are not on GitHub (then run `git pull` yourself), and for the AppImage
+  (download the new one). With `npm run server` the menu updates but cannot restart itself: start it again.
 - **Kiosk mode** (Ubuntu): shows whether it is on, and turns it on or off as above.
 - **Wi-Fi** (Linux): for Wi-Fi that stops working after sleep.
   - *Status* shows what the system can see: the kernel version, the Wi-Fi interface and its driver (`ath10k_pci`, ...), the card on

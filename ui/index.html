@@ -1132,6 +1132,18 @@
 
                 </section>
                 <section class="set-card">
+                <h3>Software update</h3>
+                <div class="emu-row" style="border-top:none">
+                    <div class="info">
+                        <div class="name">Update the menu <span id="update-state"></span></div>
+                        <div class="desc" id="update-desc">Checking…</div>
+                    </div>
+                    <button class="btn" id="update-button" onclick="sysUpdate()" disabled>…</button>
+                </div>
+                <div id="update-job" class="notice" style="display:none;white-space:pre-line"></div>
+
+                </section>
+                <section class="set-card">
                 <h3>Kiosk mode</h3>
                 <div class="emu-row" style="border-top:none" id="kiosk-row">
                     <div class="info">
@@ -2779,7 +2791,7 @@
             settingsTab = name;
             document.querySelectorAll('#settings-overlay .tab-pane').forEach(p => { p.hidden = p.dataset.pane !== name; });
             document.querySelectorAll('#settings-overlay .tab').forEach(t => { t.classList.toggle('active', t.dataset.tab === name); t.setAttribute('aria-selected', String(t.dataset.tab === name)); });
-            if (name === 'system') { sysRefresh().then(() => wifiRefresh(false)); }
+            if (name === 'system') { sysRefresh().then(() => wifiRefresh(false)); updateRefresh(); }
             if (!quiet) { Sfx.play('page'); setPadFocus(document.querySelector('#settings-overlay .tab.active')); }
         }
 
@@ -2814,10 +2826,57 @@
                     : !k.canStart ? 'Start the menu as the app (npm start or the AppImage) to set this up.'
                     : `Makes the computer sign in as ${k.user} by itself, with no password, and open the menu full screen, with no lock screen or sleep. You are asked for the administrator password once, now.${k.displayManager ? '' : ' This system’s sign-in screen is not GDM or LightDM, so automatic sign-in will need setting in the system settings.'}`;
             }
-            const text = job && (job.phase === 'running' ? job.message || 'Working…' : job.phase === 'failed' ? job.message : job.kind.startsWith('kiosk') ? job.message : '');
+            const kioskJob = job && job.kind.startsWith('kiosk') ? job : null;
+            const text = kioskJob && (kioskJob.phase === 'running' ? kioskJob.message || 'Working…' : kioskJob.message);
             jobBox.style.display = text ? '' : 'none';
             jobBox.textContent = text || '';
-            jobBox.classList.toggle('off', !!(job && job.phase === 'failed'));
+            jobBox.classList.toggle('off', !!(kioskJob && kioskJob.phase === 'failed'));
+            renderUpdate();
+        }
+
+        // ---- Software update: pull the new version from GitHub and start again on it (a git checkout: npm start, kiosk mode) ----
+        const upd = { info: null, checking: false };
+        async function updateRefresh() {
+            try { upd.info = await (await fetch('/api/system/update')).json(); } catch { upd.info = null; }
+            renderUpdate();
+        }
+        function renderUpdate() {
+            const i = upd.info, btn = document.getElementById('update-button'), desc = document.getElementById('update-desc');
+            const state = document.getElementById('update-state'), box = document.getElementById('update-job');
+            const job = sys.data && sys.data.job && sys.data.job.kind === 'update' ? sys.data.job : null;
+            const busy = !!(job && job.phase === 'running');
+            const show = (text, off) => { box.style.display = text ? '' : 'none'; box.textContent = text || ''; box.classList.toggle('off', !!off); };
+            if (!i) { desc.textContent = 'The menu could not be reached.'; btn.disabled = true; btn.textContent = '…'; return show(''); }
+            if (!i.supported) { desc.textContent = i.reason; state.textContent = ''; btn.disabled = true; btn.textContent = 'Not available'; return show(''); }
+            state.textContent = `· ${i.version.sha}`;
+            desc.textContent = `This copy is from ${i.version.date}: “${i.version.subject}”.${i.dirty.length ? ` It has changes of its own (${i.dirty.length} file${i.dirty.length === 1 ? '' : 's'}), so update it with git yourself.` : ''}`;
+            const ready = i.checked && i.behind > 0 && !i.dirty.length && !i.ahead;
+            btn.disabled = busy || upd.checking;
+            btn.textContent = busy ? 'Updating…' : upd.checking ? 'Checking…' : ready ? `Update and restart (${i.behind} new)` : 'Check for updates';
+            if (job) return show(job.message, job.phase === 'failed');
+            if (i.error) return show(i.error, true);
+            if (!i.checked) return show('');
+            if (!i.behind) return show('Up to date.');
+            show(`New on GitHub:\n${i.changes.join('\n')}${i.behind > i.changes.length ? `\n… and ${i.behind - i.changes.length} more` : ''}${i.ahead ? `\nThis copy also has ${i.ahead} change(s) that are not on GitHub: update it with git yourself.` : i.canRestart ? '' : '\nAfter updating, close the menu and start it again.'}`);
+        }
+        async function sysUpdate() {
+            const i = upd.info;
+            if (!i || !i.supported) return;
+            Sfx.play('select');
+            if (i.checked && i.behind > 0 && !i.dirty.length && !i.ahead) {
+                try {
+                    const res = await fetch('/api/system/update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+                    const data = await res.json();
+                    if (!res.ok) return showToast(data.message || 'That did not work');
+                    sys.data = data;
+                } catch { return showToast('The menu could not be reached.'); }
+                renderSystem();
+                return sysRefresh();
+            }
+            upd.checking = true; renderUpdate();
+            try { upd.info = await (await fetch('/api/system/update/check', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })).json(); }
+            catch { showToast('The menu could not be reached.'); }
+            upd.checking = false; renderUpdate();
         }
 
         async function sysKiosk() {

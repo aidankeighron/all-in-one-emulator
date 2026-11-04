@@ -11,6 +11,7 @@ const hotkey = require('./lib/hotkey');
 const wiimoteLib = require('./lib/wiimote');
 const wiimoteAccessLib = require('./lib/wiimoteaccess');
 const dolphinLog = require('./lib/dolphinlog');
+const updaterLib = require('./lib/updater');
 const procs = require('./lib/procs');
 const controllers = require('./lib/controllers');
 const inputconfig = require('./lib/inputconfig');
@@ -57,6 +58,7 @@ let importing = null;   // in-flight ROM import
 let current = null;     // running game {emulator, path, slotId, paused, frozenPids}
 let restarting = false; // the game is being stopped so it can start again (new controllers)
 let pauseHook = () => {};   // told when the pause menu should come up or go away (the app window raises itself)
+let restartHook = null;     // the app: start again on the code on disk (after an update)
 let lastError = null;   // last failed launch, shown once in the UI
 const jobs = new Map(); // emulator install/uninstall jobs
 let nextJob = 1;
@@ -513,6 +515,7 @@ async function handleBluetooth(route, req, res) {
 // The computer: restart, shut down, kiosk mode (Ubuntu), leave the menu
 const system = systemLib.createSystem({ platform: runner.platform, configDir: path.dirname(config.configFile) });
 let systemJob = null;
+const updater = updaterLib.createUpdater();
 const wifi = wifiLib.createWifi({ platform: runner.platform });
 let wifiJob = null;
 
@@ -544,6 +547,23 @@ async function handleSystem(route, req, res) {
             sendJson(res, 200, { ok: true });
             setTimeout(() => system.power(action), 400);     // the answer gets out first
             return true;
+        }
+        if (route === 'GET /api/system/update') return sendJson(res, 200, { ...(await updater.status()), canRestart: !!restartHook }), true;
+        if (route === 'POST /api/system/update/check') return sendJson(res, 200, { ...(await updater.check()), canRestart: !!restartHook }), true;
+        if (route === 'POST /api/system/update') {
+            // Pulls the new version from GitHub, then the app starts again on it (kiosk mode included)
+            if (current || launching) return sendJson(res, 409, { error: 'busy', message: 'Quit the game first' }), true;
+            if (systemJob && systemJob.phase === 'running') return sendJson(res, 409, { error: 'busy', message: 'Something is already in progress' }), true;
+            const job = systemJob = { kind: 'update', phase: 'running', message: 'Checking GitHub…', lines: [] };
+            const onLine = line => { job.message = line; job.lines.push(line); console.log(`[UPDATE] ${line}`); };
+            updater.update({ onLine }).then(r => {
+                job.phase = 'done';
+                if (!r.updated) { job.message = r.message; return; }
+                console.log(`[UPDATE] ${r.from} -> ${r.to}${r.installed ? ' (npm install ran)' : ''}`);
+                if (restartHook) { job.message = `Updated to ${r.version.sha}. Starting again…`; setTimeout(() => restartHook(), 1500); }
+                else job.message = `Updated to ${r.version.sha}. Close the menu and start it again to use it.`;
+            }).catch(err => { job.phase = 'failed'; job.message = err.message; console.error(`[UPDATE] ${err.message}`); });
+            return sendJson(res, 200, systemView()), true;
         }
         if (route === 'POST /api/system/quit') {
             sendJson(res, 200, { ok: true });
@@ -1193,8 +1213,9 @@ function createServer(onGameState) {
 }
 
 // Starts the server on localhost only. port 0 picks a free port.
-function start({ port = 3000, onGameState, onPause } = {}) {
+function start({ port = 3000, onGameState, onPause, onRestart } = {}) {
     if (onPause) pauseHook = onPause;
+    if (onRestart) restartHook = onRestart;
     return new Promise((resolve, reject) => {
         const server = createServer(onGameState);
         server.on('error', reject);

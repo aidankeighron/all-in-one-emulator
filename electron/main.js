@@ -66,8 +66,16 @@ function onPause(paused) {
     }
 }
 
+// After an update: start again on the new code, with the same arguments (kiosk mode starts full screen). A "." for the
+// project folder (npm start) is made absolute, since the new process may not start in the same folder.
+function restartApp() {
+    const root = path.resolve(__dirname, '..');
+    app.relaunch({ args: process.argv.slice(1).map(a => (a === '.' ? root : a)) });
+    app.exit(0);
+}
+
 async function createWindow() {
-    const { port } = await server.start({ port: 0, onGameState, onPause });
+    const { port } = await server.start({ port: 0, onGameState, onPause, onRestart: restartApp });
     serverPort = port;
 
     win = new BrowserWindow({
