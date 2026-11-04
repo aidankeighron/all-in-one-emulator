@@ -78,6 +78,14 @@ cannot open), and what the sign-in screen logged about it at this start. **Repai
 **Repair and use Xorg** also sets `WaylandEnable=false`, the usual cure with NVIDIA (the desktop then runs on Xorg too).
 An older kiosk mode gets the backup with **Repair** (or leaving and turning on kiosk mode again).
 
+**Only the menu, never the desktop.** Kiosk mode starts the menu through a small launcher
+(`~/.config/all-in-one-emulator/kiosk-start.sh`, from the autostart entry) that starts it again when it closes by accident;
+**Close menu** leaves a note first, and then it stays closed and the desktop shows. While no game runs, the app also checks
+every two seconds that its window is up and full screen and brings it back (an emulator that crashed, or a window that took
+over, cannot leave the desktop showing), and after a game ends it always comes back, whatever went wrong. A kiosk mode set up
+before the launcher existed is switched to it by itself when the menu starts. **Update and restart** in kiosk mode just
+closes the app and the launcher starts the new version.
+
 Because anyone who turns the computer on is signed in, only use it on a computer that is not holding anything private.
 Not tested on a real Ubuntu install (the file edits and commands are tested against stand-ins).
 
@@ -97,7 +105,10 @@ Everything in it works with a controller alone, so a kiosk needs no keyboard or 
   up Bluetooth, joycond, the Wii Remote permission, Wi-Fi repair, restart when Ubuntu asks) asks for it on screen with the
   menu's own keyboard (D-pad, A types, X deletes, Y shift, B cancels; a real keyboard types too). It is checked with
   `sudo`, kept in memory for 10 minutes and never written anywhere; commands then run through `sudo -S` with it
-  (`ui/lib/admin.js`). Without sudo (or on Windows) the system's own prompt is used as before.
+  (`ui/lib/admin.js`). Newer Ubuntu releases ship sudo-rs, which does not take every option of the classic sudo (that made
+  every password look wrong): the menu tries simpler forms and keeps the one that works, and when the password is not
+  taken it shows what the computer said (also in the terminal as `[ADMIN]`). **System box** on the keyboard hands over to
+  the system's own password box instead (needs a keyboard). Without sudo (or on Windows) the system's own prompt is used.
 - **Sound**: the computer's **Volume** (a slider: left and right change it) and **Mute**, and **Sound comes out of**, which
   switches between the outputs (the TV over HDMI, speakers, headphones) and moves what is playing over. Through `pactl`
   (PipeWire or PulseAudio; Ubuntu has it), else `wpctl` (volume and mute only). When the sound goes to the TV over HDMI,
@@ -218,6 +229,10 @@ of the way. The keyboard works too: arrow keys, **Enter** to select, **PageUp/Pa
 The mouse works too, as a fallback: once a controller or key is used, a mouse resting over a tile no longer takes the
 selection back (the page redraws under it, which the browser counts as entering the tile again); move the mouse and it
 chooses again. Clicks always work.
+
+Moving with the d-pad goes where the eye expects, the same way everywhere (Settings, the on-screen keyboards, the Connect
+screen): only what lies in the pressed direction counts, something in the same row or column wins over something off to
+the side, then the nearest; in Settings the focus stays inside a card while there is more of it in that direction.
 
 Only the controller you are actually using steers the menu (the one whose buttons or sticks moved
 last), and a stick that rests off-centre is learned as its centre after a second, so a drifting stick or

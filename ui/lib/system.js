@@ -65,6 +65,27 @@ function desktopEntry(command) {
     return `[Desktop Entry]\nType=Application\nName=Emulator Menu\nComment=Starts the Emulator Menu when the computer starts (kiosk mode)\nExec=${command}\nTerminal=false\nX-GNOME-Autostart-enabled=true\nX-GNOME-Autostart-Delay=0\n`;
 }
 
+// Kiosk mode starts the menu through this script: it starts it again when it closes by accident (a crash), so the desktop is
+// never left showing. "Close menu" leaves the note first, and then it stays closed (back to the desktop). Exit code 3 is the app
+// saying another copy already runs.
+function launcherScript(command, note) {
+    const sq = v => `'${String(v).replace(/'/g, "'\\''")}'`;
+    return `#!/bin/sh
+# Written by the emulator menu (kiosk mode). Starts the menu, and starts it again if it closes by accident.
+# "Close menu" in the menu leaves the note below, and then it stays closed.
+note=${sq(note)}
+rm -f "$note"
+export EMULATOR_MENU_KIOSK=1
+while :; do
+    ${command}
+    code=$?
+    if [ -e "$note" ]; then rm -f "$note"; exit 0; fi
+    [ "$code" = 3 ] && exit 0
+    sleep 2
+done
+`;
+}
+
 // The command that starts this menu again: the AppImage, or the app run by Electron from a source checkout
 function appCommand({ env = process.env, execPath = process.execPath, electron = !!process.versions.electron, root = path.resolve(__dirname, '..', '..') } = {}) {
     if (env.APPIMAGE) return `${quoteDesktop(env.APPIMAGE)} --fullscreen`;
@@ -79,7 +100,18 @@ function createSystem({
 } = {}) {
     const linux = platform === 'linux';
     const autostartFile = path.join(home, '.config', 'autostart', 'emulator-menu.desktop');
-    const stateFile = path.join(configDir || path.join(home, '.config', 'all-in-one-emulator'), 'kiosk-state.json');
+    const menuDir = configDir || path.join(home, '.config', 'all-in-one-emulator');
+    const stateFile = path.join(menuDir, 'kiosk-state.json');
+    const launcherFile = path.join(menuDir, 'kiosk-start.sh');
+    const closedNote = path.join(menuDir, 'menu-closed');
+    // The autostart entry and its launcher script for this menu
+    function writeAutostart(cmd) {
+        fs.mkdirSync(menuDir, { recursive: true });
+        fs.writeFileSync(launcherFile, launcherScript(cmd, closedNote), { mode: 0o755 });
+        fs.chmodSync(launcherFile, 0o755);
+        fs.mkdirSync(path.dirname(autostartFile), { recursive: true });
+        fs.writeFileSync(autostartFile, desktopEntry(`/bin/sh ${quoteDesktop(launcherFile)}`));
+    }
 
     const run = (file, args) => new Promise(resolve => execImpl(file, args, { timeout: 10000 }, (err, stdout) => resolve({ ok: !err, out: String(stdout || '').trim() })));
 
@@ -217,8 +249,7 @@ function createSystem({
         if (!dm) throw new Error('This system’s sign-in screen is not one the menu knows (GDM, LightDM or SDDM), so it cannot sign in by itself. Set automatic login in the system settings');
         // The part that can be refused comes first, so nothing is left half done
         await setAutologin(dm, true, onLine);
-        fs.mkdirSync(path.dirname(autostartFile), { recursive: true });
-        fs.writeFileSync(autostartFile, desktopEntry(cmd));
+        writeAutostart(cmd);
         onLine('The menu will start when the computer does');
         await setDesktopSettings(true, onLine);
         onLine('Kiosk mode is on. From the next start the computer signs in by itself and opens the menu');
@@ -228,6 +259,7 @@ function createSystem({
     async function disable({ onLine = () => {} } = {}) {
         if (!linux) throw new Error('Kiosk mode is set up for Ubuntu (Linux) only');
         fs.rmSync(autostartFile, { force: true });
+        fs.rmSync(launcherFile, { force: true });
         await setDesktopSettings(false, onLine);
         const dm = displayManager();
         if (dm && autologinOn(dm)) await setAutologin(dm, false, onLine);
@@ -302,7 +334,26 @@ function createSystem({
         return loginDiagnosis();
     }
 
-    return { power, status, enable, disable, autostartFile, displayManager, nextStart, fixWifi, loginDiagnosis, repairLogin };
+    // "Close menu": the launcher does not start it again
+    function markClosed() {
+        if (!linux || !exists(autostartFile)) return;
+        try { fs.mkdirSync(menuDir, { recursive: true }); fs.writeFileSync(closedNote, 'closed on purpose\n'); } catch { /* it then starts again */ }
+    }
+
+    // A kiosk mode set up before the launcher existed starts the app straight; switch it to the launcher (the person's own
+    // autostart entry: no password needed). Run when the menu starts.
+    function refreshKiosk() {
+        if (!linux || !exists(autostartFile)) return false;
+        try {
+            if (read(autostartFile).includes(launcherFile) && exists(launcherFile)) return false;
+            const cmd = command();
+            if (!cmd) return false;
+            writeAutostart(cmd);
+            return true;
+        } catch { return false; }
+    }
+
+    return { power, status, enable, disable, autostartFile, launcherFile, displayManager, nextStart, fixWifi, loginDiagnosis, repairLogin, markClosed, refreshKiosk };
 }
 
-module.exports = { sddmConfig, createSystem, gdmConfig, lightdmConfig, desktopEntry, appCommand, GNOME_SETTINGS, MARK_BEGIN, MARK_END };
+module.exports = { launcherScript, sddmConfig, createSystem, gdmConfig, lightdmConfig, desktopEntry, appCommand, GNOME_SETTINGS, MARK_BEGIN, MARK_END };

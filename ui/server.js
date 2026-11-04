@@ -327,7 +327,15 @@ async function startGame(relPath, slotId, onGameState) {
     const started = Date.now();
     const stopWatching = process.env.EMU_NO_HOTKEY ? () => {} : hotkey.start(togglePause, { holdMs: config.getPauseHold() * 1000 });
     if (emu.id === 'dolphin') wiimoteReader.hold(true);       // the Wii Remotes are Dolphin's while it plays
-    current.child = runner.launch(emu, args, (code, stderr) => {
+    // Whatever goes wrong after a game (a crash leaves odd state), the menu is told it ended and comes back
+    const afterGame = (code, stderr) => {
+        try { ended(code, stderr); } catch (err) {
+            console.error(`[LAUNCH] after ${emu.name} closed: ${err.stack || err.message}`);
+            current = null;
+            if (onGameState) onGameState(false);
+        }
+    };
+    const ended = (code, stderr) => {
         stopWatching();
         wiimoteReader.hold(false);
         if (emu.id === 'dolphin' && gameConsole !== 'gamecube') {
@@ -367,7 +375,8 @@ async function startGame(relPath, slotId, onGameState) {
                 if (r.status !== 200) lastError = r.body.message || 'Could not start the game again';
             }).finally(() => { restarting = false; });
         }
-    });
+    };
+    current.child = runner.launch(emu, args, afterGame);
     if (onGameState) onGameState(true);
     return { status: 200, body: { status: 'launched', emulator: emu.id } };
 }
@@ -598,6 +607,7 @@ async function handleSystem(route, req, res) {
             return sendJson(res, 200, systemView()), true;
         }
         if (route === 'POST /api/system/quit') {
+            system.markClosed();        // kiosk mode: closed on purpose, so it is not started again
             sendJson(res, 200, { ok: true });
             setTimeout(() => process.exit(0), 300);
             return true;
@@ -1106,8 +1116,9 @@ function createServer(onGameState) {
                 if (route === 'GET /api/admin') return sendJson(res, 200, admin.status({ platform: runner.platform }));
                 if (route === 'POST /api/admin/password') {
                     // The administrator password from the menu's own keyboard (no keyboard needed); kept in memory for a while
-                    const ok = await admin.remember((await readJson(req)).password);
-                    return sendJson(res, ok ? 200 : 403, ok ? admin.status({ platform: runner.platform }) : { error: 'bad_password', message: 'That is not the password (or this user may not run administrator commands).' });
+                    const r = await admin.remember((await readJson(req)).password);
+                    if (!r.ok) console.error(`[ADMIN] the password was not taken: ${r.reason}`);
+                    return sendJson(res, r.ok ? 200 : 403, r.ok ? admin.status({ platform: runner.platform }) : { error: 'bad_password', message: `Not taken. The computer said: “${r.reason}”` });
                 }
                 if (url.pathname.startsWith('/api/system')) {
                     if (await handleSystem(route, req, res)) return;
@@ -1264,13 +1275,17 @@ function start({ port = 3000, onGameState, onPause, onRestart } = {}) {
             processRoms(); // pick up any zips dropped in while the app was closed
             ensureBetterJoy();
             if (helper.supported) setInterval(refreshBetterJoy, 3000).unref();
+            if (system.refreshKiosk()) console.log('[SYSTEM] kiosk mode now starts the menu again if it closes by accident');
             applyShareSettings().then(err => err && console.error(`[LIBRARY] ${err}`));
             resolve({ server, port: actual });
         });
     });
 }
 
-module.exports = { start };
+// Whether a game (or an emulator's own window) is up: the app keeps its window on screen only when not
+const isGameRunning = () => !!current || launching || restarting;
+
+module.exports = { start, isGameRunning };
 
 if (require.main === module) {
     start({ port: Number(process.env.PORT) || 3000 }).catch(err => {

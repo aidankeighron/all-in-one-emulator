@@ -69,7 +69,8 @@ test('kiosk mode: sign-in, autostart and the desktop’s lock and sleep are set,
     assert.match(fs.readFileSync(gdmFile, 'utf8'), /AutomaticLogin=tv/);
     assert.ok(fs.existsSync(gdmFile + '.emulator-menu.bak'), 'the original file is kept');
     assert.strictEqual(fs.readFileSync(gdmFile + '.emulator-menu.bak', 'utf8'), DEFAULT_GDM);
-    assert.match(fs.readFileSync(path.join(home, '.config/autostart/emulator-menu.desktop'), 'utf8'), /Exec="\/x\/app" --fullscreen/);
+    assert.match(fs.readFileSync(path.join(home, '.config/autostart/emulator-menu.desktop'), 'utf8'), /Exec=\/bin\/sh ".*kiosk-start\.sh"/);
+    assert.match(fs.readFileSync(path.join(home, 'cfg/kiosk-start.sh'), 'utf8'), /\n    "\/x\/app" --fullscreen\n/, 'the launcher starts the app');
     assert.deepStrictEqual([gsettings['org.gnome.desktop.screensaver lock-enabled'], gsettings['org.gnome.desktop.session idle-delay'], gsettings['org.gnome.settings-daemon.plugins.power sleep-inactive-ac-type']], ['false', 'uint32 0', "'nothing'"]);
     assert.ok(calls.some(c => c[0] === 'pkexec'));
 
@@ -182,4 +183,31 @@ test('the sign-in screen: Xorg for NVIDIA, the one that really runs is written, 
     assert.strictEqual(diag.timed, false, 'an older kiosk mode: no backup yet');
     assert.strictEqual(diag.nvidia && diag.wayland, true);
     assert.deepStrictEqual(diag.log, ['Gdm: GdmDisplay: Session never registered, failing', 'Gdm: autologin failed, falling back to the greeter']);
+});
+
+test('kiosk launcher: the menu is started again after an accidental close, and stays closed after Close menu', () => {
+    const dir = tmp();
+    const counter = path.join(dir, 'runs'), note = path.join(dir, 'menu-closed');
+    // a stand-in for the app: the first run "crashes", the second is closed with Close menu (which leaves the note)
+    const app = path.join(dir, 'app.sh');
+    fs.writeFileSync(app, `n=$(cat "${counter}" 2>/dev/null || echo 0); n=$((n+1)); echo $n > "${counter}"; [ $n -ge 2 ] && echo closed > "${note}"; [ "$EMULATOR_MENU_KIOSK" = 1 ] || exit 9; exit 1\n`);
+    const script = path.join(dir, 'kiosk-start.sh');
+    fs.writeFileSync(script, systemLib.launcherScript(`/bin/sh "${app}"`, note));
+    require('child_process').execFileSync('/bin/sh', [script], { timeout: 10000 });
+    assert.strictEqual(fs.readFileSync(counter, 'utf8').trim(), '2', 'started again once after the crash, then stopped');
+    assert.ok(!fs.existsSync(note), 'the note is cleared for next time');
+});
+
+test('kiosk: Close menu leaves the note, and an older kiosk mode is switched to the launcher', () => {
+    const home = tmp();
+    const cfg = path.join(home, 'cfg');
+    const auto = path.join(home, '.config/autostart/emulator-menu.desktop');
+    fs.mkdirSync(path.dirname(auto), { recursive: true });
+    fs.writeFileSync(auto, systemLib.desktopEntry('"/x/app" --fullscreen'));       // as kiosk mode wrote it before
+    const sys = systemLib.createSystem({ platform: 'linux', home, user: 'tv', configDir: cfg, command: () => '"/x/app" --fullscreen' });
+    assert.strictEqual(sys.refreshKiosk(), true);
+    assert.match(fs.readFileSync(auto, 'utf8'), /kiosk-start\.sh/);
+    assert.strictEqual(sys.refreshKiosk(), false, 'once is enough');
+    sys.markClosed();
+    assert.ok(fs.existsSync(path.join(cfg, 'menu-closed')));
 });

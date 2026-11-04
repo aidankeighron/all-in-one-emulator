@@ -16,17 +16,39 @@ let pauseWin = null;       // the pause menu: a transparent window over everythi
 let serverPort = 0;
 let hiddenForGame = false;
 
-// A fullscreen menu would cover the emulator window, so get out of the way while a game runs
+// Kiosk mode (started by its launcher, or full screen): the menu is all there is. The desktop must never be left showing.
+const kiosk = process.env.EMULATOR_MENU_KIOSK === '1' || startFullscreen;
+
+// Puts the menu back on screen, full screen in kiosk mode, in front
+function bringBack() {
+    if (!win) return;
+    if (!win.isVisible()) win.show();
+    if (win.isMinimized()) win.restore();
+    if (kiosk && !win.isFullScreen()) win.setFullScreen(true);
+    win.focus();
+}
+
+// A fullscreen menu would cover the emulator window, so get out of the way while a game runs. When the game ends, in any
+// way (a crash included), the menu comes back; once more a moment later, after the emulator's last windows are gone.
 function onGameState(running) {
     if (!win) return;
     if (running && win.isFullScreen()) {
         hiddenForGame = true;
         win.minimize();
-    } else if (!running && hiddenForGame) {
+    } else if (!running && (hiddenForGame || kiosk)) {
         hiddenForGame = false;
-        win.restore();
-        win.focus();
+        bringBack();
+        setTimeout(() => { if (!server.isGameRunning()) bringBack(); }, 1200);
     }
+}
+
+// Kiosk mode: whenever no game runs, the menu is on screen. Whatever hid it (an emulator that crashed, a window that took
+// over), it is put back within a couple of seconds.
+if (kiosk) {
+    setInterval(() => {
+        if (!win || server.isGameRunning()) return;
+        if (win.isMinimized() || !win.isVisible() || !win.isFullScreen()) bringBack();
+    }, 2000).unref();
 }
 
 // The pause menu (Back + Start held in a game) is its own frameless, transparent window that covers the screen and sits above
@@ -74,6 +96,8 @@ function onPause(paused) {
 // After an update: start again on the new code, with the same arguments (kiosk mode starts full screen). A "." for the
 // project folder (npm start) is made absolute, since the new process may not start in the same folder.
 function restartApp() {
+    // kiosk mode's launcher starts it again by itself (a relaunch as well would make two)
+    if (process.env.EMULATOR_MENU_KIOSK === '1') return app.exit(0);
     const root = path.resolve(__dirname, '..');
     app.relaunch({ args: process.argv.slice(1).map(a => (a === '.' ? root : a)) });
     app.exit(0);
@@ -137,7 +161,7 @@ ipcMain.handle('pick-folder', async () => {
 });
 
 if (!app.requestSingleInstanceLock()) {
-    app.quit();
+    app.exit(3);        // another copy runs (kiosk mode's launcher stops on this code)
 } else {
     app.on('second-instance', () => {
         if (win) {

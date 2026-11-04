@@ -15,7 +15,12 @@ function fakeSpawn(codeFor) {
         const child = new EventEmitter();
         child.stdout = new EventEmitter(); child.stderr = new EventEmitter();
         child.stdin = { write: t => { call.input += t; }, end() {} };
-        setTimeout(() => child.emit('close', codeFor(call)), 5);
+        setTimeout(() => {
+            const answer = codeFor(call);
+            const [code, err] = Array.isArray(answer) ? answer : [answer, ''];
+            if (err) child.stderr.emit('data', err);
+            child.emit('close', code);
+        }, 5);
         return child;
     };
     return { spawnImpl, calls };
@@ -26,9 +31,9 @@ test('the password is checked with sudo, kept for a while, and then used instead
     const exists = f => f === '/usr/bin/sudo';
     const { spawnImpl, calls } = fakeSpawn(c => (c.input === 'right\n' ? 0 : 1));
     assert.strictEqual(admin.spawn(spawnImpl, 'echo hi', { exists }) && calls[0].cmd, 'pkexec', 'without it: the system asks');
-    assert.strictEqual(await admin.remember('wrong', { spawnImpl, exists }), false);
+    assert.strictEqual((await admin.remember('wrong', { spawnImpl, exists })).ok, false);
     assert.strictEqual(admin.password(), null);
-    assert.strictEqual(await admin.remember('right', { spawnImpl, exists }), true);
+    assert.strictEqual((await admin.remember('right', { spawnImpl, exists })).ok, true);
     admin.spawn(spawnImpl, 'systemctl reboot', { exists });
     const last = calls[calls.length - 1];
     assert.deepStrictEqual([last.cmd, ...last.args], ['/usr/bin/sudo', '-S', '-k', '-p', '', 'sh', '-c', 'systemctl reboot']);
@@ -93,4 +98,17 @@ test('TV volume: sent with cec-ctl when the computer has a CEC link, explained w
     assert.match(st.reason, /no HDMI-CEC/);
     const needsTool = await createCec({ platform: 'linux', exists: () => false, list: () => ['cec0'], execImpl }).status();
     assert.strictEqual(needsTool.install, 'v4l-utils');
+});
+
+test('a sudo that does not take every option (sudo-rs) still takes the password, and its own words come back when it says no', async () => {
+    admin.forget();
+    const exists = f => f === '/usr/bin/sudo';
+    // like sudo-rs: -p is not an option it knows
+    const { spawnImpl, calls } = fakeSpawn(c => (c.args.includes('-p') ? [1, "sudo-rs: unexpected argument '-p' found\n"] : c.input === 'right\n' ? 0 : [1, '[sudo: authenticate] Password: \nsudo-rs: Authentication failed, try again.\n']));
+    const wrong = await admin.remember('wrong', { spawnImpl, exists });
+    assert.deepStrictEqual(wrong, { ok: false, reason: 'sudo-rs: Authentication failed, try again.' }, 'the real reason, not "invalid password" for everything');
+    assert.deepStrictEqual(await admin.remember('right', { spawnImpl, exists }), { ok: true });
+    admin.spawn(spawnImpl, 'true', { exists });
+    assert.deepStrictEqual(calls[calls.length - 1].args.slice(0, 2), ['-S', '-k'], 'the form that worked is used from then on');
+    admin.forget();
 });
