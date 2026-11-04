@@ -119,7 +119,8 @@ Everything in it works with a controller alone, so a kiosk needs no keyboard or 
   Otherwise the card says so; use the computer volume.
 - **Close menu**: quits the menu (to the desktop). In kiosk mode the menu starts again at the next start.
 - **Software update** (a copy run from a git checkout: `npm start`, and kiosk mode, which starts that same checkout with
-  Electron): **Check for updates** fetches from GitHub and lists what is new; **Update and restart** runs `git pull --ff-only`,
+  Electron): shows the version (the date of the copy) and checks GitHub by itself when the tab opens: *Up to date* or *Update
+  available*; **Update** runs `git pull --ff-only`,
   runs `npm install` only when `package.json` or `package-lock.json` changed (npm is looked for on the PATH, next to node and
   under `~/.nvm`), and the app starts again on the new code with the same arguments, so kiosk mode comes back full screen.
   It is refused while a game runs, when the copy has changes of its own in files git tracks (untracked files such as a

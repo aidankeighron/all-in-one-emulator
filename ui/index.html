@@ -315,6 +315,9 @@
         .pill.pair { background: linear-gradient(to bottom, #8bd48f, #4aa855); }
         .pill.batt { background: linear-gradient(to bottom, #b3bcc4, #8f9aa4); }
         .pill.fail { background: linear-gradient(to bottom, #f08a7e, #d9473a); }
+        .kiosk-line { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+        .power-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+        .power-row .btn { width: 100%; }
         .pc-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
         .pc-card { height: 168px; border-radius: 16px; border: 2px solid var(--bd-e3e8ec); background: linear-gradient(to bottom, var(--bg-f6f9fb), var(--bg-e9eef2));
             display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 8px; transition: opacity .3s, filter .3s; min-width: 0; }
@@ -1044,15 +1047,12 @@
                     <button class="btn" id="browse-button" onclick="browseRomsDir()">Browse</button>
                     <button class="btn primary" onclick="saveRomsDir()">Save</button>
                 </div>
-                <div class="desc" style="margin-top:8px">Put games (or .zip, .rar or .7z files) in subfolders named after the system: <span id="folder-list"></span></div>
+                <div class="desc" style="margin-top:8px">Folders: <span id="folder-list"></span></div>
 
                 </section>
                 <section class="set-card wide">
                 <h3>Emulators</h3>
-                <div id="flatpak-warning" class="notice" style="display:none">
-                    Emulators are installed with Flatpak, which isn't installed yet. Run
-                    <code>sudo apt install flatpak</code> in a terminal, then reopen this menu.
-                </div>
+                <div id="flatpak-warning" class="notice" style="display:none">Needs Flatpak: run <code>sudo apt install flatpak</code>, then reopen the menu.</div>
                 <div id="windows-note" class="notice" style="display:none"></div>
                 <div id="emulator-list"></div>
                 </section>
@@ -1063,7 +1063,7 @@
                 <h3>Sound</h3>
                 <div class="emu-row" style="border-top:none">
                     <div class="info">
-                        <div class="name">Menu sounds and music</div>
+                        <div class="name">Menu sounds</div>
                         <div class="desc" id="sound-desc"></div>
                     </div>
                     <button class="btn" id="sound-toggle-button" onclick="toggleSound()">On</button>
@@ -1076,15 +1076,13 @@
                 <h3>Controllers</h3>
                 <div class="emu-row" style="border-top:none">
                     <div class="info">
-                        <div class="name">Set up controllers automatically</div>
-                        <div class="desc">Before each game starts, the controllers plugged in are set up in that emulator.</div>
+                        <div class="name">Set up controllers before each game</div>
                     </div>
                     <button class="btn" id="auto-controllers-button" onclick="toggleAutoControllers()">On</button>
                 </div>
                 <div class="emu-row">
                     <div class="info">
-                        <div class="name">Pause menu: hold Back + Start for <span id="pause-hold-value">1.5 s</span></div>
-                        <div class="desc">In a game (Linux), holding both buttons this long freezes it and opens the pause menu. 0 opens it at once.</div>
+                        <div class="name">Pause: hold Back + Start <span id="pause-hold-value">1.5 s</span></div>
                     </div>
                     <div class="slider-box">
                         <input type="range" id="pause-hold" min="0" max="2" step="0.5" value="1.5" aria-label="Seconds to hold Back and Start">
@@ -1097,8 +1095,7 @@
                 <h3>Look</h3>
                 <div class="emu-row" style="border-top:none">
                     <div class="info">
-                        <div class="name">Light or dark</div>
-                        <div class="desc" id="theme-desc">Follows this computer's setting by default.</div>
+                        <div class="name">Theme</div>
                     </div>
                     <button class="btn" id="theme-button" onclick="cycleTheme()">System</button>
                 </div>
@@ -1107,35 +1104,14 @@
 
             <div class="tab-pane" data-pane="system" hidden>
                 <section class="set-card">
-                <h3>This computer</h3>
-                <div class="emu-row" style="border-top:none">
-                    <div class="info">
-                        <div class="name">Restart</div>
-                        <div class="desc">Restarts the computer. Save your games first; press twice to confirm.</div>
-                    </div>
+                <h3>Power</h3>
+                <div class="power-row">
                     <button class="btn" id="sys-restart" onclick="sysPower('restart')">Restart</button>
-                </div>
-                <div class="emu-row">
-                    <div class="info">
-                        <div class="name">Sleep</div>
-                        <div class="desc">Puts the computer to sleep. Wake it with its power button (a USB controller or keyboard may wake it too; Bluetooth controllers usually cannot).</div>
-                    </div>
                     <button class="btn" id="sys-sleep" onclick="sysPower('sleep')">Sleep</button>
-                </div>
-                <div class="emu-row">
-                    <div class="info">
-                        <div class="name">Shut down</div>
-                        <div class="desc">Turns the computer off. Press twice to confirm.</div>
-                    </div>
                     <button class="btn" id="sys-shutdown" onclick="sysPower('shutdown')">Shut down</button>
-                </div>
-                <div class="emu-row">
-                    <div class="info">
-                        <div class="name">Close the menu</div>
-                        <div class="desc">Quits the menu and goes to the desktop. In kiosk mode the menu starts again at the next start.</div>
-                    </div>
                     <button class="btn" id="sys-quit" onclick="sysQuit()">Close menu</button>
                 </div>
+                <div class="desc" style="margin-top:8px">Press twice to confirm.</div>
 
                 </section>
                 <section class="set-card">
@@ -1143,22 +1119,22 @@
                 <div class="emu-row" style="border-top:none">
                     <div class="info">
                         <div class="name">Volume <span id="vol-value"></span></div>
-                        <div class="desc" id="vol-desc">Checking…</div>
+                        <div class="desc" id="vol-desc"></div>
                     </div>
                     <div class="slider-box" style="width:180px;flex:none"><input type="range" id="vol-range" min="0" max="100" step="5" aria-label="Volume" disabled></div>
                     <button class="btn" id="vol-mute" onclick="volumeSet({ mute: !(snd.data && snd.data.audio.muted) })" disabled>Mute</button>
                 </div>
                 <div class="emu-row" id="out-row">
                     <div class="info">
-                        <div class="name">Sound comes out of</div>
+                        <div class="name">Output</div>
                         <div class="desc" id="out-desc">…</div>
                     </div>
                     <button class="btn" id="out-button" onclick="volumeNextOutput()" disabled>Change</button>
                 </div>
-                <div class="emu-row">
+                <div class="emu-row" id="tv-row" style="display:none">
                     <div class="info">
                         <div class="name">TV volume</div>
-                        <div class="desc" id="tv-desc">Checking…</div>
+                        <div class="desc" id="tv-desc"></div>
                     </div>
                     <button class="btn" id="tv-down" onclick="tvKey('down')" disabled>−</button>
                     <button class="btn" id="tv-up" onclick="tvKey('up')" disabled>+</button>
@@ -1168,11 +1144,11 @@
 
                 </section>
                 <section class="set-card">
-                <h3>Software update</h3>
+                <h3>Software</h3>
                 <div class="emu-row" style="border-top:none">
                     <div class="info">
-                        <div class="name">Update the menu <span id="update-state"></span></div>
-                        <div class="desc" id="update-desc">Checking…</div>
+                        <div class="name" id="update-name">Version</div>
+                        <div class="desc" id="update-desc">Checking for updates…</div>
                     </div>
                     <button class="btn" id="update-button" onclick="sysUpdate()" disabled>…</button>
                 </div>
@@ -1183,8 +1159,8 @@
                 <h3>Kiosk mode</h3>
                 <div class="emu-row" style="border-top:none" id="kiosk-row">
                     <div class="info">
-                        <div class="name">Start straight into the menu <span id="kiosk-state"></span></div>
-                        <div class="desc" id="kiosk-desc">Checking…</div>
+                        <div class="name" id="kiosk-state"></div>
+                        <div class="desc" id="kiosk-desc"></div>
                     </div>
                     <button class="btn" id="kiosk-button" onclick="sysKiosk()" disabled>…</button>
                 </div>
@@ -1197,17 +1173,17 @@
                     <h3>Wi-Fi</h3>
                     <div class="emu-row" style="border-top:none">
                         <div class="info">
-                            <div class="name">Wi-Fi status</div>
+                            <div class="name">Status</div>
                             <div class="desc" id="wifi-verdict">Checking…</div>
                         </div>
-                        <button class="btn" id="wifi-check" onclick="wifiRefresh(true)">Check again</button>
-                        <button class="btn primary" id="wifi-repair" onclick="wifiRepair()">Repair Wi-Fi</button>
+                        <button class="btn" id="wifi-more" onclick="wifiState.details = !wifiState.details; renderWifi()">Details</button>
+                        <button class="btn" id="wifi-check" onclick="wifiRefresh(true)">Check</button>
+                        <button class="btn primary" id="wifi-repair" onclick="wifiRepair()">Repair</button>
                     </div>
-                    <pre id="wifi-details" class="wifi-details"></pre>
+                    <pre id="wifi-details" class="wifi-details" style="display:none"></pre>
                     <div class="emu-row">
                         <div class="info">
-                            <div class="name">Keep Wi-Fi alive through sleep <span id="wifi-fix-state"></span></div>
-                            <div class="desc">Unloads the Wi-Fi driver before the computer sleeps, brings it back (and runs the repair if it is missing) when it wakes, and switches Wi-Fi power saving off. Asks for the administrator password once.</div>
+                            <div class="name">Keep Wi-Fi working after sleep <span id="wifi-fix-state"></span></div>
                         </div>
                         <button class="btn" id="wifi-fix" onclick="wifiSleepFix()" disabled>…</button>
                     </div>
@@ -1220,10 +1196,9 @@
                 <section class="set-card wide">
                 <div class="emu-row" style="border-top:none">
                     <div class="info">
-                        <div class="name">Share your games between computers</div>
-                        <div class="desc">Show the games on one computer in another computer's menu and download them with one click.</div>
+                        <div class="name">Share games between computers</div>
                     </div>
-                    <button class="btn primary" id="guide-button" onclick="openGuide()">How does this work?</button>
+                    <button class="btn primary" id="guide-button" onclick="openGuide()">How it works</button>
                 </div>
 
                 </section>
@@ -1242,14 +1217,14 @@
                         <div class="share-item"><div class="share-label">Access key</div><div class="share-value key" id="share-key"></div></div>
                         <button class="btn" onclick="newShareKey()">New key</button>
                     </div>
-                    <div class="desc" style="margin-top:6px">Type both into <b>Get games from another computer</b> on the other computer.</div>
+                    <div class="desc" style="margin-top:6px">Enter both on the other computer.</div>
                 </div>
 
                 </section>
                 <section class="set-card">
                 <h3>Get games from another computer</h3>
-                <div class="row"><input type="text" id="remote-address" spellcheck="false" placeholder="Server address, for example 192.168.1.20:8765"><button class="btn" onclick="testRemote()">Test</button></div>
-                <div class="row" style="margin-top:8px"><input type="password" id="remote-key" spellcheck="false" placeholder="Access key (leave empty to keep the saved one)"><button class="btn primary" onclick="saveRemote()">Save</button></div>
+                <div class="row"><input type="text" id="remote-address" spellcheck="false" placeholder="Address, e.g. 192.168.1.20:8765"><button class="btn" onclick="testRemote()">Test</button></div>
+                <div class="row" style="margin-top:8px"><input type="password" id="remote-key" spellcheck="false" placeholder="Access key"><button class="btn primary" onclick="saveRemote()">Save</button></div>
                 <div class="desc" id="remote-status" style="margin-top:8px"></div>
                 </section>
             </div>
@@ -1265,7 +1240,7 @@
         <div class="panel wide fit">
             <div class="wiihead"><div class="eyebrow" style="font-size:12px;font-weight:800;letter-spacing:.14em;text-transform:uppercase">Controllers</div>
             <h2>Players and mappings</h2></div>
-            <div class="desc" style="margin-bottom:12px;font-size:13px;color:var(--tx-6b747c)">Choose who plays with what. Everything is written to the emulators now and again every time a game starts, so you can quit a game, swap controllers here and start another.</div>
+
             <div id="players-body"></div>
             <div class="pl-foot" id="players-foot"></div>
         </div>
@@ -1623,7 +1598,7 @@
                 const card = document.createElement('div');
                 if (c) {
                     const leds = [1, 2, 3, 4].map(n => `<i class="${n === c.player ? 'on' : ''}"></i>`).join('');
-                    const roles = (c.roles || []).map((r, n) => `<span class="role ${n === 0 ? 'first' : ''}" title="${escapeHtml(r)}">${escapeHtml(r)}</span>`).join('');
+                    const roles = (c.roles || []).slice(0, 1).map(r => `<span class="role first" title="${escapeHtml((c.roles || []).join('\n'))}">${escapeHtml(r)}</span>`).join('');
                     card.className = 'wii-channel pad-card';
                     card.innerHTML = `
                         <div class="pad-leds">${leds}</div>
@@ -2925,7 +2900,7 @@
             settingsTab = name;
             document.querySelectorAll('#settings-overlay .tab-pane').forEach(p => { p.hidden = p.dataset.pane !== name; });
             document.querySelectorAll('#settings-overlay .tab').forEach(t => { t.classList.toggle('active', t.dataset.tab === name); t.setAttribute('aria-selected', String(t.dataset.tab === name)); });
-            if (name === 'system') { sysRefresh().then(() => wifiRefresh(false)); updateRefresh(); volumeRefresh(); }
+            if (name === 'system') { sysRefresh().then(() => wifiRefresh(false)); updateAutoCheck(); volumeRefresh(); }
             if (!quiet) { Sfx.play('page'); setPadFocus(document.querySelector('#settings-overlay .tab.active')); }
         }
 
@@ -2949,16 +2924,13 @@
             if (!d) { desc.textContent = 'The menu could not be reached.'; btn.disabled = true; return; }
             const k = d.kiosk, job = d.job, busy = job && job.phase === 'running';
             if (!k.supported) {
-                desc.textContent = d.platform === 'win32' ? 'Kiosk mode is for Ubuntu. On Windows, pin the app to the taskbar (see the README) and use F11 for full screen.' : k.reason;
-                state.textContent = ''; btn.textContent = 'Not available'; btn.disabled = true;
+                desc.textContent = d.platform === 'win32' ? 'Ubuntu only.' : k.reason;
+                state.textContent = 'Not available'; btn.style.display = 'none';
             } else {
-                state.textContent = k.enabled ? '· on' : '· off';
+                state.textContent = k.enabled ? 'On' : 'Off';
                 btn.disabled = !!busy || (!k.enabled && !k.canStart);
-                btn.textContent = busy ? 'Working…' : k.enabled ? 'Leave kiosk mode' : 'Turn on kiosk mode';
-                desc.textContent = k.enabled
-                    ? `On: the computer signs in as ${k.user} by itself, with no password, and opens the menu full screen. It never locks or sleeps. Leave kiosk mode to get the normal sign-in screen back.`
-                    : !k.canStart ? 'Start the menu as the app (npm start or the AppImage) to set this up.'
-                    : `Makes the computer sign in as ${k.user} by itself, with no password, and open the menu full screen, with no lock screen or sleep. You are asked for the administrator password once, now.${k.displayManager ? '' : ' This system’s sign-in screen is not GDM or LightDM, so automatic sign-in will need setting in the system settings.'}`;
+                btn.textContent = busy ? 'Working…' : k.enabled ? 'Turn off' : 'Turn on';
+                desc.textContent = k.enabled ? 'Starts straight into the menu.' : !k.canStart ? 'Start the menu as the app to use this.' : 'Start straight into the menu, no password.';
             }
             const kioskJob = job && job.kind.startsWith('kiosk') ? job : null;
             const text = kioskJob && (kioskJob.phase === 'running' ? kioskJob.message || 'Working…' : kioskJob.message);
@@ -2980,27 +2952,28 @@
             kioskChecking = false;
             if (!c) { box.innerHTML = ''; return; }
             const notes = [];
-            if (sys.data.kiosk.enabled) notes.push('<div class="guide-box" style="margin-top:10px">Kiosk mode is set up: at the next start the computer should sign in by itself and open the menu.</div>');
+            if (c.encrypted) notes.push('<div class="notice off" style="margin-top:8px">The encrypted disk still asks for its passphrase at start.</div>');
+            c.wifi.forEach((name, i) => notes.push(`<div class="notice off kiosk-line" style="margin-top:8px"><span>Wi-Fi “${escapeHtml(name)}” may not connect at start.</span><button class="btn" onclick="kioskWifi(${i})">Fix</button></div>`));
             if (sys.data.kiosk.enabled && login) notes.push(loginNotes(login));
-            if (c.encrypted) notes.push('<div class="notice off">This computer’s disk is encrypted, so its passphrase is asked before Ubuntu starts. Nothing can skip that except turning disk encryption off (reinstalling Ubuntu without it).</div>');
-            c.wifi.forEach((name, i) => notes.push(`<div class="notice off">Wi-Fi “${escapeHtml(name)}” keeps its password in your keyring, which is locked after an automatic sign-in: it would not connect, or ask for a password. <button class="btn" style="margin-top:8px" onclick="kioskWifi(${i})">Store it for this computer</button></div>`));
             box.innerHTML = notes.join('');
             box.dataset.wifi = JSON.stringify(c.wifi);
         }
         // "The sign-in screen still shows": what this computer says about it, and the repairs
-        const DM_NAMES = { gdm: 'GDM (Ubuntu’s)', lightdm: 'LightDM', sddm: 'SDDM (KDE’s)' };
+        const DM_NAMES = { gdm: 'GDM', lightdm: 'LightDM', sddm: 'SDDM' };
+        // "Sign-in problems?": short facts about why the computer might still show the sign-in screen, behind a button
+        let loginOpen = false;
         function loginNotes(l) {
-            const rows = [];
-            rows.push(`Sign-in screen that runs: ${l.running ? DM_NAMES[l.running] : 'not known'}${l.configured ? `; the menu set up ${DM_NAMES[l.configured]}` : ''}`);
-            if (l.mismatch) rows.push('⚠ They differ: Repair writes it for the one that runs.');
-            rows.push(`Automatic sign-in: ${l.autologin ? 'set' : 'NOT set'}${l.configured === 'gdm' ? `; backup (signs in 3 seconds after the sign-in screen shows): ${l.timed ? 'set' : 'not set yet — Repair adds it'}` : ''}`);
-            if (l.nvidia && l.wayland) rows.push('⚠ NVIDIA graphics with Wayland: a known reason the automatic sign-in falls back to the sign-in screen. “Repair and use Xorg” is the usual cure.');
-            if (l.ecryptfs) rows.push('⚠ Your home folder is encrypted, so it cannot be opened without the password: automatic sign-in cannot work. (It has to be decrypted for kiosk mode.)');
-            if (l.log.length) rows.push(`What the sign-in screen logged at this start:\n${l.log.join('\n')}`);
-            else if (!l.logReadable) rows.push('(The sign-in screen’s log could not be read.)');
-            const buttons = [`<button class="btn" onclick="kioskRepair(false)">Repair automatic sign-in</button>`];
-            if (l.configured === 'gdm' && l.wayland) buttons.push(`<button class="btn" onclick="kioskRepair(true)">Repair and use Xorg</button>`);
-            return `<div class="notice" style="white-space:pre-line;margin-top:10px"><b>If the sign-in screen still shows at the start:</b>\n${rows.map(escapeHtml).join('\n')}<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">${buttons.join('')}</div></div>`;
+            const warn = l.mismatch || !l.autologin || (l.configured === 'gdm' && !l.timed) || (l.nvidia && l.wayland) || l.ecryptfs;
+            const head = `<button class="btn" style="margin-top:8px" onclick="loginOpen = !loginOpen; kioskChecks()">${loginOpen ? 'Hide' : 'Sign-in problems?'}</button>`;
+            if (!loginOpen) return head;
+            const rows = [`Sign-in screen: ${l.running ? DM_NAMES[l.running] : 'unknown'}${l.mismatch ? ` (set up: ${DM_NAMES[l.configured]})` : ''}`,
+                `Automatic sign-in: ${l.autologin ? 'on' : 'off'}${l.configured === 'gdm' ? ` · backup: ${l.timed ? 'on' : 'off'}` : ''}`];
+            if (l.nvidia && l.wayland) rows.push('NVIDIA + Wayland: try “Repair with Xorg”');
+            if (l.ecryptfs) rows.push('Encrypted home folder: automatic sign-in cannot work');
+            if (l.log.length) rows.push(...l.log.slice(-3));
+            const buttons = [`<button class="btn" onclick="kioskRepair(false)">Repair</button>`];
+            if (l.configured === 'gdm' && l.wayland) buttons.push(`<button class="btn" onclick="kioskRepair(true)">Repair with Xorg</button>`);
+            return `${head}<div class="notice ${warn ? 'off' : ''}" style="white-space:pre-line;margin-top:8px">${rows.map(escapeHtml).join('\n')}<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">${buttons.join('')}</div></div>`;
         }
         function kioskRepair(xorg) {
             withAdmin(async () => {
@@ -3010,15 +2983,15 @@
                     const data = await res.json();
                     if (!res.ok) { Sfx.play('error'); return showToast(data.message || 'That did not work'); }
                     Sfx.play('select');
-                    showToast(xorg ? 'Done: restart to try it (the sign-in screen now uses Xorg)' : 'Done: restart to try it');
+                    showToast('Done: restart to try it');
                     kioskChecks();
                 } catch { showToast('The menu could not be reached.'); }
-            }, 'Changing the sign-in screen needs the administrator password. It is kept for 10 minutes.');
+            });
         }
         function kioskWifi(i) {
             const name = JSON.parse(document.getElementById('kiosk-checks').dataset.wifi || '[]')[i];
             if (!name) return;
-            withAdmin(() => askPassword(`Type the password of the Wi-Fi network “${name}” once. It is stored for this computer, so the network connects with nobody signed in.`, () => { showToast(`Wi-Fi “${name}” is stored for this computer`); kioskChecks(); }, {
+            withAdmin(() => askPassword(`Password of “${name}”, once.`, () => { showToast(`Wi-Fi “${name}” fixed`); kioskChecks(); }, {
                 title: 'Wi-Fi password', eyebrow: 'Wi-Fi',
                 submit: async value => {
                     const res = await fetch('/api/system/kiosk/wifi', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, psk: value }) });
@@ -3035,22 +3008,36 @@
         }
         function renderUpdate() {
             const i = upd.info, btn = document.getElementById('update-button'), desc = document.getElementById('update-desc');
-            const state = document.getElementById('update-state'), box = document.getElementById('update-job');
+            const name = document.getElementById('update-name'), box = document.getElementById('update-job');
             const job = sys.data && sys.data.job && sys.data.job.kind === 'update' ? sys.data.job : null;
             const busy = !!(job && job.phase === 'running');
             const show = (text, off) => { box.style.display = text ? '' : 'none'; box.textContent = text || ''; box.classList.toggle('off', !!off); };
-            if (!i) { desc.textContent = 'The menu could not be reached.'; btn.disabled = true; btn.textContent = '…'; return show(''); }
-            if (!i.supported) { desc.textContent = i.reason; state.textContent = ''; btn.disabled = true; btn.textContent = 'Not available'; return show(''); }
-            state.textContent = `· ${i.version.sha}`;
-            desc.textContent = `This copy is from ${i.version.date}: “${i.version.subject}”.${i.dirty.length ? ` It has changes of its own (${i.dirty.length} file${i.dirty.length === 1 ? '' : 's'}), so update it with git yourself.` : ''}`;
+            desc.style.color = '';
+            if (!i) { name.textContent = 'Version'; desc.textContent = 'Could not check.'; btn.style.display = 'none'; return show(''); }
+            if (!i.supported) { name.textContent = 'Version'; desc.textContent = i.reason; btn.style.display = 'none'; return show(''); }
+            name.textContent = `Version ${i.version.date.replace(/-/g, '.')}`;
             const ready = i.checked && i.behind > 0 && !i.dirty.length && !i.ahead;
+            btn.style.display = i.dirty.length || i.ahead ? 'none' : '';
             btn.disabled = busy || upd.checking;
-            btn.textContent = busy ? 'Updating…' : upd.checking ? 'Checking…' : ready ? `Update and restart (${i.behind} new)` : 'Check for updates';
-            if (job) return show(job.message, job.phase === 'failed');
-            if (i.error) return show(i.error, true);
-            if (!i.checked) return show('');
-            if (!i.behind) return show('Up to date.');
-            show(`New on GitHub:\n${i.changes.join('\n')}${i.behind > i.changes.length ? `\n… and ${i.behind - i.changes.length} more` : ''}${i.ahead ? `\nThis copy also has ${i.ahead} change(s) that are not on GitHub: update it with git yourself.` : i.canRestart ? '' : '\nAfter updating, close the menu and start it again.'}`);
+            btn.classList.toggle('primary', ready);
+            btn.textContent = busy ? 'Updating…' : ready ? 'Update' : 'Check';
+            desc.textContent = busy ? (job.message || 'Updating…')
+                : upd.checking ? 'Checking for updates…'
+                : i.dirty.length || i.ahead ? 'Changed on this computer: update it with git.'
+                : i.error ? 'Could not check for updates.'
+                : !i.checked ? ''
+                : i.behind ? 'Update available' : 'Up to date';
+            if (ready) desc.style.color = 'var(--wii-blue-deep)';
+            desc.title = i.error || '';
+            show(job && job.phase === 'failed' ? job.message : '', true);
+        }
+        // Opening the System tab looks for an update by itself
+        async function updateAutoCheck() {
+            await updateRefresh();
+            if (!upd.info || !upd.info.supported || upd.info.dirty.length || upd.checking) return;
+            upd.checking = true; renderUpdate();
+            try { upd.info = await (await fetch('/api/system/update/check', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })).json(); } catch { /* shown as not checked */ }
+            upd.checking = false; renderUpdate();
         }
         async function sysUpdate() {
             const i = upd.info;
@@ -3090,7 +3077,7 @@
         }
 
         // ---- Wi-Fi: what the system sees, a repair that escalates, and a fix for Wi-Fi that dies in sleep (Linux) ----
-        const wifiState = { data: null, poll: null };
+        const wifiState = { data: null, poll: null, details: false };
 
         async function wifiRefresh(sound) {
             if (sound) Sfx.play('select');
@@ -3119,15 +3106,16 @@
             lines.push(`NetworkManager: ${d.networkManager}; rfkill: ${d.rfkill.hard ? 'hard blocked' : d.rfkill.soft ? 'soft blocked' : 'not blocked'}`);
             if (d.kernel.length) lines.push('', 'Recent kernel messages about Wi-Fi:', ...d.kernel);
             if (d.history.length) lines.push('', 'What the sleep fix did:', ...d.history);
-            details.style.display = '';
+            details.style.display = wifiState.details ? '' : 'none';
             details.textContent = lines.join('\n');
+            document.getElementById('wifi-more').textContent = wifiState.details ? 'Hide' : 'Details';
             repair.disabled = !!busy;
-            repair.textContent = busy && d.job.kind === 'repair' ? 'Repairing…' : 'Repair Wi-Fi';
+            repair.textContent = busy && d.job.kind === 'repair' ? 'Repairing…' : 'Repair';
             fix.disabled = !!busy;
             fix.textContent = d.sleepFix ? 'Remove' : 'Turn on';
             document.getElementById('wifi-fix-state').textContent = d.sleepFix ? '· on' : '· off';
             const j = d.job;
-            const text = j ? (j.phase === 'running' ? (j.lines.slice(-3).join('\n') || 'Working…') : j.message) : '';
+            const text = j ? (j.phase === 'running' ? (j.message || 'Working…') : j.message) : '';
             job.style.display = text ? '' : 'none';
             job.style.whiteSpace = 'pre-line';
             job.textContent = text;
@@ -3171,7 +3159,7 @@
                     Sfx.play('error'); showToast(data.message || 'That did not work');
                 } catch { showToast(labels[2]); /* the computer is going */ }
             };
-            sysConfirm(labels[0], labels[1], 'Press again to confirm', () => send(false));
+            sysConfirm(labels[0], labels[1], 'Press again', () => send(false));
         }
 
         // ---- Sound: the computer's volume and output, and the TV's own volume over HDMI-CEC ----
@@ -3185,7 +3173,7 @@
             const range = document.getElementById('vol-range'), mute = document.getElementById('vol-mute');
             const ok = !!(a && a.supported && a.volume !== null);
             range.disabled = mute.disabled = !ok;
-            document.getElementById('vol-desc').textContent = !a ? 'The menu could not be reached.' : !a.supported ? a.reason : 'This computer’s sound (the TV’s speakers too, when the sound goes out over HDMI). Left and right change it.';
+            document.getElementById('vol-desc').textContent = !a ? 'Could not check.' : !a.supported ? a.reason : '';
             if (ok && document.activeElement !== range) { range.value = a.volume; range.style.setProperty('--fill', `${a.volume}%`); }
             document.getElementById('vol-value').textContent = ok ? `· ${a.muted ? 'muted' : `${a.volume}%`}` : '';
             mute.textContent = a && a.muted ? 'Unmute' : 'Mute';
@@ -3198,7 +3186,8 @@
             ['tv-down', 'tv-up', 'tv-mute'].forEach(id => { const b = document.getElementById(id); b.disabled = !tvOk; b.style.display = t && t.install ? 'none' : ''; });
             const inst = document.getElementById('tv-install');
             inst.style.display = t && t.install ? '' : 'none';
-            document.getElementById('tv-desc').textContent = !t ? '' : tvOk ? 'Sent to the TV over HDMI (CEC), like its own remote.' : t.reason;
+            document.getElementById('tv-row').style.display = tvOk || (t && t.install) ? '' : 'none';
+            document.getElementById('tv-desc').textContent = t && t.install ? 'Needs v4l-utils.' : '';
         }
         async function volumeSet(body) {
             try {
@@ -3241,7 +3230,7 @@
         })();
 
         function sysQuit() {
-            sysConfirm('sys-quit', 'Close menu', 'Press again to close', async () => {
+            sysConfirm('sys-quit', 'Close menu', 'Press again', async () => {
                 try { await fetch('/api/system/quit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }); } catch { /* the menu is closing */ }
             });
         }
@@ -3328,8 +3317,8 @@
             const note = document.getElementById('pause-note');
             // The server compares the controllers now with what the game started with (status.controllersChanged)
             note.textContent = pause.restart
-                ? 'The controllers changed. The game has to start again to use them: choose Reset (it starts again on the same save).'
-                : pause.changed ? 'Saved. Nothing to restart: the game keeps using the same controllers, and one that reconnects is picked up by itself.'
+                ? 'Controllers changed: Reset to use them (same save).'
+                : pause.changed ? 'Saved.'
                 : pause.frozen ? '' : 'The game keeps running behind this menu.';
             note.style.display = note.textContent ? '' : 'none';
             note.classList.toggle('warn', !pause.restart && !pause.changed);
@@ -4269,7 +4258,7 @@
             const note = document.getElementById('windows-note');
             note.style.display = data.manual ? 'block' : 'none';
             if (data.manual) {
-                note.innerHTML = `Unzip each emulator into its own folder inside <code>${escapeHtml(data.emulatorsDir)}</code> and it is found automatically, or press <b>Locate</b> to choose its program. <b>Install</b> downloads and unpacks it for you. <button class="btn" id="open-emulators-folder" style="margin-left:6px">Open folder</button>`;
+                note.innerHTML = `Install, or unzip into the emulators folder, or Locate the program. <button class="btn" id="open-emulators-folder" style="margin-left:6px">Open folder</button>`;
                 document.getElementById('open-emulators-folder').addEventListener('click', () => openFolder(data.emulatorsDir));
             }
 
@@ -4281,7 +4270,6 @@
                     row.innerHTML = `
                         <div class="info">
                             <div class="name">${escapeHtml(emu.name)} <span class="state">${emu.installed ? 'Found' : ''}</span></div>
-                            <div class="desc">${escapeHtml(emu.description)} &middot; folders: ${emu.folders.map(escapeHtml).join(', ')}</div>
                             <div class="progress" id="progress-${emu.id}" style="word-break:break-all">${emu.installed ? escapeHtml(emu.path || '') : 'Not found yet'}</div>
                         </div>
                         ${emu.installed ? `<button class="btn" id="open-${emu.id}" title="Open ${escapeHtml(emu.name)} to set up controllers, BIOS and other settings">Open</button>` : ''}
@@ -4302,7 +4290,7 @@
                 row.innerHTML = `
                     <div class="info">
                         <div class="name">${escapeHtml(emu.name)} <span class="state">${emu.installed ? 'Installed' : ''}</span></div>
-                        <div class="desc">${escapeHtml(emu.description)} &middot; folders: ${emu.folders.map(escapeHtml).join(', ')}</div>
+                        <div class="desc">${emu.folders.map(escapeHtml).join(', ')}</div>
                         <div class="progress" id="progress-${emu.id}"></div>
                     </div>
                     ${emu.installed ? `<button class="btn" id="open-${emu.id}" title="Open ${escapeHtml(emu.name)} to set up controllers, BIOS and other settings">Open</button>` : ''}
@@ -4326,7 +4314,7 @@
             document.getElementById('music-volume-button').textContent = `Music ${percent(st.musicVolume)}`;
             if (info) {
                 const el = document.getElementById('sound-desc');
-                el.textContent = info.effects || info.tracks ? `Using your own sounds (${info.effects} effects, ${info.tracks} tracks)` : 'Built-in sounds. Put your own files in the sounds folder (see the README).';
+                el.textContent = info.effects || info.tracks ? 'Your own sounds' : '';
                 el.title = info.dir;
             }
         }

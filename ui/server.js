@@ -601,8 +601,8 @@ async function handleSystem(route, req, res) {
                 job.phase = 'done';
                 if (!r.updated) { job.message = r.message; return; }
                 console.log(`[UPDATE] ${r.from} -> ${r.to}${r.installed ? ' (npm install ran)' : ''}`);
-                if (restartHook) { job.message = `Updated to ${r.version.sha}. Starting again…`; setTimeout(() => restartHook(), 1500); }
-                else job.message = `Updated to ${r.version.sha}. Close the menu and start it again to use it.`;
+                if (restartHook) { job.message = 'Updated. Starting again…'; setTimeout(() => restartHook(), 1500); }
+                else job.message = 'Updated. Restart the menu to use it.';
             }).catch(err => { job.phase = 'failed'; job.message = err.message; console.error(`[UPDATE] ${err.message}`); });
             return sendJson(res, 200, systemView()), true;
         }

@@ -110,17 +110,17 @@ function parseRfkill(text) {
 }
 
 function verdict(d) {
-    if (d.rfkill.hard) return { level: 'bad', text: 'Wi-Fi is switched off by a hardware switch or key (a Wi-Fi / airplane key on the keyboard). Press it.' };
-    if (d.rfkill.soft) return { level: 'bad', text: 'Wi-Fi is blocked by software. Repair unblocks it.' };
-    if (!d.adapters.length && !d.cards.length) return { level: 'bad', text: 'The system cannot see a Wi-Fi card at all: it has dropped off the bus. Repair tries to bring it back; if that fails the card needs its power cut (shut down and unplug for 30 seconds).' };
+    if (d.rfkill.hard) return { level: 'bad', text: 'Off by a hardware switch or key: press it.' };
+    if (d.rfkill.soft) return { level: 'bad', text: 'Wi-Fi blocked by software. Try Repair.' };
+    if (!d.adapters.length && !d.cards.length) return { level: 'bad', text: 'No Wi-Fi card found (dropped off the bus). Try Repair, else unplug the computer for 30 s.' };
     if (!d.adapters.length) {
         const c = d.cards[0];
-        return { level: 'bad', text: c.driver ? `The card is there but the driver (${c.driver}) has no Wi-Fi interface: the driver lost it. Repair reloads the driver, then resets the card.` : 'The card is there but no driver is loaded for it. Repair loads the driver and resets the card if needed.' };
+        return { level: 'bad', text: c.driver ? `The Wi-Fi driver (${c.driver}) has no Wi-Fi interface. Try Repair.` : 'No driver loaded for the Wi-Fi card. Try Repair.' };
     }
-    if (d.networkManager !== 'active') return { level: 'bad', text: 'NetworkManager is not running. Repair restarts it.' };
+    if (d.networkManager !== 'active') return { level: 'bad', text: 'NetworkManager is not running. Try Repair.' };
     const a = d.adapters[0];
-    if (a.state === 'unavailable' || a.state === 'unmanaged') return { level: 'bad', text: `Wi-Fi (${a.name}) is ${a.state}. Repair resets it.` };
-    return a.state === 'connected' ? { level: 'ok', text: `Wi-Fi works (${a.name}, ${a.driver || 'driver unknown'}).` } : { level: 'warn', text: `Wi-Fi (${a.name}) is there but not connected (${a.state || 'unknown'}).` };
+    if (a.state === 'unavailable' || a.state === 'unmanaged') return { level: 'bad', text: `Wi-Fi is ${a.state}. Try Repair.` };
+    return a.state === 'connected' ? { level: 'ok', text: 'Connected' } : { level: 'warn', text: 'Not connected' };
 }
 
 function createWifi({ platform = process.platform === 'win32' ? 'win32' : 'linux', sys = '/sys', exists = fs.existsSync, readdir = d => fs.readdirSync(d), read = f => fs.readFileSync(f, 'utf8'), readlink = f => fs.readlinkSync(f), execImpl = childProcess.execFile, spawnImpl = childProcess.spawn, tmpdir = os.tmpdir(), release = os.release() } = {}) {

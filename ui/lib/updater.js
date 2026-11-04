@@ -68,14 +68,14 @@ function createUpdater({ root = path.resolve(__dirname, '..', '..'), env = proce
         if (st.ahead) throw new Error(`This copy has ${st.ahead} change${st.ahead === 1 ? '' : 's'} that are not on GitHub, so it cannot simply take GitHub's. Run git pull in ${root}.`);
         if (!st.behind) return { updated: false, message: 'Already up to date' };
         const from = (await git('rev-parse', 'HEAD')).out;
-        onLine(`Downloading ${st.behind} change${st.behind === 1 ? '' : 's'}…`);
+        onLine('Downloading the update…');
         const pulled = await git('pull', '--ff-only', '--quiet');
         if (!pulled.ok) throw new Error(`git pull did not work: ${pulled.err || pulled.out}`);
         const to = (await git('rev-parse', 'HEAD')).out;
         const changed = (await git('diff', '--name-only', from, to, '--', ...DEPENDENCY_FILES)).out.split('\n').filter(Boolean);
         let installed = false;
         if (changed.length) {
-            onLine('The dependencies changed: running npm install (this can take a few minutes)…');
+            onLine('Installing (a few minutes)…');
             let done = null;
             for (const npm of npmCommand()) {
                 // npm is a node script: its own folder goes first on the PATH so the node next to it runs it
