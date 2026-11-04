@@ -13,6 +13,7 @@ const controllers = require('../ui/lib/controllers');
 const bt = require('../ui/lib/bluetooth');
 const { createWiimoteAccess, RULES } = require('../ui/lib/wiimoteaccess');
 const { Ini } = require('../ui/lib/ini');
+const wiimoteLib = require('../ui/lib/wiimote');
 
 const pad = (over = {}) => ({ id: 'js0', name: 'Xbox 360 Controller', kind: 'xbox', pad: true, js: 0, sdlIndex: 0, nameIndex: 0, vendor: '045e', product: '028e', ...over });
 const wiimote = (over = {}) => ({ id: 'event9', name: 'Nintendo Wii Remote', kind: 'wiimote', pad: false, js: null, nameIndex: 0, vendor: '057e', product: '0306', address: 'AA:BB:CC:00:00:01', ...over });
@@ -45,22 +46,13 @@ test('a released player takes the next controller; everyone else keeps theirs, a
     assert.deepStrictEqual(playersLib.release(kept, slots2, 1).map(p => p.device), ['real', 'auto', 'auto', 'auto']);
 });
 
-test('Dolphin: with a Wii Remote paired, free players wait for one, so a remote can join while the game runs', () => {
-    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'spare-'));
+test('Dolphin never searches for Wii Remotes all the time (it knocks connected ones off); a free player is nobody', () => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'scan-'));
     const dir = path.join(home, '.var/app/org.DolphinEmu.dolphin-emu/config/dolphin-emu');
-    inputconfig.apply('dolphin', [pad()], { home, platform: 'linux', spareRemotes: true });
-    let wm = Ini.read(path.join(dir, 'WiimoteNew.ini'));
-    assert.strictEqual(wm.get('Wiimote1', 'Source'), '1');
-    assert.deepStrictEqual([2, 3, 4].map(n => wm.get(`Wiimote${n}`, 'Source')), ['2', '2', '2']);
-    assert.strictEqual(Ini.read(path.join(dir, 'Dolphin.ini')).get('Core', 'WiimoteContinuousScanning'), 'True');
-    // without one, a free player is nobody (and no scanning)
-    const home2 = fs.mkdtempSync(path.join(os.tmpdir(), 'spare-'));
-    inputconfig.apply('dolphin', [pad()], { home: home2, platform: 'linux' });
-    wm = Ini.read(path.join(home2, '.var/app/org.DolphinEmu.dolphin-emu/config/dolphin-emu/WiimoteNew.ini'));
-    assert.strictEqual(wm.get('Wiimote2', 'Source'), '0');
-    // nothing connected at all still writes the waiting slots
-    const home3 = fs.mkdtempSync(path.join(os.tmpdir(), 'spare-'));
-    assert.strictEqual(inputconfig.apply('dolphin', [], { home: home3, platform: 'linux', spareRemotes: true }).status, 'configured');
+    inputconfig.apply('dolphin', [pad(), wiimote()], { home, platform: 'linux', game: 'wii' });
+    const wm = Ini.read(path.join(dir, 'WiimoteNew.ini'));
+    assert.deepStrictEqual([1, 2, 3, 4].map(n => wm.get(`Wiimote${n}`, 'Source')), ['1', '2', '0', '0']);
+    assert.strictEqual(Ini.read(path.join(dir, 'Dolphin.ini')).get('Core', 'WiimoteContinuousScanning'), 'False');
 });
 
 const block = (name, bus, uniq, event, js, product) => [
@@ -341,9 +333,37 @@ test('Dolphin: a Wii game gets only Wii Remotes and a GameCube game only GameCub
     assert.deepStrictEqual([0, 1, 2, 3].map(n => main.get('Core', `SIDevice${n}`)), ['0', '0', '0', '0'], 'and no GameCube controller');
 
     const gc = fs.mkdtempSync(path.join(os.tmpdir(), 'game-gc-'));
-    inputconfig.apply('dolphin', two, { home: gc, platform: 'linux', game: 'gamecube', spareRemotes: true });
+    inputconfig.apply('dolphin', two, { home: gc, platform: 'linux', game: 'gamecube' });
     ({ main, wm } = read(gc));
     assert.deepStrictEqual([0, 1, 2, 3].map(n => main.get('Core', `SIDevice${n}`)), ['6', '6', '0', '0'], 'both are GameCube controllers');
-    assert.deepStrictEqual([1, 2, 3, 4].map(n => wm.get(`Wiimote${n}`, 'Source')), ['0', '0', '0', '0'], 'and no Wii Remote, not even a waiting one');
+    assert.deepStrictEqual([1, 2, 3, 4].map(n => wm.get(`Wiimote${n}`, 'Source')), ['0', '0', '0', '0'], 'and no Wii Remote');
     assert.strictEqual(main.get('Core', 'WiimoteContinuousScanning'), 'False');
+});
+
+test('a Joy-Con is known by its Bluetooth address, not the one it reports about itself (which named its battery)', () => {
+    const sys = fs.mkdtempSync(path.join(os.tmpdir(), 'sysjc-'));
+    const hid = 'devices/bt/hci0:256/0005:057E:2006.0007';
+    fs.mkdirSync(path.join(sys, hid, 'input', 'input30'), { recursive: true });
+    fs.writeFileSync(path.join(sys, hid, 'uevent'), 'HID_UNIQ=98:b6:e9:00:00:01\n');
+    const procFile = path.join(sys, 'devices.txt');
+    // the Joy-Con reports another address about itself
+    fs.writeFileSync(procFile, block('Nintendo Switch Left Joy-Con', '0005', '01:00:00:e9:b6:98', 30, 0, '2006').replace('S: Sysfs=/devices/x', `S: Sysfs=/${hid}/input/input30`));
+    const [jc] = controllers.detect({ platform: 'linux', procFile, usbRoot: '/nonexistent', sysRoot: sys });
+    assert.strictEqual(jc.address, '98:B6:E9:00:00:01');
+    assert.strictEqual(jc.reportedAddress, '01:00:00:E9:B6:98');
+    const power = new Map([['01:00:00:E9:B6:98', { percent: null, level: 'low', charging: false, low: true }]]);
+    assert.strictEqual(controllers.batteryOf(jc, power).level, 'low', 'its battery is still found');
+});
+
+test('the menu lets go of the Wii Remotes while held, and reads them again after', () => {
+    const opened = [];
+    const reader = wiimoteLib.createReader({ listDevices: () => [{ name: 'Nintendo Wii Remote', event: 7 }], open: f => { opened.push(f); return 99; }, pollMs: 1e6, rescanMs: 1e6 });
+    const seen = [];
+    const off = reader.subscribe(r => seen.push(r.length));
+    assert.strictEqual(opened.length, 1);
+    reader.hold(true);
+    assert.strictEqual(seen[seen.length - 1], 0, 'nothing is read while held');
+    reader.hold(false);
+    assert.strictEqual(opened.length, 2, 'opened again');
+    off();
 });

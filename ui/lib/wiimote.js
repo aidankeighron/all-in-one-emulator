@@ -54,6 +54,7 @@ function createReader({ listDevices = defaultDevices, open = file => fs.openSync
     const listeners = new Set();
     const warned = new Set();
     let timers = null;
+    let held = false;       // let go of the remotes for a while (see hold)
 
     const snapshot = () => [...remotes.entries()].map(([id, r]) => ({ id, buttons: [...r.state.down] }));
     const emit = () => { const now = snapshot(); for (const fn of listeners) { try { fn(now); } catch { /* a closed connection */ } } };
@@ -102,7 +103,7 @@ function createReader({ listDevices = defaultDevices, open = file => fs.openSync
     }
 
     function startTimers() {
-        if (timers) return;
+        if (timers || held) return;
         scan();
         timers = [setInterval(poll, pollMs), setInterval(scan, rescanMs)];
     }
@@ -116,6 +117,12 @@ function createReader({ listDevices = defaultDevices, open = file => fs.openSync
 
     return {
         // Starts reading while someone listens; returns a function that stops listening
+        // While Dolphin plays, the menu lets go of the remotes so only Dolphin talks to them (with the menu reading one too, the
+        // driver keeps setting the remote up for the menu while Dolphin sets it up for the game). hold(false) reads them again.
+        hold(on) {
+            held = !!on;
+            if (held) { stopTimers(); emit(); } else if (listeners.size) startTimers();
+        },
         subscribe(fn) {
             listeners.add(fn);
             startTimers();

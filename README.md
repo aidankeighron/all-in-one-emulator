@@ -136,10 +136,8 @@ Nothing else to install: the AppImage already contains the menu and its runtime.
    **B** closes the menu. Quit and Reset ask for a second **A** press, since they end the game. D-pad moves, A chooses. Holding the buttons again also closes it.
    The combo is found per controller: **Back + Start** on an Xbox-style pad, **− + +** on a Switch controller or Joy-Con pair,
    and **− and +** on a real Wii Remote. Controllers connected while the game runs are watched too.
-   Controllers can be connected and changed from the pause menu. A controller that drops out and comes back, or a real Wii Remote
-   connecting, is picked up by the running game by itself: once a Wii Remote is paired with the computer, every player without a
-   controller is left open for a Wii Remote in Dolphin, so a remote that connects mid-game (press a button, or 1 + 2) just joins as
-   the next player. Anything else (a new gamepad or Switch controller on a player, another mapping) needs the
+   Controllers can be connected and changed from the pause menu. A controller that drops out and comes back is picked up by the
+   running game by itself. Anything else (a new controller on a player, another mapping) needs the
    game to start again, because Dolphin and Ryujinx only read which controller each player has when a game starts: the pause screen then says so and puts the focus on **Reset**, which ends the game (the save is uploaded as
    usual) and starts it again on the same save. The emulator's settings files are left alone while it runs and written when it closes.
    Dolphin is started with its "confirm on stop" question off, so **Quit to menu** closes it without a second prompt. **Quit to menu** ends the game like closing the emulator, so save first. In the app the pause menu is its own
@@ -430,6 +428,9 @@ and is tried again when it is put in pairing mode again.
     afresh straight away. A refused connection is looked at again a moment later (a Joy-Con sometimes connects itself), up
     to three times, then the controller is paired afresh once. The real reason is in the `[BT]` lines in the terminal. A Wii
     Remote is never unpaired by the menu.
+  - **Wii Remotes in a game:** connect them before starting the game. Dolphin looks for them once as the game starts (it
+    does not keep searching: searching Bluetooth all the time knocks connected Wii Remotes off on many adapters), and while
+    Dolphin plays the menu lets go of them so only Dolphin talks to them.
   - **Connected means really connected:** a controller counts as connected once the system has it as a controller (its HID
     device, found by its Bluetooth address), not when Bluetooth's radio link is up.
   - **Wii Remote:** connected to the computer so it can drive the menu (held upright: D-pad moves, **A** chooses, **B** goes

@@ -196,11 +196,10 @@ const pendingSetup = new Set();
 function controllerPlan(emulatorId, game = null) {
     const view = inputconfig.describe(detectPads(), { players: config.getPlayers(), wiiRemotes: config.getWiiRemotes() }, mappings);
     const field = emulatorId === 'ryujinx' ? ['sw'] : game === 'wii' ? ['wii'] : game === 'gamecube' ? ['gc'] : ['wii', 'gc'];
-    // Dolphin: a real Wii Remote has nothing to map, and a free player is written as a real Wii Remote too when this computer
-    // has one paired, so a remote that connects there during the game is the same plan (Dolphin picks it up by itself)
+    // Dolphin: a real Wii Remote has nothing to map (one that drops out and comes back is the same plan)
     const dolphin = emulatorId !== 'ryujinx';
     return JSON.stringify(view.slots.map(s => {
-        if (dolphin && game !== 'gamecube' && (s.mode === 'real' || (s.mode === 'empty' && wiimotesPaired))) return ['real'];
+        if (dolphin && game !== 'gamecube' && s.mode === 'real') return ['real'];
         if (dolphin && game === 'gamecube' && s.mode !== 'pad') return ['none'];      // Wii Remotes play no part in a GameCube game
         return [s.mode, s.controller ? playersLib.padKey(s.controller) : null, ...field.map(f => s[f] && s[f].id)];
     }));
@@ -215,7 +214,7 @@ function setupControllers(emulatorIds, { game = null } = {}) {
     }
     const connected = detectPads();
     const results = emulatorIds.map(id => {
-        const result = inputconfig.apply(id, connected, { ...platformCtx, wiiRemotes: config.getWiiRemotes(), spareRemotes: wiimotesPaired, game: id === 'dolphin' ? game : null, players: config.getPlayers(), profiles: mappings, betterjoyMotion: betterjoyOn() ? betterjoyLib.MOTION_PORT : 0, joyconsSplit: config.getJoyconPairs().splits.length > 0 });
+        const result = inputconfig.apply(id, connected, { ...platformCtx, wiiRemotes: config.getWiiRemotes(), game: id === 'dolphin' ? game : null, players: config.getPlayers(), profiles: mappings, betterjoyMotion: betterjoyOn() ? betterjoyLib.MOTION_PORT : 0, joyconsSplit: config.getJoyconPairs().splits.length > 0 });
         console.log(`[PADS] ${id}: ${result.status}${result.message ? ` (${result.message})` : ''}`);
         return result;
     });
@@ -291,7 +290,6 @@ async function startGame(relPath, slotId, onGameState) {
 
     await runner.grantAccess(emu, romsDir);
     await ensureBetterJoy();
-    if (emu.id === 'dolphin') await refreshPaired();
     // Dolphin plays Wii and GameCube games: each gets only its own console's controllers
     const gameConsole = emu.id === 'dolphin' && ['wii', 'gamecube'].includes(folder) ? folder : null;
     if (config.getAutoControllers() && !skipSetup.delete(emu.id)) setupControllers([emu.id], { game: gameConsole });
@@ -318,8 +316,10 @@ async function startGame(relPath, slotId, onGameState) {
     lastError = null;
     const started = Date.now();
     const stopWatching = process.env.EMU_NO_HOTKEY ? () => {} : hotkey.start(togglePause, { holdMs: config.getPauseHold() * 1000 });
+    if (emu.id === 'dolphin') wiimoteReader.hold(true);       // the Wii Remotes are Dolphin's while it plays
     current.child = runner.launch(emu, args, (code, stderr) => {
         stopWatching();
+        wiimoteReader.hold(false);
         const wasPaused = !!(current && current.paused);
         const asked = !!(current && current.stopping);
         current = null;
@@ -371,6 +371,7 @@ async function pauseGame() {
         current.frozenPids = await procs.pidsFor(current.child, current.emu.flatpak, undefined);
         if (!procs.signal(current.frozenPids, 'SIGSTOP')) current.frozenPids = [];
     } catch (err) { console.error(`[PAUSE] could not freeze the game: ${err.message}`); current.frozenPids = []; }
+    wiimoteReader.hold(false);          // the pause menu is steered with them
     pauseHook(true);
 }
 
@@ -384,6 +385,7 @@ function resumeGame() {
     if (!current || !current.paused) return;
     thaw();
     current.paused = false;
+    if (current.emulator === 'dolphin') wiimoteReader.hold(true);
     console.log('[PAUSE] resume');
     pauseHook(false);
 }
@@ -463,19 +465,11 @@ const inputPresent = address => controllers.hidPresent(address);
 const bluetooth = bluetoothLib.createBluetooth({ log: console.log, inputPresent: runner.platform === 'linux' ? inputPresent : null });
 const wiimoteAccess = wiimoteAccessLib.createWiimoteAccess({ platform: runner.platform });
 
-// Whether a Wii Remote is paired with this computer (then free players in Dolphin wait for one, see inputconfig)
-let wiimotesPaired = false;
-async function refreshPaired() {
-    try { wiimotesPaired = (await bluetooth.paired()).some(d => d.type === 'wiimote'); } catch { /* keep what was known */ }
-    return wiimotesPaired;
-}
-
 // /api/bluetooth/*. Returns true when it sent a response.
 async function handleBluetooth(route, req, res) {
     try {
         if (route === 'GET /api/bluetooth') {
             const [status, paired] = await Promise.all([bluetooth.status(), bluetooth.paired()]);
-            wiimotesPaired = paired.some(d => d.type === 'wiimote');
             return sendJson(res, 200, { ...status, paired, wiiRemotes: config.getWiiRemotes(), wiimoteAccess: wiimoteAccess.status() }), true;
         }
         if (route === 'POST /api/bluetooth/wiimote-access') {
@@ -1174,7 +1168,6 @@ function start({ port = 3000, onGameState, onPause } = {}) {
             processRoms(); // pick up any zips dropped in while the app was closed
             ensureBetterJoy();
             if (helper.supported) setInterval(refreshBetterJoy, 3000).unref();
-            if (runner.platform !== 'win32') refreshPaired();
             applyShareSettings().then(err => err && console.error(`[LIBRARY] ${err}`));
             resolve({ server, port: actual });
         });

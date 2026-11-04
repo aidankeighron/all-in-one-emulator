@@ -74,7 +74,7 @@ test('Xbox on player 1, Wii Remote on player 2, Joy-Con pair on player 3: each r
         assert.strictEqual(wm.get('Wiimote3', 'Device'), 'SDL/0/Nintendo Switch Joy-Con (L/R)', 'the joycond pair by the name SDL gives it');
         const main = Ini.read(path.join(dolphinDir, 'Dolphin.ini'));
         assert.strictEqual(main.get('SDL_Hints', 'SDL_JOYSTICK_HIDAPI_JOY_CONS'), '0');
-        assert.strictEqual(main.get('Core', 'WiimoteContinuousScanning'), 'True');
+        assert.strictEqual(main.get('Core', 'WiimoteContinuousScanning'), 'False');
         assert.ok(await until(() => fs.existsSync(runLog)), 'Dolphin was started');
         assert.match(fs.readFileSync(runLog, 'utf8'), /Dolphin\.Interface\.ConfirmStop=False/);
 

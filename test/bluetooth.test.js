@@ -239,7 +239,7 @@ test('real Wii Remotes take the first players and gamepads fill the rest', () =>
     assert.strictEqual(res.status, 'configured');
     const dir = path.join(home, '.var/app/org.DolphinEmu.dolphin-emu/config/dolphin-emu');
     assert.match(fs.readFileSync(path.join(dir, 'WiimoteNew.ini'), 'utf8'), /\[Wiimote1\]\s+Source = 2/);
-    assert.match(fs.readFileSync(path.join(dir, 'Dolphin.ini'), 'utf8'), /WiimoteContinuousScanning = True/);
+    assert.match(fs.readFileSync(path.join(dir, 'Dolphin.ini'), 'utf8'), /WiimoteContinuousScanning = False/);
 });
 
 test('pairing one side of a Joy-Con pair ignores the other side', async () => {

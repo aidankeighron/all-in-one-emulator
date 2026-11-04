@@ -67,7 +67,7 @@ test('Dolphin: a real Wii Remote takes its slot and turns scanning on; the GC ad
     const dir = dolphinDir(home);
     const main = Ini.read(path.join(dir, 'Dolphin.ini'));
     assert.deepStrictEqual([0, 1, 2, 3].map(i => main.get('Core', `SIDevice${i}`)), ['6', '12', '12', '12']);
-    assert.strictEqual(main.get('Core', 'WiimoteContinuousScanning'), 'True');
+    assert.strictEqual(main.get('Core', 'WiimoteContinuousScanning'), 'False');
     const wm = Ini.read(path.join(dir, 'WiimoteNew.ini'));
     assert.strictEqual(wm.get('Wiimote1', 'Source'), '1');
     assert.strictEqual(wm.get('Wiimote2', 'Source'), '2');

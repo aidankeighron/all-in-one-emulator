@@ -105,9 +105,10 @@ function readUsbIds(root = '/sys/bus/usb/devices') {
 // What a joycond controller takes from the two Joy-Cons it is made of: their addresses, and that it is on Bluetooth
 function joycondHalves(halves, nameIndexOf) {
     const addresses = halves.map(h => (h.bus === '0005' ? h.address : null)).filter(Boolean);
+    const reportedAddresses = halves.map(h => (h.bus === '0005' ? h.reportedAddress : null)).filter(Boolean);
     // the keys the two Joy-Cons had while they were controllers of their own: a player kept for either one gets the pair
     const memberKeys = halves.map(h => keyOf({ vendor: h.vendor, product: h.product, name: h.name, nameIndex: nameIndexOf(h) }));
-    return { memberKeys, ...(addresses.length ? { addresses, connection: 'Bluetooth' } : {}) };
+    return { memberKeys, reportedAddresses, ...(addresses.length ? { addresses, connection: 'Bluetooth' } : {}) };
 }
 
 // Turns raw device lists into the list the menu and the emulator writers work with.
@@ -158,6 +159,7 @@ function build(procDevices, usbIds = []) {
             bus: d.bus,
             version: d.version,
             address: d.bus === '0005' ? d.address || null : null,
+            reportedAddress: d.bus === '0005' ? d.reportedAddress || null : null,
             ...(halvesOf.has(d) ? joycondHalves(halvesOf.get(d), h => halves.filter(x => x.name === h.name).indexOf(h)) : {}),
             keys: d.keys || [],
             js: d.js,
@@ -263,8 +265,14 @@ function hidPresent(address, { hidRoot = '/sys/bus/hid/devices', read = f => fs.
     });
 }
 
-// Fills in the address of Bluetooth devices whose input device does not carry it
-const withAddresses = (devices, opts) => devices.map(d => (d.address || d.bus !== '0005' ? d : { ...d, address: hidAddress(d.sysfs, opts) }));
+// A Bluetooth controller's address is the one Bluetooth knows it by (its HID device's, the same bluetoothctl uses). Its
+// input device's "Uniq" is not always that: a Wii Remote's is empty, and a Joy-Con's is the address the controller reports
+// about itself, which some do not report the same way. That one is kept as reportedAddress (Joy-Con batteries are named by it).
+const withAddresses = (devices, opts) => devices.map(d => {
+    if (d.bus !== '0005') return d;
+    const bt = hidAddress(d.sysfs, opts);
+    return { ...d, address: bt || d.address, reportedAddress: d.address };
+});
 
 function detect({ platform = process.platform, procFile = '/proc/bus/input/devices', usbRoot, sysRoot, now = Date.now(), merge, hideNintendo = false } = {}) {
     let found;
@@ -348,6 +356,7 @@ function combine(list, { merges = [], splits = [], auto = true } = {}) {
             memberKeys: [keyOf(a), keyOf(b)],
             memberNames: [a.name, b.name],
             addresses: [a.address, b.address].filter(Boolean),
+            reportedAddresses: [a.reportedAddress, b.reportedAddress].filter(Boolean),
             player: Math.min(a.player, b.player)
         });
     }
@@ -469,8 +478,8 @@ function batteries({ root = '/sys/class/power_supply', read = f => fs.readFileSy
 
 // The battery of a controller (a pair: the emptier of its two Joy-Cons), or null when the system does not say
 function batteryOf(c, all) {
-    const addresses = c.addresses && c.addresses.length ? c.addresses : c.address ? [c.address] : [];
-    const found = addresses.map(a => all.get(String(a).toUpperCase())).filter(Boolean);
+    const addresses = [...(c.addresses && c.addresses.length ? c.addresses : c.address ? [c.address] : []), ...(c.reportedAddresses || []), ...(c.reportedAddress ? [c.reportedAddress] : [])];
+    const found = [...new Set(addresses.map(a => String(a).toUpperCase()))].map(a => all.get(a)).filter(Boolean);
     if (!found.length) return null;
     return found.sort((a, b) => LEVELS.indexOf(a.level) - LEVELS.indexOf(b.level) || (a.percent ?? 101) - (b.percent ?? 101))[0];
 }

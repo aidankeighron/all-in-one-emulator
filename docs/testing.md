@@ -59,9 +59,9 @@ Linux needs Bluetooth (the menu offers to install it) and kernel 5.16 or newer f
 - **Let Dolphin use Wii Remotes:** after the remote connects, press **Let Dolphin use Wii Remotes** (password once). Check that
   `/etc/udev/rules.d/72-emulator-menu-wiimote.rules` exists and `ls -l /dev/hidraw*` shows a `+` (an ACL) on the remote's
   device. Then start a Wii game with the remote still connected to the computer: it should work without pressing 1 + 2.
-- **A Wii Remote joining mid-game:** start a Wii game with only an Xbox pad, then turn a paired Wii Remote on (press a button).
-  It should become player 2 in the game, and the pause menu should not ask for a restart. `WiimoteNew.ini` should show
-  `Source = 2` for Wiimote2-4.
+- **A Wii Remote staying connected in a game:** connect it, start a Wii game and play for a few minutes: it should stay
+  connected (`WiimoteContinuousScanning = False` in `Dolphin.ini`). If it still drops, note how long it took and copy the
+  `[BT]` lines and Dolphin's log (View -> Show Log, with Wiimote logging on).
 - **Everyone at once:** open Connect a controller and put two Joy-Cons and a Wii Remote in sync mode at the same time. Each
   should be listed as it connects; press Done. With joycond on, L + R on the pair should make it a player.
 - **Batteries:** with Joy-Cons connected, their tile should show *Battery …*; `ls /sys/class/power_supply` should list

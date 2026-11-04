@@ -3686,8 +3686,10 @@
             const cards = padList.filter(c => !c.adapter && !c.virtual).map(c => ({ art: c, name: c.name, status: c.player ? `Player ${c.player}` : 'Connected', player: c.player, state: 'on' }));
             if (job) {
                 for (const d of job.devices || []) {
-                    if (onComputer.has(d.address)) continue;
-                    if (d.ok) cards.push({ art: PC_ART[d.type], name: PC_NAME[d.type] || d.label, status: d.note === 'connected' ? 'Connected' : 'Connects in a game', state: 'on' });
+                    // A controller that connected is on the computer, so it is already a card above (as part of a joined pair,
+                    // maybe): only a Wii Remote the computer could not hold gets a card of its own
+                    if (onComputer.has(d.address) || (d.ok && d.note === 'connected')) continue;
+                    if (d.ok) cards.push({ art: PC_ART[d.type], name: PC_NAME[d.type] || d.label, status: 'Connects in a game', state: 'on' });
                     else cards.push({ art: PC_ART[d.type], name: PC_NAME[d.type] || d.label, status: 'Hold sync again', state: 'failed' });
                 }
                 if (job.phase === 'running' && job.device && !onComputer.has(job.device.address)) cards.push({ art: PC_ART[job.device.type], name: PC_NAME[job.device.type] || job.device.label, status: 'Connecting…', state: 'busy' });
