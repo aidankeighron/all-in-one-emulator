@@ -43,6 +43,7 @@ function parseProc(text) {
         const name = block.match(/^N: Name="(.*)"$/m);
         const handlers = block.match(/^H: Handlers=(.*)$/m);
         const uniq = block.match(/^U: Uniq=([0-9a-f]{2}(?::[0-9a-f]{2}){5})\s*$/im);
+        const sysfs = block.match(/^S: Sysfs=(.*)$/m);
         const keyLine = block.match(/^B: KEY=(.*)$/m);
         if (!id || !name || !handlers) continue;
         const list = handlers[1].trim().split(/\s+/);
@@ -55,6 +56,7 @@ function parseProc(text) {
             product: id[3].toLowerCase(),
             version: (id[4] || '0000').toLowerCase(),
             address: uniq ? uniq[1].toUpperCase() : null,      // a Bluetooth controller's address (what "forget" needs)
+            sysfs: sysfs ? sysfs[1].trim() : null,
             keys: keyLine ? keyCodes(keyLine[1]) : [],
             js: js ? Number(js.slice(2)) : null,
             event: event ? Number(event.slice(5)) : null
@@ -237,13 +239,39 @@ function report(pads, now = Date.now()) {
 
 // merge: {merges, splits, auto} as kept in config.json (see combine), applied to whatever was found
 // hideNintendo: leave out the real Switch controllers (BetterJoy's virtual Xbox pads stand in for them)
-function detect({ platform = process.platform, procFile = '/proc/bus/input/devices', usbRoot, now = Date.now(), merge, hideNintendo = false } = {}) {
+// The Bluetooth address of a Bluetooth controller, from the HID device it belongs to. The Wii Remote's driver leaves its
+// input devices without one (their "Uniq" is empty), but the HID device under them always has it (HID_UNIQ).
+function hidAddress(sysfs, { sysRoot = '/sys', read = f => fs.readFileSync(f, 'utf8') } = {}) {
+    if (!sysfs) return null;
+    const hidDir = sysfs.replace(/\/input\/input\d+\/?$/, '');
+    try {
+        const m = /^HID_UNIQ=((?:[0-9a-f]{2}:){5}[0-9a-f]{2})\s*$/im.exec(read(path.join(sysRoot, hidDir, 'uevent')));
+        return m ? m[1].toUpperCase() : null;
+    } catch { return null; }
+}
+
+// Whether a Bluetooth controller is on the computer as a controller right now: one of its HID devices is there (that is,
+// its controller part connected, not only the radio link)
+function hidPresent(address, { hidRoot = '/sys/bus/hid/devices', read = f => fs.readFileSync(f, 'utf8'), list = d => fs.readdirSync(d) } = {}) {
+    const want = String(address || '').toUpperCase();
+    if (!want) return false;
+    let names = [];
+    try { names = list(hidRoot); } catch { return false; }
+    return names.some(n => {
+        try { const m = /^HID_UNIQ=(.*)$/im.exec(read(path.join(hidRoot, n, 'uevent'))); return !!m && m[1].trim().toUpperCase() === want; } catch { return false; }
+    });
+}
+
+// Fills in the address of Bluetooth devices whose input device does not carry it
+const withAddresses = (devices, opts) => devices.map(d => (d.address || d.bus !== '0005' ? d : { ...d, address: hidAddress(d.sysfs, opts) }));
+
+function detect({ platform = process.platform, procFile = '/proc/bus/input/devices', usbRoot, sysRoot, now = Date.now(), merge, hideNintendo = false } = {}) {
     let found;
     if (platform === 'win32') found = now - reported.at < REPORT_TTL_MS ? fromGamepadApi(reported.pads) : [];
     else {
         let text = '';
         try { text = fs.readFileSync(procFile, 'utf8'); } catch { /* no input subsystem */ }
-        found = build(parseProc(text), readUsbIds(usbRoot));
+        found = build(withAddresses(parseProc(text), sysRoot ? { sysRoot } : {}), readUsbIds(usbRoot));
     }
     if (hideNintendo) found = found.filter(c => !(c.kind === 'switch' && c.vendor === NINTENDO));
     return merge ? combine(found, { ...merge, auto: false }) : found;      // pairs are made by hand (both bumpers)
@@ -446,4 +474,4 @@ function batteryOf(c, all) {
     return found.sort((a, b) => LEVELS.indexOf(a.level) - LEVELS.indexOf(b.level) || (a.percent ?? 101) - (b.percent ?? 101))[0];
 }
 
-module.exports = { batteries, batteryOf, createOrder, parseProc, classify, build, detect, hasGcAdapter, fromGamepadApi, report, combine, keyOf, joyconSide, sdlName, crc16, KIND_LABELS, PAD_KINDS, JOYCON_PAIR_SDL_NAME };
+module.exports = { hidAddress, hidPresent, batteries, batteryOf, createOrder, parseProc, classify, build, detect, hasGcAdapter, fromGamepadApi, report, combine, keyOf, joyconSide, sdlName, crc16, KIND_LABELS, PAD_KINDS, JOYCON_PAIR_SDL_NAME };

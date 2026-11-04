@@ -420,10 +420,14 @@ and is tried again when it is put in pairing mode again.
 - **Linux:** if Bluetooth is not installed or switched off, the screen offers to install and start it first (one password
   prompt through `pkexec`; `apt`, `dnf`, `pacman` and `zypper` are supported), then starts looking. Switch controllers need
   Linux 5.16 or newer (the menu checks).
-  - **Switch controllers that "failed to connect" (`br-connection-create-socket`):** a Joy-Con often connects to the computer
-    by itself right after pairing, and the menu's own connect request at that moment can fail although it works out. So the
-    menu waits a moment for the controller to show up, then asks (up to three times), and a controller Bluetooth only knew
-    from an old pairing (one it may have forgotten, say after it was used with a Switch) is unpaired and paired afresh once.
+  - **Switch controllers that were paired before:** holding the sync button starts a new pairing on the controller's side,
+    so the computer's old pairing no longer works and every connection to it is refused (`br-connection-create-socket`,
+    common after a Joy-Con was used with a Switch). So a Switch controller the computer already knew is unpaired and paired
+    afresh straight away. A refused connection is looked at again a moment later (a Joy-Con sometimes connects itself), up
+    to three times, then the controller is paired afresh once. The real reason is in the `[BT]` lines in the terminal. A Wii
+    Remote is never unpaired by the menu.
+  - **Connected means really connected:** a controller counts as connected once the system has it as a controller (its HID
+    device, found by its Bluetooth address), not when Bluetooth's radio link is up.
   - **Wii Remote:** connected to the computer so it can drive the menu (held upright: D-pad moves, **A** chooses, **B** goes
     back, **1** / **2** are X / Y, **−** / **+** change page, **Home** is Start). The kernel shows its D-pad as arrow keys,
     which the browser's gamepad support leaves out, so the menu reads the remote itself (`ui/lib/wiimote.js`, from
@@ -436,6 +440,11 @@ and is tried again when it is put in pairing mode again.
     way the system already gives them their gamepads. Delete the file to undo it.
 - **Windows:** Windows owns pairing, so the screen opens its Bluetooth page and lists the steps.
 - This was tested against a stand-in for `bluetoothctl`, not real Wii Remotes or Switch controllers.
+
+**Settings file.** `config.json` (favorites, players, ROMs folder, ...) is written to a new file that then replaces the old
+one, the previous one is kept as `config.json.bak`, and a file that cannot be read is never treated as empty (the menu
+uses the last one it could read, or the backup), so one bad moment cannot wipe the favorites. Delete `config.json` to start
+over.
 
 **Batteries.** The system's "game controller battery low" warning does not say which controller it means, so the menu
 does: each controller's tile shows its battery (*Battery 64%*, *Battery high*, *Battery low*, *Charging*), the chip at the top

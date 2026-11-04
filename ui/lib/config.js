@@ -6,17 +6,41 @@ const platformLib = require('./platform');
 
 const configFile = path.join(platformLib.configDir(), 'config.json');
 
+// Every setting is one key of config.json, and every change reads the whole file, changes its key and writes it all back. So
+// a file that cannot be read must never count as empty: the next change would write it back with only that one key, and
+// favorites, players and everything else would be gone. It is written to a new file that then replaces the old one in one
+// step (so nobody ever reads it half-written, not even another copy of the menu), the previous one is kept as config.json.bak,
+// and a file that cannot be read falls back to the last one that could (this run's, else the backup).
+const backupFile = `${configFile}.bak`;
+let lastGood = null;
+
+function readJson(file) {
+    const text = fs.readFileSync(file, 'utf8');
+    const value = JSON.parse(text);
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('not a settings object');
+    return value;
+}
+
 function load() {
     try {
-        return JSON.parse(fs.readFileSync(configFile, 'utf8'));
-    } catch {
+        lastGood = readJson(configFile);
+        return { ...lastGood };
+    } catch (err) {
+        if (err.code === 'ENOENT') { lastGood = null; return {}; }      // first start, or deleted on purpose to start over
+        if (lastGood) return { ...lastGood };
+        try { lastGood = readJson(backupFile); console.error(`[CONFIG] ${configFile} could not be read (${err.message}); using ${backupFile}`); return { ...lastGood }; } catch { /* no backup either */ }
         return {};
     }
 }
 
 function save(cfg) {
     fs.mkdirSync(path.dirname(configFile), { recursive: true });
-    fs.writeFileSync(configFile, JSON.stringify(cfg, null, 2), { mode: 0o600 });   // holds the library access keys
+    const text = JSON.stringify(cfg, null, 2);
+    const tmp = `${configFile}.tmp-${process.pid}`;
+    fs.writeFileSync(tmp, text, { mode: 0o600 });   // holds the library access keys
+    try { if (fs.existsSync(configFile)) { readJson(configFile); fs.copyFileSync(configFile, backupFile); fs.chmodSync(backupFile, 0o600); } } catch { /* keep the older backup rather than a broken file */ }
+    fs.renameSync(tmp, configFile);
+    lastGood = JSON.parse(text);
 }
 
 // From a source checkout the ROMs live in <repo>/roms (the original layout);

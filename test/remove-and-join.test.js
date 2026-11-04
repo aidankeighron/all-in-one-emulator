@@ -222,18 +222,19 @@ test('"Connected: yes" from Bluetooth alone is not connected: without the contro
     while (Date.now() < end && !(b.snapshot().devices || []).length) await new Promise(r => setTimeout(r, 20));
     const job = b.cancel();
     assert.deepStrictEqual(job.devices.map(d => [d.label, d.ok]), [['Joy-Con (R)', false]]);
-    assert.strictEqual(calls.filter(c => c === 'connect').length, 3, 'it asked three times');
+    assert.strictEqual(calls.filter(c => c === 'connect').length, 6, 'three times, then three more after pairing it afresh once');
+    assert.strictEqual(calls.filter(c => c === 'remove').length, 1, 'paired afresh only once');
 });
 
-test('a Joy-Con BlueZ only knew from an old pairing is unpaired and paired afresh when it will not connect', async () => {
+test('a Joy-Con BlueZ knew from before is unpaired and paired afresh straight away, without trying the old pairing', async () => {
     const { spawnImpl, calls } = fakeSelfConnecting({ stale: true });
     const b = bt.createBluetooth({ platform: 'linux', spawnImpl, exists: () => false, retryMs: 30 });
     b.startPairing('all');
     const job = await settled(b);
     b.cancel();
     assert.deepStrictEqual(job.devices.map(d => [d.label, d.ok]), [['Joy-Con (R)', true]]);
-    assert.strictEqual(calls.filter(c => c === 'connect').length, 4, 'three tries, then one after pairing again');
-    assert.ok(calls.includes('remove'));
+    assert.strictEqual(calls.filter(c => c === 'connect').length, 1, 'only the fresh pairing is connected');
+    assert.ok(calls.indexOf('remove') < calls.indexOf('connect'), 'the old pairing is removed first');
 });
 
 test('controller batteries are read from the system, matched by Bluetooth address (a Joy-Con pair shows its emptier half)', () => {
@@ -249,4 +250,50 @@ test('controller batteries are read from the system, matched by Bluetooth addres
     assert.deepStrictEqual(pair, { percent: null, level: 'low', charging: false, low: true });
     assert.deepStrictEqual(controllers.batteryOf({ address: 'BB:00:00:00:00:01' }, all), { percent: 64, level: 'high', charging: false, low: false });
     assert.strictEqual(controllers.batteryOf({ address: null }, all), null);
+});
+
+test('a Wii Remote is never unpaired by the menu, even when it will not connect', async () => {
+    const { spawnImpl } = fakeSelfConnecting();
+    const calls = [];
+    const wrap = () => {
+        const child = spawnImpl();
+        const write = child.stdin.write;
+        // the same stand-in, answering for a Wii Remote that BlueZ already knows
+        child.stdin.write = text => {
+            for (const l of String(text).split('\n').filter(Boolean)) calls.push(l.trim().split(' ')[0]);
+            const t = String(text).replace(/scan on/, 'scan on');
+            if (/^scan on/m.test(t)) setTimeout(() => child.stdout.emit('data', '[NEW] Device 33:00:00:00:00:01 Nintendo RVL-CNT-01\n'), 10);
+            if (/^pair /m.test(t)) { setTimeout(() => child.stdout.emit('data', 'Failed to pair: org.bluez.Error.AlreadyExists\n'), 5); return; }
+            if (/^scan on/m.test(t)) return;
+            return write(text);
+        };
+        return child;
+    };
+    const b = bt.createBluetooth({ platform: 'linux', spawnImpl: wrap, exists: () => false, retryMs: 20, pollMs: 10, stepSeconds: 0.2, inputPresent: () => false });
+    b.startPairing('all');
+    const end = Date.now() + 4000;
+    while (Date.now() < end && !(b.snapshot().devices || []).length) await new Promise(r => setTimeout(r, 20));
+    const job = b.cancel();
+    assert.ok(!calls.includes('remove'), 'never removed');
+    assert.deepStrictEqual(job.devices.map(d => [d.label, d.ok]), [['Wii Remote', true]], 'still listed: Dolphin connects it in a game');
+});
+
+test('a Wii Remote gets its Bluetooth address from its HID device, which also says whether it is really connected', () => {
+    const sys = fs.mkdtempSync(path.join(os.tmpdir(), 'sys-'));
+    const hid = 'devices/pci0000:00/bluetooth/hci0/hci0:256/0005:057E:0306.0004';
+    fs.mkdirSync(path.join(sys, hid, 'input', 'input23'), { recursive: true });
+    fs.writeFileSync(path.join(sys, hid, 'uevent'), 'DRIVER=wiimote\nHID_ID=0005:0000057E:00000306\nHID_NAME=Nintendo RVL-CNT-01\nHID_UNIQ=8c:56:c5:aa:bb:cc\n');
+    assert.strictEqual(controllers.hidAddress(`/${hid}/input/input23`, { sysRoot: sys }), '8C:56:C5:AA:BB:CC');
+    // detect fills it in for the remote, whose input device has no Uniq
+    const procFile = path.join(sys, 'devices.txt');
+    fs.writeFileSync(procFile, ['I: Bus=0005 Vendor=057e Product=0306 Version=8001', 'N: Name="Nintendo Wii Remote"', 'P: Phys=', `S: Sysfs=/${hid}/input/input23`, 'U: Uniq=', 'H: Handlers=event23', 'B: EV=3', ''].join('\n'));
+    const [remote] = controllers.detect({ platform: 'linux', procFile, usbRoot: '/nonexistent', sysRoot: sys });
+    assert.strictEqual(remote.kind, 'wiimote');
+    assert.strictEqual(remote.address, '8C:56:C5:AA:BB:CC');
+    // present while its HID device is there
+    const hidRoot = path.join(sys, 'bus-hid');
+    fs.mkdirSync(path.join(hidRoot, '0005:057E:0306.0004'), { recursive: true });
+    fs.writeFileSync(path.join(hidRoot, '0005:057E:0306.0004', 'uevent'), 'HID_UNIQ=8c:56:c5:aa:bb:cc\n');
+    assert.strictEqual(controllers.hidPresent('8C:56:C5:AA:BB:CC', { hidRoot }), true);
+    assert.strictEqual(controllers.hidPresent('8C:56:C5:AA:BB:CD', { hidRoot }), false);
 });

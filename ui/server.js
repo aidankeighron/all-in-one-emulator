@@ -453,10 +453,9 @@ function readJson(req) {
     });
 }
 
-// A paired controller only counts as connected once the system shows it as a controller (an input device with its address)
-const inputPresent = address => {
-    try { return controllers.parseProc(fs.readFileSync('/proc/bus/input/devices', 'utf8')).some(d => d.address === address); } catch { return false; }
-};
+// A paired controller only counts as connected once the system shows it as a controller (a HID device with its address:
+// the controller part connected, not only Bluetooth's radio link). Wii Remotes included, whose input devices carry no address.
+const inputPresent = address => controllers.hidPresent(address);
 const bluetooth = bluetoothLib.createBluetooth({ log: console.log, inputPresent: runner.platform === 'linux' ? inputPresent : null });
 const wiimoteAccess = wiimoteAccessLib.createWiimoteAccess({ platform: runner.platform });
 
