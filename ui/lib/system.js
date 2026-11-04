@@ -18,6 +18,8 @@ const OFF_TAG = '#emulator-menu kiosk, was: ';
 const GDM_FILES = ['/etc/gdm3/custom.conf', '/etc/gdm/custom.conf'];
 const LIGHTDM_DIR = '/etc/lightdm/lightdm.conf.d';
 const LIGHTDM_FILE = `${LIGHTDM_DIR}/50-emulator-menu-kiosk.conf`;
+const SDDM_DIR = '/etc/sddm.conf.d';
+const SDDM_FILE = `${SDDM_DIR}/50-emulator-menu-kiosk.conf`;
 
 // What the desktop does by itself that a kiosk must not: [schema, key, value to set]
 const GNOME_SETTINGS = [
@@ -30,7 +32,10 @@ const GNOME_SETTINGS = [
 // ---------- pure helpers (tested without touching the system) ----------
 
 // GDM's custom.conf with automatic sign-in on (user) or off (null). Only the block between the markers is ever ours.
-function gdmConfig(text, user) {
+// Besides automatic sign-in it sets timed sign-in (after 3 seconds): GDM's automatic sign-in can lose a race at start
+// (NVIDIA graphics with Wayland are known for it) and fall back to the sign-in screen, which timed sign-in then signs in from
+// by itself. xorg: the sign-in screen (and so the desktop) use Xorg instead of Wayland, the usual cure for that race.
+function gdmConfig(text, user, { xorg = false } = {}) {
     const lines = String(text || '').split('\n');
     const out = [];
     let skipping = false;
@@ -39,21 +44,20 @@ function gdmConfig(text, user) {
         if (line.trim() === MARK_END) { skipping = false; continue; }
         if (!skipping) out.push(line);
     }
-    // Any automatic sign-in the file already has would fight ours: it is commented out while ours is there, and put back after
-    let cleaned = out.map(l => {
-        if (user && /^\s*AutomaticLogin(Enable)?\s*=/i.test(l)) return `${OFF_TAG}${l}`;
-        if (!user && l.startsWith(OFF_TAG)) return l.slice(OFF_TAG.length);
-        return l;
-    });
+    // Settings of the file's own that would fight ours are commented out while ours are there, and put back after
+    let cleaned = out.map(l => (l.startsWith(OFF_TAG) ? l.slice(OFF_TAG.length) : l));
     if (!user) return cleaned.join('\n');
-    const block = [MARK_BEGIN, 'AutomaticLoginEnable=true', `AutomaticLogin=${user}`, MARK_END];
+    const fights = xorg ? /^\s*(AutomaticLogin(Enable)?|TimedLogin(Enable|Delay)?|WaylandEnable)\s*=/i : /^\s*(AutomaticLogin(Enable)?|TimedLogin(Enable|Delay)?)\s*=/i;
+    cleaned = cleaned.map(l => (fights.test(l) ? `${OFF_TAG}${l}` : l));
+    const block = [MARK_BEGIN, 'AutomaticLoginEnable=true', `AutomaticLogin=${user}`, 'TimedLoginEnable=true', `TimedLogin=${user}`, 'TimedLoginDelay=3', ...(xorg ? ['WaylandEnable=false'] : []), MARK_END];
     const at = cleaned.findIndex(l => l.trim().toLowerCase() === '[daemon]');
     if (at >= 0) cleaned.splice(at + 1, 0, ...block);
     else cleaned = ['[daemon]', ...block, '', ...cleaned];
     return cleaned.join('\n');
 }
-
 const lightdmConfig = user => `${MARK_BEGIN}\n[Seat:*]\nautologin-user=${user}\nautologin-user-timeout=0\n${MARK_END}\n`;
+// SDDM (Kubuntu and other KDE systems) needs the desktop session to start as well
+const sddmConfig = (user, session) => `${MARK_BEGIN}\n[Autologin]\nUser=${user}\n${session ? `Session=${session}.desktop\n` : ''}Relogin=false\n${MARK_END}\n`;
 
 const quoteDesktop = s => `"${String(s).replace(/(["`$\\])/g, '\\$1')}"`;
 
@@ -71,7 +75,7 @@ function appCommand({ env = process.env, execPath = process.execPath, electron =
 function createSystem({
     platform = process.platform === 'win32' ? 'win32' : 'linux', home = os.homedir(), user = os.userInfo().username, configDir,
     exists = fs.existsSync, read = file => fs.readFileSync(file, 'utf8'), execImpl = childProcess.execFile, spawnImpl = childProcess.spawn,
-    command = () => appCommand(), tmpdir = os.tmpdir()
+    command = () => appCommand(), tmpdir = os.tmpdir(), env = process.env
 } = {}) {
     const linux = platform === 'linux';
     const autostartFile = path.join(home, '.config', 'autostart', 'emulator-menu.desktop');
@@ -113,10 +117,18 @@ function createSystem({
         });
     }
 
+    // The sign-in screen this computer starts: the one /etc/X11/default-display-manager names when it says (a computer can
+    // have several installed, and writing the one that does not run changes nothing), else the first one found
     function displayManager() {
+        let active = '';
+        try { if (exists('/etc/X11/default-display-manager')) active = path.basename(read('/etc/X11/default-display-manager').trim()); } catch { /* not said */ }
         const gdm = GDM_FILES.find(f => exists(f));
+        if (/^gdm/.test(active) && gdm) return { name: 'gdm', file: gdm };
+        if (active === 'lightdm') return { name: 'lightdm', file: LIGHTDM_FILE };
+        if (active === 'sddm') return { name: 'sddm', file: SDDM_FILE };
         if (gdm) return { name: 'gdm', file: gdm };
         if (exists('/etc/lightdm')) return { name: 'lightdm', file: LIGHTDM_FILE };
+        if (exists('/etc/sddm.conf.d') || exists('/etc/sddm.conf')) return { name: 'sddm', file: SDDM_FILE };
         return null;
     }
 
@@ -146,11 +158,17 @@ function createSystem({
     }
 
     // Writes (or removes) the display manager's automatic sign-in
-    async function setAutologin(dm, on, onLine) {
+    async function setAutologin(dm, on, onLine, { xorg = false } = {}) {
         const q = s => `'${String(s).replace(/'/g, "'\\''")}'`;
         let script;
-        if (dm.name === 'gdm') {
-            const next = gdmConfig(exists(dm.file) ? read(dm.file) : '', on ? user : null);
+        if (dm.name === 'sddm') {
+            if (on) {
+                const tmp = path.join(fs.mkdtempSync(path.join(tmpdir, 'kiosk-')), 'kiosk.conf');
+                fs.writeFileSync(tmp, sddmConfig(user, env.DESKTOP_SESSION || null));
+                script = `mkdir -p ${q(SDDM_DIR)} ; cp ${q(tmp)} ${q(SDDM_FILE)}`;
+            } else script = `rm -f ${q(SDDM_FILE)}`;
+        } else if (dm.name === 'gdm') {
+            const next = gdmConfig(exists(dm.file) ? read(dm.file) : '', on ? user : null, { xorg });
             const tmp = path.join(fs.mkdtempSync(path.join(tmpdir, 'kiosk-')), 'custom.conf');
             fs.writeFileSync(tmp, next);
             script = `cp -n ${q(dm.file)} ${q(dm.file + '.emulator-menu.bak')} ; cp ${q(tmp)} ${q(dm.file)}`;
@@ -196,7 +214,7 @@ function createSystem({
         const cmd = command();
         if (!cmd) throw new Error('Start the menu as the app (npm start, or the AppImage) to set up kiosk mode');
         const dm = displayManager();
-        if (!dm) throw new Error('This system’s sign-in screen is not one the menu knows (GDM or LightDM), so it cannot sign in by itself. Set automatic login in the system settings');
+        if (!dm) throw new Error('This system’s sign-in screen is not one the menu knows (GDM, LightDM or SDDM), so it cannot sign in by itself. Set automatic login in the system settings');
         // The part that can be refused comes first, so nothing is left half done
         await setAutologin(dm, true, onLine);
         fs.mkdirSync(path.dirname(autostartFile), { recursive: true });
@@ -248,7 +266,43 @@ function createSystem({
         return true;
     }
 
-    return { power, status, enable, disable, autostartFile, displayManager, nextStart, fixWifi };
+    // Why the computer might still show the sign-in screen with kiosk mode on, from the computer itself: which sign-in screen
+    // really runs (systemd's display-manager service) against the one the menu wrote, what that file says, NVIDIA graphics
+    // with Wayland (a known reason GDM's automatic sign-in falls back to the sign-in screen), an encrypted home folder
+    // (cannot be opened without the password), and what the sign-in screen itself logged about it at this start.
+    async function loginDiagnosis() {
+        if (!linux) return null;
+        const unit = (await run('systemctl', ['show', '-p', 'Id', '--value', 'display-manager.service'])).out;
+        const running = /gdm/.test(unit) ? 'gdm' : /lightdm/.test(unit) ? 'lightdm' : /sddm/.test(unit) ? 'sddm' : null;
+        const dm = displayManager();
+        let text = '';
+        try { if (dm && exists(dm.file)) text = read(dm.file); } catch { /* cannot read it */ }
+        const block = text.includes(MARK_BEGIN) ? text.slice(text.indexOf(MARK_BEGIN), text.indexOf(MARK_END) + MARK_END.length) : '';
+        const journal = unit ? await run('journalctl', ['-b', '-q', '--no-pager', '-o', 'cat', '-u', unit, '-n', '400']) : { ok: false, out: '' };
+        const log = journal.ok ? journal.out.split('\n').filter(l => /autolog|automatic|timed|login.*fail|fail.*login|session.*(fail|error)|nvidia/i.test(l)).slice(-8) : [];
+        return {
+            running, configured: dm ? dm.name : null, file: dm ? dm.file : null,
+            mismatch: !!(running && dm && running !== dm.name),
+            autologin: /AutomaticLogin=/.test(block) || (dm && dm.name !== 'gdm' && !!text),
+            timed: /TimedLoginEnable=true/.test(block),
+            nvidia: exists('/sys/module/nvidia'),
+            wayland: dm && dm.name === 'gdm' ? !/^\s*WaylandEnable\s*=\s*false/im.test(text) : null,
+            ecryptfs: exists(path.join('/home/.ecryptfs', user)),
+            log, logReadable: journal.ok
+        };
+    }
+
+    // Writes automatic sign-in again, with the timed sign-in backup, for the sign-in screen that really runs; xorg as above
+    async function repairLogin({ xorg = false, onLine = () => {} } = {}) {
+        if (!linux) throw new Error('Kiosk mode is set up for Ubuntu (Linux) only');
+        const dm = displayManager();
+        if (!dm) throw new Error('This system’s sign-in screen is not one the menu knows (GDM, LightDM or SDDM)');
+        await setAutologin(dm, true, onLine, { xorg });
+        onLine(xorg ? 'Automatic sign-in written again, with the sign-in screen on Xorg' : 'Automatic sign-in written again');
+        return loginDiagnosis();
+    }
+
+    return { power, status, enable, disable, autostartFile, displayManager, nextStart, fixWifi, loginDiagnosis, repairLogin };
 }
 
-module.exports = { createSystem, gdmConfig, lightdmConfig, desktopEntry, appCommand, GNOME_SETTINGS, MARK_BEGIN, MARK_END };
+module.exports = { sddmConfig, createSystem, gdmConfig, lightdmConfig, desktopEntry, appCommand, GNOME_SETTINGS, MARK_BEGIN, MARK_END };

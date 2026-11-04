@@ -11,7 +11,7 @@ const DEFAULT_GDM = '# GDM configuration storage\n\n[daemon]\n# Uncomment the li
 
 test('GDM: automatic sign-in is added in its own block, and removing it gives back the original file', () => {
     const on = systemLib.gdmConfig(DEFAULT_GDM, 'tv');
-    assert.match(on, /\[daemon\]\n# emulator-menu kiosk: begin\nAutomaticLoginEnable=true\nAutomaticLogin=tv\n# emulator-menu kiosk: end/);
+    assert.match(on, /\[daemon\]\n# emulator-menu kiosk: begin\nAutomaticLoginEnable=true\nAutomaticLogin=tv\nTimedLoginEnable=true\nTimedLogin=tv\nTimedLoginDelay=3\n# emulator-menu kiosk: end/);
     assert.strictEqual(systemLib.gdmConfig(on, null), DEFAULT_GDM);
     assert.strictEqual(systemLib.gdmConfig(systemLib.gdmConfig(on, 'tv'), 'tv'), on, 'turning it on twice changes nothing more');
     // a sign-in the file already had is put aside while ours is on, and comes back
@@ -91,7 +91,7 @@ test('kiosk mode: a refused password changes nothing; an unknown sign-in screen 
 
     const none = fakeSystem({ gdm: false });
     const bare = systemLib.createSystem({ platform: 'linux', home: none.home, user: 'tv', exists: () => false, command: () => 'x', configDir: none.home });
-    await assert.rejects(bare.enable({}), /GDM or LightDM/);
+    await assert.rejects(bare.enable({}), /GDM, LightDM or SDDM/);
     const noApp = systemLib.createSystem({ platform: 'linux', home: none.home, exists: () => true, command: () => null });
     await assert.rejects(noApp.enable({}), /as the app/);
 
@@ -158,4 +158,28 @@ test('next start: an encrypted disk and Wi-Fi kept in the keyring are found, and
     await assert.rejects(sys.fixWifi('Home:5G', 'short'), /8 to 63/);
     await sys.fixWifi('Home:5G', "it's-a-secret");
     assert.strictEqual(scripts[0], "nmcli connection modify id 'Home:5G' 802-11-wireless-security.psk-flags 0 802-11-wireless-security.psk 'it'\\''s-a-secret'");
+});
+
+test('the sign-in screen: Xorg for NVIDIA, the one that really runs is written, and the diagnosis says why it might not sign in', async () => {
+    const xorg = systemLib.gdmConfig(DEFAULT_GDM, 'tv', { xorg: true });
+    assert.match(xorg, /TimedLoginDelay=3\nWaylandEnable=false\n# emulator-menu kiosk: end/);
+    assert.strictEqual(systemLib.gdmConfig(xorg, null), DEFAULT_GDM, 'all of it comes off again');
+    assert.strictEqual(systemLib.gdmConfig(xorg, 'tv'), systemLib.gdmConfig(DEFAULT_GDM, 'tv'), 'repairing without Xorg takes Wayland back');
+    assert.match(systemLib.sddmConfig('tv', 'plasma'), /\[Autologin\]\nUser=tv\nSession=plasma.desktop/);
+
+    // GDM is installed but LightDM is the one that runs: LightDM is written
+    const files = { '/etc/X11/default-display-manager': '/usr/sbin/lightdm\n', '/etc/gdm3/custom.conf': DEFAULT_GDM };
+    const sys = systemLib.createSystem({ platform: 'linux', user: 'tv', exists: f => f in files, read: f => files[f], execImpl: (f, a, o, cb) => cb(null, ''), command: () => 'x' });
+    assert.strictEqual(sys.displayManager().name, 'lightdm');
+
+    // GDM with NVIDIA and Wayland, and what GDM logged
+    const g = { '/etc/gdm3/custom.conf': systemLib.gdmConfig(DEFAULT_GDM, 'tv').replace(/TimedLogin.*\n/g, ''), '/sys/module/nvidia': '' };
+    const answers = { 'systemctl show -p Id --value display-manager.service': 'gdm.service', 'journalctl -b -q --no-pager -o cat -u gdm.service -n 400': 'Gdm: Child process -1234 was already dead.\nGdm: GdmDisplay: Session never registered, failing\nGdm: autologin failed, falling back to the greeter\n' };
+    const diag = await systemLib.createSystem({ platform: 'linux', user: 'tv', exists: f => f in g, read: f => g[f], execImpl: (f, a, o, cb) => cb(null, answers[[f, ...a].join(' ')] || ''), command: () => 'x' }).loginDiagnosis();
+    assert.strictEqual(diag.running, 'gdm');
+    assert.strictEqual(diag.mismatch, false);
+    assert.strictEqual(diag.autologin, true);
+    assert.strictEqual(diag.timed, false, 'an older kiosk mode: no backup yet');
+    assert.strictEqual(diag.nvidia && diag.wayland, true);
+    assert.deepStrictEqual(diag.log, ['Gdm: GdmDisplay: Session never registered, failing', 'Gdm: autologin failed, falling back to the greeter']);
 });

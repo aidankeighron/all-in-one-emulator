@@ -69,6 +69,15 @@ card also checks the next start for what can still ask:
 
 Removing your account's password does not help with either; leave it.
 
+**The normal sign-in screen at the start anyway?** Then automatic sign-in is not taking. Besides automatic sign-in, kiosk
+mode now also sets GDM's timed sign-in (it signs in 3 seconds after the sign-in screen shows), which catches GDM's
+automatic sign-in losing a race at start, a known problem with NVIDIA graphics on Wayland. The kiosk card shows what this
+computer says: which sign-in screen really runs (GDM, LightDM or SDDM; the menu now writes that one, and supports SDDM),
+whether automatic sign-in and the backup are set, NVIDIA with Wayland, an encrypted home folder (which automatic sign-in
+cannot open), and what the sign-in screen logged about it at this start. **Repair automatic sign-in** writes it all again;
+**Repair and use Xorg** also sets `WaylandEnable=false`, the usual cure with NVIDIA (the desktop then runs on Xorg too).
+An older kiosk mode gets the backup with **Repair** (or leaving and turning on kiosk mode again).
+
 Because anyone who turns the computer on is signed in, only use it on a computer that is not holding anything private.
 Not tested on a real Ubuntu install (the file edits and commands are tested against stand-ins).
 

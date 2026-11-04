@@ -2969,16 +2969,45 @@
             const box = document.getElementById('kiosk-checks');
             if (!sys.data || !sys.data.kiosk.supported || kioskChecking) { if (!sys.data || !sys.data.kiosk.supported) box.innerHTML = ''; return; }
             kioskChecking = true;
-            let c = null;
-            try { c = (await (await fetch('/api/system/next-start')).json()).checks; } catch { /* leave it */ }
+            let c = null, login = null;
+            try { const d = await (await fetch('/api/system/next-start')).json(); c = d.checks; login = d.login; } catch { /* leave it */ }
             kioskChecking = false;
             if (!c) { box.innerHTML = ''; return; }
             const notes = [];
-            if (sys.data.kiosk.enabled) notes.push('<div class="guide-box" style="margin-top:10px">Next start: signs in by itself and opens the menu.</div>');
+            if (sys.data.kiosk.enabled) notes.push('<div class="guide-box" style="margin-top:10px">Kiosk mode is set up: at the next start the computer should sign in by itself and open the menu.</div>');
+            if (sys.data.kiosk.enabled && login) notes.push(loginNotes(login));
             if (c.encrypted) notes.push('<div class="notice off">This computer’s disk is encrypted, so its passphrase is asked before Ubuntu starts. Nothing can skip that except turning disk encryption off (reinstalling Ubuntu without it).</div>');
             c.wifi.forEach((name, i) => notes.push(`<div class="notice off">Wi-Fi “${escapeHtml(name)}” keeps its password in your keyring, which is locked after an automatic sign-in: it would not connect, or ask for a password. <button class="btn" style="margin-top:8px" onclick="kioskWifi(${i})">Store it for this computer</button></div>`));
             box.innerHTML = notes.join('');
             box.dataset.wifi = JSON.stringify(c.wifi);
+        }
+        // "The sign-in screen still shows": what this computer says about it, and the repairs
+        const DM_NAMES = { gdm: 'GDM (Ubuntu’s)', lightdm: 'LightDM', sddm: 'SDDM (KDE’s)' };
+        function loginNotes(l) {
+            const rows = [];
+            rows.push(`Sign-in screen that runs: ${l.running ? DM_NAMES[l.running] : 'not known'}${l.configured ? `; the menu set up ${DM_NAMES[l.configured]}` : ''}`);
+            if (l.mismatch) rows.push('⚠ They differ: Repair writes it for the one that runs.');
+            rows.push(`Automatic sign-in: ${l.autologin ? 'set' : 'NOT set'}${l.configured === 'gdm' ? `; backup (signs in 3 seconds after the sign-in screen shows): ${l.timed ? 'set' : 'not set yet — Repair adds it'}` : ''}`);
+            if (l.nvidia && l.wayland) rows.push('⚠ NVIDIA graphics with Wayland: a known reason the automatic sign-in falls back to the sign-in screen. “Repair and use Xorg” is the usual cure.');
+            if (l.ecryptfs) rows.push('⚠ Your home folder is encrypted, so it cannot be opened without the password: automatic sign-in cannot work. (It has to be decrypted for kiosk mode.)');
+            if (l.log.length) rows.push(`What the sign-in screen logged at this start:\n${l.log.join('\n')}`);
+            else if (!l.logReadable) rows.push('(The sign-in screen’s log could not be read.)');
+            const buttons = [`<button class="btn" onclick="kioskRepair(false)">Repair automatic sign-in</button>`];
+            if (l.configured === 'gdm' && l.wayland) buttons.push(`<button class="btn" onclick="kioskRepair(true)">Repair and use Xorg</button>`);
+            return `<div class="notice" style="white-space:pre-line;margin-top:10px"><b>If the sign-in screen still shows at the start:</b>\n${rows.map(escapeHtml).join('\n')}<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">${buttons.join('')}</div></div>`;
+        }
+        function kioskRepair(xorg) {
+            withAdmin(async () => {
+                showToast('Writing automatic sign-in again…');
+                try {
+                    const res = await fetch('/api/system/kiosk/repair', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ xorg }) });
+                    const data = await res.json();
+                    if (!res.ok) { Sfx.play('error'); return showToast(data.message || 'That did not work'); }
+                    Sfx.play('select');
+                    showToast(xorg ? 'Done: restart to try it (the sign-in screen now uses Xorg)' : 'Done: restart to try it');
+                    kioskChecks();
+                } catch { showToast('The menu could not be reached.'); }
+            }, 'Changing the sign-in screen needs the administrator password. It is kept for 10 minutes.');
         }
         function kioskWifi(i) {
             const name = JSON.parse(document.getElementById('kiosk-checks').dataset.wifi || '[]')[i];
