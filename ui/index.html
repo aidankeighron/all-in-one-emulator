@@ -1189,6 +1189,7 @@
                     <button class="btn" id="kiosk-button" onclick="sysKiosk()" disabled>…</button>
                 </div>
                 <div id="kiosk-job" class="notice" style="display:none"></div>
+                <div id="kiosk-checks"></div>
 
                 </section>
                 <section class="set-card wide">
@@ -1771,7 +1772,7 @@
             [...'!@#$%&*-_.?'].map(ch => ({ ch })),
             [{ type: 'shift', label: 'Shift' }, { type: 'show', label: 'Show' }, { type: 'space', label: 'space' }, { type: 'delete', label: 'Delete' }, { type: 'cancel', label: 'Cancel' }, { type: 'ok', label: 'OK' }]
         ];
-        const pw = { open: false, text: '', shift: false, show: false, r: 1, c: 0, then: null, busy: false };
+        const pw = { open: false, text: '', shift: false, show: false, r: 1, c: 0, then: null, busy: false, submit: null };
         function pwRender() {
             document.getElementById('pw-field').textContent = pw.show ? pw.text : '•'.repeat(pw.text.length);
             document.getElementById('pw-keys').innerHTML = PW_ROWS.map((row, r) => `<div class="kb-row">${row.map((k, c) => {
@@ -1782,9 +1783,11 @@
             }).join('')}</div>`).join('');
             document.querySelectorAll('#pw-keys .kb-key').forEach(el => el.addEventListener('click', () => { pw.r = Number(el.dataset.r); pw.c = Number(el.dataset.c); pwPress(); }));
         }
-        function askPassword(text, then) {
-            Object.assign(pw, { open: true, text: '', shift: false, show: false, r: 1, c: 0, then, busy: false });
-            document.getElementById('pw-title').textContent = 'Administrator password';
+        // submit(value): resolves true when it was right, or a message to show (then it is asked again)
+        function askPassword(text, then, { title = 'Administrator password', eyebrow = 'Administrator', submit = adminSubmit } = {}) {
+            Object.assign(pw, { open: true, text: '', shift: false, show: false, r: 1, c: 0, then, busy: false, submit });
+            document.getElementById('pw-title').textContent = title;
+            document.querySelector('#pw-overlay .eyebrow').textContent = eyebrow;
             document.getElementById('pw-text').textContent = text;
             document.getElementById('pw-overlay').classList.add('open');
             Sfx.play('open');
@@ -1797,13 +1800,16 @@
             if (!quiet) Sfx.play('back');
         }
         function pwType(ch) { if (pw.text.length < 128) pw.text += pw.shift ? ch.toUpperCase() : ch; }
+        async function adminSubmit(value) {
+            const res = await fetch('/api/admin/password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: value }) });
+            return res.ok ? true : ((await res.json()).message || 'That did not work.');
+        }
         async function pwSubmit() {
             if (pw.busy || !pw.text) return;
             pw.busy = true;
             try {
-                const res = await fetch('/api/admin/password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: pw.text }) });
-                const data = await res.json();
-                if (!res.ok) { pw.busy = false; pw.text = ''; Sfx.play('error'); document.getElementById('pw-text').textContent = data.message || 'That did not work.'; return pwRender(); }
+                const answer = await pw.submit(pw.text);
+                if (answer !== true) { pw.busy = false; pw.text = ''; Sfx.play('error'); document.getElementById('pw-text').textContent = answer; return pwRender(); }
                 const then = pw.then;
                 pwClose(true);
                 Sfx.play('select');
@@ -2954,6 +2960,36 @@
             jobBox.textContent = text || '';
             jobBox.classList.toggle('off', !!(kioskJob && kioskJob.phase === 'failed'));
             renderUpdate();
+            kioskChecks();
+        }
+
+        // What could still ask for a password at the next start, and the Wi-Fi fix (see nextStart in lib/system.js)
+        let kioskChecking = false;
+        async function kioskChecks() {
+            const box = document.getElementById('kiosk-checks');
+            if (!sys.data || !sys.data.kiosk.supported || kioskChecking) { if (!sys.data || !sys.data.kiosk.supported) box.innerHTML = ''; return; }
+            kioskChecking = true;
+            let c = null;
+            try { c = (await (await fetch('/api/system/next-start')).json()).checks; } catch { /* leave it */ }
+            kioskChecking = false;
+            if (!c) { box.innerHTML = ''; return; }
+            const notes = [];
+            if (sys.data.kiosk.enabled) notes.push('<div class="guide-box" style="margin-top:10px">Next start: signs in by itself and opens the menu.</div>');
+            if (c.encrypted) notes.push('<div class="notice off">This computer’s disk is encrypted, so its passphrase is asked before Ubuntu starts. Nothing can skip that except turning disk encryption off (reinstalling Ubuntu without it).</div>');
+            c.wifi.forEach((name, i) => notes.push(`<div class="notice off">Wi-Fi “${escapeHtml(name)}” keeps its password in your keyring, which is locked after an automatic sign-in: it would not connect, or ask for a password. <button class="btn" style="margin-top:8px" onclick="kioskWifi(${i})">Store it for this computer</button></div>`));
+            box.innerHTML = notes.join('');
+            box.dataset.wifi = JSON.stringify(c.wifi);
+        }
+        function kioskWifi(i) {
+            const name = JSON.parse(document.getElementById('kiosk-checks').dataset.wifi || '[]')[i];
+            if (!name) return;
+            withAdmin(() => askPassword(`Type the password of the Wi-Fi network “${name}” once. It is stored for this computer, so the network connects with nobody signed in.`, () => { showToast(`Wi-Fi “${name}” is stored for this computer`); kioskChecks(); }, {
+                title: 'Wi-Fi password', eyebrow: 'Wi-Fi',
+                submit: async value => {
+                    const res = await fetch('/api/system/kiosk/wifi', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, psk: value }) });
+                    return res.ok ? true : ((await res.json()).message || 'That did not work.');
+                }
+            }));
         }
 
         // ---- Software update: pull the new version from GitHub and start again on it (a git checkout: npm start, kiosk mode) ----

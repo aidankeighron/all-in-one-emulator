@@ -217,7 +217,38 @@ function createSystem({
         return status();
     }
 
-    return { power, status, enable, disable, autostartFile, displayManager };
+    // What could still stop the next start from going straight into the menu without a keyboard:
+    //   encrypted   the disk is encrypted: its passphrase is asked before Ubuntu starts (nothing can skip that but removing it)
+    //   wifi        Wi-Fi networks whose password is kept in the signed-in person's keyring: after an automatic sign-in the
+    //               keyring is locked, so the network cannot connect (or asks for it). fixWifi stores it for the computer.
+    async function nextStart() {
+        if (!linux) return null;
+        const st = status();
+        const blk = await run('lsblk', ['-nro', 'TYPE']);
+        const encrypted = blk.ok && /^crypt$/m.test(blk.out);
+        const wifi = [];
+        const act = await run('nmcli', ['-t', '-f', 'TYPE,NAME', 'connection', 'show']);
+        for (const line of act.ok ? act.out.split('\n') : []) {
+            const at = line.indexOf(':');
+            if (at < 0 || line.slice(0, at) !== '802-11-wireless') continue;
+            const name = line.slice(at + 1).replace(/\\(.)/g, '$1');
+            const flags = await run('nmcli', ['-g', '802-11-wireless-security.psk-flags', 'connection', 'show', 'id', name]);
+            if (flags.ok && /^1\b/.test(flags.out)) wifi.push(name);      // 1: "agent-owned", kept in the keyring
+        }
+        return { autologin: st.autologin, autostart: st.autostart, encrypted, wifi };
+    }
+
+    // Stores a Wi-Fi network's password for the whole computer (not in the keyring), so it connects before anyone signs in.
+    // The password is typed on the menu's keyboard: reading it from a locked keyring would put up the very box this avoids.
+    async function fixWifi(name, psk, { onLine = () => {} } = {}) {
+        if (typeof name !== 'string' || !name || typeof psk !== 'string' || psk.length < 8 || psk.length > 63) throw new Error('A Wi-Fi password has 8 to 63 characters');
+        const q = v => `'${String(v).replace(/'/g, "'\\''")}'`;
+        const code = await asAdmin(`nmcli connection modify id ${q(name)} 802-11-wireless-security.psk-flags 0 802-11-wireless-security.psk ${q(psk)}`, onLine);
+        if (code !== 0) throw new Error(code === 126 ? 'The administrator password was not accepted' : `The Wi-Fi network could not be changed (code ${code})`);
+        return true;
+    }
+
+    return { power, status, enable, disable, autostartFile, displayManager, nextStart, fixWifi };
 }
 
 module.exports = { createSystem, gdmConfig, lightdmConfig, desktopEntry, appCommand, GNOME_SETTINGS, MARK_BEGIN, MARK_END };

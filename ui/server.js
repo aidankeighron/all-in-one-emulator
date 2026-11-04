@@ -553,6 +553,12 @@ async function handleSystem(route, req, res) {
             if (!r.ok) console.error(`[SYSTEM] ${action}: ${r.message}`);
             return sendJson(res, r.ok ? 200 : 409, r.ok ? { ok: true } : { error: r.admin ? 'needs_admin' : 'failed', message: r.message }), true;
         }
+        if (route === 'GET /api/system/next-start') return sendJson(res, 200, { checks: await system.nextStart() }), true;
+        if (route === 'POST /api/system/kiosk/wifi') {
+            const { name, psk } = await readJson(req);
+            await system.fixWifi(name, psk, { onLine: line => console.log(`[SYSTEM] ${line}`) });
+            return sendJson(res, 200, { checks: await system.nextStart() }), true;
+        }
         if (route === 'GET /api/system/sound') return sendJson(res, 200, { audio: await audio.status(), tv: await tv.status() }), true;
         if (route === 'POST /api/system/sound') {
             const body = await readJson(req);

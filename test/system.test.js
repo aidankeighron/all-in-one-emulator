@@ -133,3 +133,29 @@ test('restart, sleep and shut down run the right command, and say when the compu
     assert.deepStrictEqual(r.calls, [['shutdown', '/r', '/t', '0'], ['shutdown', '/s', '/t', '0'], ['rundll32.exe', 'powrprof.dll,SetSuspendState', '0,1,0']]);
     await assert.rejects(r.sys.power('rm -rf'), /Unknown/);
 });
+
+test('next start: an encrypted disk and Wi-Fi kept in the keyring are found, and the Wi-Fi password is stored for the computer', async () => {
+    const { EventEmitter } = require('events');
+    const answers = {
+        'lsblk -nro TYPE': 'disk\npart\ncrypt\n',
+        'nmcli -t -f TYPE,NAME connection show': '802-11-wireless:Home\\:5G\n802-3-ethernet:Wired\n802-11-wireless:Cafe\n',
+        'nmcli -g 802-11-wireless-security.psk-flags connection show id Home:5G': '1 (agent-owned)',
+        'nmcli -g 802-11-wireless-security.psk-flags connection show id Cafe': '0 (none)'
+    };
+    const execImpl = (f, a, o, cb) => { const out = answers[[f, ...a].join(' ')]; cb(out === undefined ? new Error('no') : null, out || ''); };
+    const scripts = [];
+    const spawnImpl = (cmd, args) => {
+        scripts.push(args[args.length - 1]);
+        const child = new EventEmitter();
+        child.stdout = new EventEmitter(); child.stderr = new EventEmitter();
+        setTimeout(() => child.emit('close', 0), 5);
+        return child;
+    };
+    const sys = systemLib.createSystem({ platform: 'linux', execImpl, spawnImpl, exists: () => false, read: () => '' });
+    const c = await sys.nextStart();
+    assert.strictEqual(c.encrypted, true);
+    assert.deepStrictEqual(c.wifi, ['Home:5G'], 'only the network whose password is in the keyring');
+    await assert.rejects(sys.fixWifi('Home:5G', 'short'), /8 to 63/);
+    await sys.fixWifi('Home:5G', "it's-a-secret");
+    assert.strictEqual(scripts[0], "nmcli connection modify id 'Home:5G' 802-11-wireless-security.psk-flags 0 802-11-wireless-security.psk 'it'\\''s-a-secret'");
+});

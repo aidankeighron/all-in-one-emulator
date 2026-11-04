@@ -6,6 +6,11 @@ const server = require('../ui/server');
 // runs, so --no-sandbox is passed by `npm start` and by the AppImage launcher (scripts/after-pack.js).
 
 const startFullscreen = process.argv.includes('--fullscreen') || process.env.FULLSCREEN === '1';
+
+// Never touch the desktop's keyring. Chromium (inside Electron) opens it as it starts, and after an automatic sign-in
+// (kiosk mode) the keyring is still locked, so Ubuntu put an "unlock your login keyring" password box over the menu at
+// every start. The menu keeps no secrets there; this stores Chromium's own little data in its folder instead.
+app.commandLine.appendSwitch('password-store', 'basic');
 let win = null;
 let pauseWin = null;       // the pause menu: a transparent window over everything, so it shows on top of the game
 let serverPort = 0;

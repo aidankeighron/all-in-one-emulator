@@ -58,6 +58,17 @@ again). **Close menu** quits the menu to the desktop without changing anything. 
 `~/.config/autostart/emulator-menu.desktop`, or set automatic login off in Ubuntu's **Settings -> Users**. If the menu
 cannot be reached at all, press Ctrl+Alt+F3 for a text console, sign in and run `sudo sed -i '/emulator-menu kiosk: begin/,/emulator-menu kiosk: end/d' /etc/gdm3/custom.conf`.
 
+**A password box at the start anyway?** Usually that is not the sign-in screen but *"unlock your login keyring"*: an
+automatic sign-in leaves the desktop's keyring (where it keeps saved passwords) locked, and Chromium, inside the app, used
+to open it as it started. The app now never uses the keyring (`--password-store=basic`), so it no longer asks. The kiosk
+card also checks the next start for what can still ask:
+- a Wi-Fi network whose password is in the keyring (then it cannot connect after an automatic sign-in): **Store it for this
+  computer** takes the Wi-Fi password once on the menu's keyboard and keeps it for the whole computer (NetworkManager's
+  `psk-flags 0`);
+- an encrypted disk: its passphrase is asked before Ubuntu starts, and nothing but turning encryption off can skip that.
+
+Removing your account's password does not help with either; leave it.
+
 Because anyone who turns the computer on is signed in, only use it on a computer that is not holding anything private.
 Not tested on a real Ubuntu install (the file edits and commands are tested against stand-ins).
 
