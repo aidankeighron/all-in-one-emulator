@@ -1111,7 +1111,14 @@
                     <button class="btn" id="sys-shutdown" onclick="sysPower('shutdown')">Shut down</button>
                     <button class="btn" id="sys-quit" onclick="sysQuit()">Close menu</button>
                 </div>
-                <div class="desc" style="margin-top:8px">Press twice to confirm.</div>
+                <div class="emu-row" id="idle-row">
+                    <div class="info">
+                        <div class="name">When idle</div>
+                        <div class="desc" id="idle-desc"></div>
+                    </div>
+                    <button class="btn" id="idle-action" onclick="idleCycle('action')">Off</button>
+                    <button class="btn" id="idle-minutes" onclick="idleCycle('minutes')">30 min</button>
+                </div>
 
                 </section>
                 <section class="set-card">
@@ -4234,6 +4241,27 @@
             });
         })();
 
+        // When idle (in the menu, never in a game): nothing, the screen off, or sleep, after a while (see lib/idle.js)
+        const IDLE_NAMES = { off: 'Off', screen: 'Screen off', sleep: 'Sleep' };
+        let idleSetting = { action: 'off', minutes: 30 };
+        function renderIdle(v) {
+            if (v) idleSetting = v;
+            document.getElementById('idle-action').textContent = IDLE_NAMES[idleSetting.action];
+            const min = document.getElementById('idle-minutes');
+            min.textContent = `${idleSetting.minutes} min`;
+            min.style.display = idleSetting.action === 'off' ? 'none' : '';
+            document.getElementById('idle-desc').textContent = idleSetting.action === 'screen' ? 'A controller wakes it.' : idleSetting.action === 'sleep' ? 'The power button wakes it.' : '';
+        }
+        async function idleCycle(which) {
+            const next = { ...idleSetting };
+            if (which === 'action') { const order = ['off', 'screen', 'sleep']; next.action = order[(order.indexOf(next.action) + 1) % order.length]; }
+            else { const order = [10, 15, 30, 60]; next.minutes = order[(order.indexOf(next.minutes) + 1) % order.length]; }
+            renderIdle(next);
+            Sfx.play('toggle');
+            const r = await saveApi('/api/settings', { idle: next });
+            if (!r.ok) showToast(r.body.message || 'Could not save that');
+        }
+
         function renderAutoButton(on) {
             document.getElementById('auto-controllers-button').textContent = on ? 'On' : 'Off';
         }
@@ -4249,6 +4277,7 @@
             document.getElementById('folder-list').innerHTML = folders.map(f => `<code>${escapeHtml(f)}</code>`).join(' ');
             renderAutoButton(data.autoControllers);
             showPauseHold(data.pauseHold === undefined ? 1.5 : data.pauseHold);
+            renderIdle(data.idle);
             applyTheme(data.theme || 'system');
             renderSound(await Sfx.load());
             refreshLibrarySettings();

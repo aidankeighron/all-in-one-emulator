@@ -15,6 +15,7 @@ const updaterLib = require('./lib/updater');
 const admin = require('./lib/admin');
 const audioLib = require('./lib/audio');
 const cecLib = require('./lib/cec');
+const idleLib = require('./lib/idle');
 const procs = require('./lib/procs');
 const controllers = require('./lib/controllers');
 const inputconfig = require('./lib/inputconfig');
@@ -62,6 +63,7 @@ let current = null;     // running game {emulator, path, slotId, paused, frozenP
 let restarting = false; // the game is being stopped so it can start again (new controllers)
 let pauseHook = () => {};   // told when the pause menu should come up or go away (the app window raises itself)
 let restartHook = null;     // the app: start again on the code on disk (after an update)
+let activityHook = () => {};    // the app: a controller was used (kiosk mode brings the menu to the front)
 let lastError = null;   // last failed launch, shown once in the UI
 const jobs = new Map(); // emulator install/uninstall jobs
 let nextJob = 1;
@@ -1152,7 +1154,7 @@ function createServer(onGameState) {
                     return sendJson(res, 200, { setup: setupControllers(ids) });
                 }
                 if (route === 'GET /api/settings') {
-                    return sendJson(res, 200, { romsDir: config.getRomsDir(), autoControllers: config.getAutoControllers(), sound: config.getSound(), pauseHold: config.getPauseHold(), theme: config.getTheme(), ...await emulatorStates() });
+                    return sendJson(res, 200, { romsDir: config.getRomsDir(), autoControllers: config.getAutoControllers(), sound: config.getSound(), pauseHold: config.getPauseHold(), theme: config.getTheme(), idle: config.getIdle(), ...await emulatorStates() });
                 }
                 if (route === 'POST /api/settings') {
                     const body = await readJson(req);
@@ -1174,6 +1176,7 @@ function createServer(onGameState) {
                         config.setPauseHold(body.pauseHold);
                     }
                     if (body.sound && typeof body.sound === 'object') config.setSound(body.sound);
+                    if (body.idle && typeof body.idle === 'object') config.setIdle(body.idle);
                     return sendJson(res, 200, { romsDir: config.getRomsDir(), autoControllers: config.getAutoControllers() });
                 }
                 const m = url.pathname.match(/^\/api\/emulators\/([\w-]+)\/(install|uninstall)$/);
@@ -1262,9 +1265,10 @@ function createServer(onGameState) {
 }
 
 // Starts the server on localhost only. port 0 picks a free port.
-function start({ port = 3000, onGameState, onPause, onRestart } = {}) {
+function start({ port = 3000, onGameState, onPause, onRestart, onActivity } = {}) {
     if (onPause) pauseHook = onPause;
     if (onRestart) restartHook = onRestart;
+    if (onActivity) activityHook = onActivity;
     return new Promise((resolve, reject) => {
         const server = createServer(onGameState);
         server.on('error', reject);
@@ -1276,10 +1280,36 @@ function start({ port = 3000, onGameState, onPause, onRestart } = {}) {
             ensureBetterJoy();
             if (helper.supported) setInterval(refreshBetterJoy, 3000).unref();
             if (system.refreshKiosk()) console.log('[SYSTEM] kiosk mode now starts the menu again if it closes by accident');
+            system.refreshKioskSettings().catch(() => {});
+            watchControllers();
             applyShareSettings().then(err => err && console.error(`[LIBRARY] ${err}`));
             resolve({ server, port: actual });
         });
     });
+}
+
+// Controllers being used (any button, a stick pushed): the idle timer starts again, a dark screen comes back, and the app
+// is told (kiosk mode brings the menu to the front when it is not). Read from the joystick devices and the Wii Remotes, so
+// it works whatever window has the focus.
+const idle = idleLib.createIdle({
+    getSettings: () => config.getIdle(),
+    gameRunning: () => isGameRunning(),
+    sleep: async () => { const r = await system.power('sleep'); if (!r.ok) console.error(`[IDLE] could not sleep: ${r.message}`); },
+    log: console.log
+});
+let watchingControllers = false;
+function watchControllers() {
+    if (watchingControllers || runner.platform === 'win32' || process.env.EMU_NO_HOTKEY) return;
+    watchingControllers = true;
+    const used = () => { idle.controllerUsed(); try { activityHook(); } catch { /* the window is gone */ } };
+    hotkey.watchActivity(used);
+    let before = '';
+    wiimoteReader.subscribe(remotes => {
+        const now = JSON.stringify(remotes.map(r => r.buttons));
+        if (now !== before && remotes.some(r => r.buttons.length)) used();
+        before = now;
+    });
+    setInterval(() => idle.tick().catch(() => {}), 15000).unref();
 }
 
 // Whether a game (or an emulator's own window) is up: the app keeps its window on screen only when not

@@ -78,13 +78,22 @@ cannot open), and what the sign-in screen logged about it at this start. **Repai
 **Repair and use Xorg** also sets `WaylandEnable=false`, the usual cure with NVIDIA (the desktop then runs on Xorg too).
 An older kiosk mode gets the backup with **Repair** (or leaving and turning on kiosk mode again).
 
-**Only the menu, never the desktop.** Kiosk mode starts the menu through a small launcher
+**The menu for the controllers, the desktop for a keyboard.** Kiosk mode starts the menu through a small launcher
 (`~/.config/all-in-one-emulator/kiosk-start.sh`, from the autostart entry) that starts it again when it closes by accident;
-**Close menu** leaves a note first, and then it stays closed and the desktop shows. While no game runs, the app also checks
-every two seconds that its window is up and full screen and brings it back (an emulator that crashed, or a window that took
-over, cannot leave the desktop showing), and after a game ends it always comes back, whatever went wrong. A kiosk mode set up
-before the launcher existed is switched to it by itself when the menu starts. **Update and restart** in kiosk mode just
-closes the app and the launcher starts the new version.
+**Close menu** leaves a note first, and then it stays closed and the desktop shows. The desktop stays usable with a keyboard
+and mouse (Alt+Tab away from the menu); **any controller button brings the menu back** to the front (the menu reads the
+controllers itself, whatever window has the focus), and it comes back by itself when a game ends, however it ended. A kiosk
+mode set up before the launcher existed is switched to it by itself when the menu starts. **Update** in kiosk mode just closes
+the app and the launcher starts the new version.
+
+**Sleep and the screen.** Kiosk mode switches off the desktop's own lock screen (also Ubuntu's separate lock when the
+computer sleeps), screen blanking and sleep: the desktop's idle timer only sees the keyboard and mouse, so it would put the
+computer to sleep in the middle of a game played with a controller. Instead **Settings -> System -> Power -> When idle**
+(Off, Screen off, Sleep; after 10, 15, 30 or 60 minutes) counts from the last use of any controller, key or the mouse, and
+never acts while a game runs. **Screen off** is woken by any controller (and the keyboard and mouse). **Sleep** saves the
+most power; waking needs the power button, or a USB controller or keyboard if the computer allows waking from USB (often a
+BIOS setting, "Wake on USB"; "ErP" off). Bluetooth controllers (Joy-Cons, Wii Remotes) can rarely wake a sleeping computer.
+After waking there is no password: the lock screen is off.
 
 Because anyone who turns the computer on is signed in, only use it on a computer that is not holding anything private.
 Not tested on a real Ubuntu install (the file edits and commands are tested against stand-ins).

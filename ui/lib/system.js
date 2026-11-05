@@ -24,6 +24,8 @@ const SDDM_FILE = `${SDDM_DIR}/50-emulator-menu-kiosk.conf`;
 // What the desktop does by itself that a kiosk must not: [schema, key, value to set]
 const GNOME_SETTINGS = [
     ['org.gnome.desktop.screensaver', 'lock-enabled', 'false'],
+    // Ubuntu also locks when the computer sleeps, separately: off, so waking needs no password (only a controller)
+    ['org.gnome.desktop.screensaver', 'ubuntu-lock-on-suspend', 'false'],
     ['org.gnome.desktop.session', 'idle-delay', 'uint32 0'],
     ['org.gnome.settings-daemon.plugins.power', 'sleep-inactive-ac-type', "'nothing'"],
     ['org.gnome.settings-daemon.plugins.power', 'sleep-inactive-battery-type', "'nothing'"]
@@ -353,7 +355,15 @@ function createSystem({
         } catch { return false; }
     }
 
-    return { power, status, enable, disable, autostartFile, launcherFile, displayManager, nextStart, fixWifi, loginDiagnosis, repairLogin, markClosed, refreshKiosk };
+    // Kiosk mode's desktop settings again, when it is on: a setting added since it was turned on (no lock when waking from
+    // sleep) gets set too. The values from before kiosk mode are kept as they were saved the first time.
+    async function refreshKioskSettings() {
+        if (!linux || !exists(autostartFile)) return false;
+        await setDesktopSettings(true, () => {});
+        return true;
+    }
+
+    return { refreshKioskSettings, power, status, enable, disable, autostartFile, launcherFile, displayManager, nextStart, fixWifi, loginDiagnosis, repairLogin, markClosed, refreshKiosk };
 }
 
 module.exports = { launcherScript, sddmConfig, createSystem, gdmConfig, lightdmConfig, desktopEntry, appCommand, GNOME_SETTINGS, MARK_BEGIN, MARK_END };

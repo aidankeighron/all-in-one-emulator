@@ -113,6 +113,57 @@ function start(onCombo, { holdMs = HOLD_MS, listDevices = defaultDevices, rescan
     return () => { clearInterval(rescan); for (const stop of watchers.values()) stop(); watchers.clear(); };
 }
 
+// Calls onActivity whenever any controller is used: a button pressed, or a stick pushed well past its middle (a drifting
+// stick does not count), at most every throttleMs. Like start(), it works whatever window has the focus, so the menu can come
+// to the front when a controller is picked up, and knows the controllers are not idle. Returns a function that stops it.
+const JS_EVENT_AXIS = 0x02;
+const AXIS_PUSH = 16000;
+function activityIn(buf) {
+    for (let i = 0; i + EVENT_SIZE <= buf.length; i += EVENT_SIZE) {
+        const raw = buf[i + 6];
+        if (raw & JS_EVENT_INIT) continue;                 // the state the device reports when it is opened
+        const value = buf.readInt16LE(i + 4);
+        if ((raw === JS_EVENT_BUTTON && value) || (raw === JS_EVENT_AXIS && Math.abs(value) > AXIS_PUSH)) return true;
+    }
+    return false;
+}
+
+function watchActivity(onActivity, { listDevices = defaultDevices, rescanMs = 2000, pollMs = 50, throttleMs = 250, open = f => fs.openSync(f, fs.constants.O_RDONLY | fs.constants.O_NONBLOCK) } = {}) {
+    const fds = new Map();          // "js3" -> fd
+    const buf = Buffer.alloc(EVENT_SIZE * 64);
+    let last = 0;
+    function scan() {
+        let devices;
+        try { devices = listDevices(); } catch { devices = []; }
+        const now = new Set(devices.filter(d => d.js !== null && d.js !== undefined).map(d => `js${d.js}`));
+        for (const [js, fd] of fds) if (!now.has(js)) { try { fs.closeSync(fd); } catch { /* gone */ } fds.delete(js); }
+        for (const js of now) {
+            if (fds.has(js)) continue;
+            try { fds.set(js, open(path.join('/dev/input', js))); } catch { /* not readable: skipped */ }
+        }
+    }
+    function poll() {
+        let used = false;
+        for (const [js, fd] of fds) {
+            for (;;) {
+                let n;
+                try { n = fs.readSync(fd, buf, 0, buf.length, null); } catch (err) {
+                    if (err.code !== 'EAGAIN') { try { fs.closeSync(fd); } catch { /* gone */ } fds.delete(js); }
+                    break;
+                }
+                if (n <= 0) break;
+                if (activityIn(buf.subarray(0, n))) used = true;
+            }
+        }
+        const t = Date.now();
+        if (used && t - last >= throttleMs) { last = t; onActivity(); }
+    }
+    scan();
+    const timers = [setInterval(poll, pollMs), setInterval(scan, rescanMs)];
+    timers.forEach(t => t.unref && t.unref());
+    return () => { timers.forEach(clearInterval); for (const fd of fds.values()) { try { fs.closeSync(fd); } catch { /* gone */ } } fds.clear(); };
+}
+
 function defaultDevices() {
     const { parseProc } = require('./controllers');
     let text = '';
@@ -123,4 +174,4 @@ function defaultDevices() {
     try { return fs.readdirSync('/dev/input').filter(n => /^js\d+$/.test(n)).map(n => ({ name: '', js: Number(n.slice(2)), keys: [] })); } catch { return []; }
 }
 
-module.exports = { start, createDetector, comboFor };
+module.exports = { start, createDetector, comboFor, watchActivity, activityIn };

@@ -106,6 +106,7 @@ function createReader({ listDevices = defaultDevices, open = file => fs.openSync
         if (timers || held) return;
         scan();
         timers = [setInterval(poll, pollMs), setInterval(scan, rescanMs)];
+        timers.forEach(t => t.unref && t.unref());       // reading the remotes never keeps the program running by itself
     }
 
     function stopTimers() {

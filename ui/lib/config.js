@@ -91,6 +91,20 @@ function setPauseHold(seconds) {
     if (PAUSE_HOLD_STEPS.includes(Number(seconds))) save({ ...load(), pauseHold: Number(seconds) });
 }
 
+// What happens when nobody uses the computer for a while, in the menu (see lib/idle.js): off, screen off, or sleep
+const IDLE_ACTIONS = ['off', 'screen', 'sleep'];
+const IDLE_MINUTES = [10, 15, 30, 60];
+function getIdle() {
+    const v = load().idle || {};
+    return { action: IDLE_ACTIONS.includes(v.action) ? v.action : 'off', minutes: IDLE_MINUTES.includes(Number(v.minutes)) ? Number(v.minutes) : 30 };
+}
+function setIdle(next) {
+    const cur = getIdle();
+    const action = IDLE_ACTIONS.includes(next && next.action) ? next.action : cur.action;
+    const minutes = IDLE_MINUTES.includes(Number(next && next.minutes)) ? Number(next.minutes) : cur.minutes;
+    save({ ...load(), idle: { action, minutes } });
+}
+
 // Favourite games, by their path under the ROMs folder (so a game keeps its star when its picture or title changes)
 function getFavorites() {
     const list = load().favorites;
@@ -245,4 +259,4 @@ const mappingsDir = path.join(path.dirname(configFile), 'mappings');
 const artworkDir = path.join(path.dirname(configFile), 'artwork');
 const soundsDir = process.env.SOUNDS_DIR || path.join(path.dirname(configFile), 'sounds');
 
-module.exports = { getRomsDir, setRomsDir, getAutoControllers, setAutoControllers, getWiiRemotes, setWiiRemotes, getTheme, setTheme, THEMES, getPauseHold, setPauseHold, PAUSE_HOLD_STEPS, getFavorites, setFavorite, getPlayers, setPlayers, getJoyconPairs, setJoyconPairs, getBetterJoy, setBetterJoy, getSound, setSound, getCloud, getCloudToken, getLibrary, setLibrary, libraryCacheFile, getEmulatorPaths, getEmulatorUrls, setEmulatorPath, emulatorsDir, configFile, mappingsDir, artworkDir, soundsDir };
+module.exports = { getIdle, setIdle, IDLE_ACTIONS, IDLE_MINUTES, getRomsDir, setRomsDir, getAutoControllers, setAutoControllers, getWiiRemotes, setWiiRemotes, getTheme, setTheme, THEMES, getPauseHold, setPauseHold, PAUSE_HOLD_STEPS, getFavorites, setFavorite, getPlayers, setPlayers, getJoyconPairs, setJoyconPairs, getBetterJoy, setBetterJoy, getSound, setSound, getCloud, getCloudToken, getLibrary, setLibrary, libraryCacheFile, getEmulatorPaths, getEmulatorUrls, setEmulatorPath, emulatorsDir, configFile, mappingsDir, artworkDir, soundsDir };

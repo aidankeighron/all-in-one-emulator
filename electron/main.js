@@ -16,16 +16,29 @@ let pauseWin = null;       // the pause menu: a transparent window over everythi
 let serverPort = 0;
 let hiddenForGame = false;
 
-// Kiosk mode (started by its launcher, or full screen): the menu is all there is. The desktop must never be left showing.
+// Kiosk mode (started by its launcher, or full screen): the menu is what the controllers see. The desktop is still there for
+// a keyboard and mouse (Alt+Tab away to it), and a controller brings the menu back.
 const kiosk = process.env.EMULATOR_MENU_KIOSK === '1' || startFullscreen;
 
-// Puts the menu back on screen, full screen in kiosk mode, in front
+// Puts the menu back on screen, full screen in kiosk mode, in front. The desktop does not let a window in the background
+// take the focus by itself, so it is put on top for a moment.
 function bringBack() {
     if (!win) return;
     if (!win.isVisible()) win.show();
     if (win.isMinimized()) win.restore();
     if (kiosk && !win.isFullScreen()) win.setFullScreen(true);
+    win.setAlwaysOnTop(true);
+    win.moveTop();
     win.focus();
+    setTimeout(() => { if (win) win.setAlwaysOnTop(false); }, 400);
+}
+
+// A controller was used (any button or stick, whatever window has the focus): in kiosk mode the menu comes to the front,
+// unless a game is playing or the menu already is in front
+function onActivity() {
+    if (!kiosk || !win || server.isGameRunning()) return;
+    if (win.isFocused() && win.isVisible() && !win.isMinimized()) return;
+    bringBack();
 }
 
 // A fullscreen menu would cover the emulator window, so get out of the way while a game runs. When the game ends, in any
@@ -42,14 +55,7 @@ function onGameState(running) {
     }
 }
 
-// Kiosk mode: whenever no game runs, the menu is on screen. Whatever hid it (an emulator that crashed, a window that took
-// over), it is put back within a couple of seconds.
-if (kiosk) {
-    setInterval(() => {
-        if (!win || server.isGameRunning()) return;
-        if (win.isMinimized() || !win.isVisible() || !win.isFullScreen()) bringBack();
-    }, 2000).unref();
-}
+
 
 // The pause menu (Back + Start held in a game) is its own frameless, transparent window that covers the screen and sits above
 // everything, so the frozen game stays visible behind it. The menu window is left alone.
@@ -104,7 +110,7 @@ function restartApp() {
 }
 
 async function createWindow() {
-    const { port } = await server.start({ port: 0, onGameState, onPause, onRestart: restartApp });
+    const { port } = await server.start({ port: 0, onGameState, onPause, onRestart: restartApp, onActivity });
     serverPort = port;
 
     win = new BrowserWindow({
