@@ -1,6 +1,6 @@
 // Menu audio: sound effects and background music.
 // Files from the user's sound pack (see ui/lib/sounds.js) are used when present; otherwise the menu
-// synthesises its own small sounds and a quiet ambient loop, so it is never silent.
+// synthesises its own small sounds and soft music-box phrases, so it is never silent.
 const Sfx = (() => {
     const LEVELS = [0, 0.25, 0.5, 0.75, 1];
 
@@ -41,7 +41,7 @@ const Sfx = (() => {
 
     // ---------- Built-in sounds ----------
 
-    function tone(freq, at, dur, { type = 'sine', gain = 0.3, slideTo = null, dest = sfxGain } = {}) {
+    function tone(freq, at, dur, { type = 'sine', gain = 0.3, slideTo = null, dest = sfxGain, attack = 0.01 } = {}) {
         const t0 = ctx.currentTime + at;
         const osc = ctx.createOscillator();
         const g = ctx.createGain();
@@ -49,7 +49,7 @@ const Sfx = (() => {
         osc.frequency.setValueAtTime(freq, t0);
         if (slideTo) osc.frequency.exponentialRampToValueAtTime(slideTo, t0 + dur);
         g.gain.setValueAtTime(0.0001, t0);
-        g.gain.exponentialRampToValueAtTime(gain, t0 + Math.min(0.01, dur / 4));
+        g.gain.exponentialRampToValueAtTime(gain, t0 + Math.min(attack, dur / 4));
         g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
         osc.connect(g).connect(dest);
         osc.start(t0);
@@ -118,41 +118,70 @@ const Sfx = (() => {
     }
 
     // ---------- Music ----------
+    // Music only plays while the menu is the thing on screen: not during a game, not while another window is in front or
+    // the menu is minimised, and not once nobody has touched anything for a while (the next press brings it back).
+
+    const IDLE_MS = 5 * 60 * 1000;
+    let away = false;                 // the menu window is hidden or another window has the focus
+    let idleQuiet = false;            // faded out after IDLE_MS without input
+    let lastActivity = performance.now();
+    let currentTrackUrl = null;
+    let elFade = null;
+    const silenced = () => ducked || away || idleQuiet;
+
+    // Built-in music: short music-box phrases over a chord progression, with a rest between them. Every note dies away
+    // on its own, so nothing sustains under the menu (no drone), and stop() silences what is already scheduled at once.
+    const N = { A3: 220.0, B3: 246.94, C4: 261.63, D4: 293.66, E4: 329.63, F4: 349.23, G4: 392.0, A4: 440.0, B4: 493.88, C5: 523.25 };
+    const CHORDS = {
+        C: [N.C4, N.E4, N.G4, N.C5], Am: [N.A3, N.C4, N.E4, N.A4], F: [N.A3, N.C4, N.F4, N.A4],
+        G: [N.B3, N.D4, N.G4, N.B4], Em: [N.B3, N.E4, N.G4, N.B4], Dm: [N.A3, N.D4, N.F4, N.A4]
+    };
+    const PROGRESSIONS = [['C', 'Am', 'F', 'G'], ['Am', 'F', 'C', 'G'], ['F', 'G', 'Em', 'Am'], ['C', 'G', 'Am', 'F'], ['Dm', 'G', 'C', 'Am']];
+    const PATTERNS = [[0, 1, 2, 3], [0, 2, 1, 3], [0, 1, 2, 1], [3, 2, 1, 2]];
+    const pick = list => list[Math.floor(Math.random() * list.length)];
 
     function startSynthMusic() {
         const c = context();
         if (!c || synthMusic) return;
-        const pad = [130.81, 196.0, 329.63].map((f, i) => {
-            const osc = c.createOscillator();
-            const g = c.createGain();
-            const lfo = c.createOscillator();
-            const lfoGain = c.createGain();
-            osc.type = 'sine';
-            osc.frequency.value = f;
-            g.gain.value = 0.05;
-            lfo.frequency.value = 0.05 + i * 0.03;
-            lfoGain.gain.value = 0.03;
-            lfo.connect(lfoGain).connect(g.gain);
-            osc.connect(g).connect(synthMusicGain);
-            osc.start();
-            lfo.start();
-            return { osc, lfo };
-        });
-        const scale = [523.25, 587.33, 659.25, 783.99, 880.0, 1046.5];
+        const bus = c.createGain();
+        const soft = c.createBiquadFilter();
+        soft.type = 'lowpass';
+        soft.frequency.value = 2800;
+        bus.connect(soft).connect(synthMusicGain);
+        const opts = (gain, type = 'triangle') => ({ type, gain, dest: bus, attack: 0.02 });
+
+        // Returns how long the phrase lasts, in seconds
+        function phrase() {
+            const beat = 0.6;
+            const chords = pick(PROGRESSIONS);
+            const pattern = pick(PATTERNS);
+            chords.forEach((name, ci) => {
+                const notes = CHORDS[name];
+                const last = ci === chords.length - 1;
+                pattern.forEach((n, bi) => {
+                    const at = (ci * 4 + bi) * beat;
+                    tone(notes[n], at, last && bi === 3 ? 2.8 : 1.6, opts(0.05));
+                });
+                if (Math.random() < 0.6) tone(notes[3] * 2, ci * 4 * beat, 2, opts(0.03, 'sine'));
+            });
+            return chords.length * 4 * beat + 3;
+        }
+
         let timer = null;
         const next = () => {
-            if (c.state === 'running') {
-                const f = scale[Math.floor(Math.random() * scale.length)];
-                tone(f, 0, 3, { type: 'triangle', gain: 0.07, dest: synthMusicGain });
-                if (Math.random() < 0.35) tone(f / 2, 0.25, 3.5, { type: 'sine', gain: 0.05, dest: synthMusicGain });
-            }
-            timer = setTimeout(next, 1300 + Math.random() * 2200);
+            if (c.state !== 'running') { timer = setTimeout(next, 1000); return; }   // don't pile up phrases while suspended
+            const length = phrase();
+            timer = setTimeout(next, (length + 6 + Math.random() * 8) * 1000);      // a rest of 6-14 s between phrases
         };
         next();
         synthMusic = {
-            stop() {
+            stop(fade = 0.15) {
                 clearTimeout(timer);
-                pad.forEach(({ osc, lfo }) => { try { osc.stop(); lfo.stop(); } catch { /* already stopped */ } });
+                const t = c.currentTime;
+                bus.gain.cancelScheduledValues(t);
+                bus.gain.setValueAtTime(bus.gain.value, t);
+                bus.gain.linearRampToValueAtTime(0, t + fade);
+                setTimeout(() => { try { bus.disconnect(); } catch { /* already gone */ } }, fade * 1000 + 100);
             }
         };
     }
@@ -161,24 +190,35 @@ const Sfx = (() => {
         const track = pack.music[trackIndex % pack.music.length];
         if (!musicEl) {
             musicEl = new Audio();
-            musicEl.addEventListener('ended', () => { trackIndex++; if (musicWanted) playTrack(); });
+            musicEl.addEventListener('ended', () => { trackIndex++; if (musicWanted && !silenced()) playTrack(); });
         }
-        musicEl.src = track.url;
+        if (currentTrackUrl !== track.url) { musicEl.src = track.url; currentTrackUrl = track.url; }   // a paused song resumes where it was
+        clearInterval(elFade);
         applyVolumes();
         musicEl.play().then(() => { musicBlocked = false; }, err => { if (err && err.name === 'NotAllowedError') musicBlocked = true; });
     }
 
-    function stopMusicNow() {
-        if (musicEl) musicEl.pause();
-        if (synthMusic) { synthMusic.stop(); synthMusic = null; }
+    function stopMusicNow(fade = 0.15) {
+        if (musicEl && !musicEl.paused) {
+            clearInterval(elFade);
+            const steps = Math.max(1, Math.round(fade * 20));
+            const from = musicEl.volume;
+            let i = 0;
+            elFade = setInterval(() => {
+                i++;
+                musicEl.volume = Math.max(0, from * (1 - i / steps));
+                if (i >= steps) { clearInterval(elFade); musicEl.pause(); applyVolumes(); }
+            }, 50);
+        }
+        if (synthMusic) { synthMusic.stop(fade); synthMusic = null; }
     }
 
     function startMusic() {
         musicWanted = true;
-        if (!settings.enabled || settings.musicVolume === 0 || ducked) return stopMusicNow();
+        if (!settings.enabled || settings.musicVolume === 0 || silenced()) return stopMusicNow();
         if (pack.music.length) {
             if (synthMusic) { synthMusic.stop(); synthMusic = null; }
-            if (!musicEl || musicEl.paused) playTrack();
+            if (!musicEl || musicEl.paused || elFade) playTrack();
         } else {
             if (musicEl) musicEl.pause();
             startSynthMusic();
@@ -193,14 +233,31 @@ const Sfx = (() => {
     // Quiet while a game runs, back when it closes
     function duck(on) {
         ducked = on;
+        lastActivity = performance.now();
         if (on) stopMusicNow(); else if (musicWanted) startMusic();
     }
 
-    // First input in a browser that blocks autoplay
+    // The menu window went to the background (another window in front, minimised, hidden) or came back
+    function setAway(on) {
+        if (away === on) return;
+        away = on;
+        if (on) stopMusicNow(0.5); else if (musicWanted) { lastActivity = performance.now(); startMusic(); }
+    }
+
+    // Fades the music out when the menu has sat untouched for a while
+    setInterval(() => {
+        if (idleQuiet || !musicWanted || silenced() || performance.now() - lastActivity < IDLE_MS) return;
+        idleQuiet = true;
+        stopMusicNow(3);
+    }, 10000);
+
+    // Any input: the first one unlocks sound in a browser that blocks autoplay, and any one brings idle-faded music back
     function unlock() {
         context();
+        lastActivity = performance.now();
+        if (idleQuiet) { idleQuiet = false; if (musicWanted) return startMusic(); }
         if (musicBlocked && musicWanted) startMusic();
-        else if (musicWanted && !synthMusic && !pack.music.length && !ducked) startMusic();
+        else if (musicWanted && !synthMusic && !pack.music.length && !silenced()) startMusic();
     }
 
     // ---------- Loading the user's sound pack ----------
@@ -241,7 +298,7 @@ const Sfx = (() => {
         return i < 0 ? LEVELS[0] : LEVELS[i];
     }
 
-    return { load, play, startMusic, stopMusic, duck, unlock, setSettings, nextLevel, get settings() { return settings; } };
+    return { load, play, startMusic, stopMusic, duck, setAway, unlock, setSettings, nextLevel, get settings() { return settings; } };
 })();
 
 window.Sfx = Sfx;

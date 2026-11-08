@@ -4945,6 +4945,11 @@
             setInterval(async () => { try { syncPauseMenu(await (await fetch('/api/status')).json()); } catch { /* the server is busy */ } }, 400);
         } else {
             Sfx.load().then(() => { Sfx.play('boot'); Sfx.startMusic(); }).catch(() => {});
+            // The menu's music is for the menu: it stops while another window is in front or the menu is minimised
+            const menuAway = () => Sfx.setAway(document.hidden || !document.hasFocus());
+            window.addEventListener('blur', menuAway);
+            window.addEventListener('focus', menuAway);
+            document.addEventListener('visibilitychange', menuAway);
             fitGrid();
             loadGames().then(() => syncAtStart(true));
         }

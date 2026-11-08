@@ -284,8 +284,9 @@ games work offline afterwards. Compressed `.ciso`/`.gcz` Dolphin images and Swit
 same-name picture for those.
 
 **Sound.** The menu has sound effects (moving, selecting, paging, opening Settings, starting a game,
-errors) and background music that pauses while a game runs. Out of the box it plays small built-in
-synthesised sounds and a quiet ambient loop. To use your own, put audio files (wav, mp3, ogg, m4a, flac)
+errors) and background music that pauses while a game runs, while another window is in front, and after five
+minutes without input (the next press brings it back). Out of the box it plays small built-in
+synthesised sounds and soft music-box phrases. To use your own, put audio files (wav, mp3, ogg, m4a, flac)
 in `~/.config/all-in-one-emulator/sounds` (the menu creates the folder with a `README.txt` the first
 time it runs):
 
