@@ -9,6 +9,7 @@ const tmp = p => fs.mkdtempSync(path.join(os.tmpdir(), `srvlib-${p}-`));
 const home = tmp('home'), cfgHome = tmp('cfg'), roms = tmp('roms'), theirRoms = tmp('theirs');
 process.env.HOME = home;
 process.env.XDG_CONFIG_HOME = cfgHome;
+process.env.APPDATA = cfgHome;   // config.js reads APPDATA, not XDG_CONFIG_HOME, on win32
 process.env.ROMS_DIR = roms;
 fs.mkdirSync(path.join(roms, 'wii'), { recursive: true });
 fs.writeFileSync(path.join(roms, 'wii', 'Wii Sports.iso'), 'mine');
@@ -48,6 +49,12 @@ test('games on the other computer show up as downloadable, and downloading one i
         r = await api(port, 'POST', '/api/library/settings', { remote: { address: `127.0.0.1:${theirPort}`, key: KEY } });
         assert.deepStrictEqual([r.body.remote.name, r.body.remote.games, r.body.remote.hasKey], ['Living Room PC', 3, true]);
         assert.ok(!('key' in r.body.remote) && !JSON.stringify(r.body.remote).includes(KEY), 'the access key typed for the other computer is never sent back to the page');
+
+        // typing a different candidate into Test must check that candidate directly, and never overwrite what was Saved
+        r = await api(port, 'POST', '/api/library/test', { address: '127.0.0.1:1', key: KEY });
+        assert.strictEqual(r.body.ok, false, 'the typed candidate, not the saved address, is what gets checked');
+        r = await api(port, 'GET', '/api/library/settings');
+        assert.strictEqual(r.body.remote.address, `127.0.0.1:${theirPort}`, 'testing a bad candidate did not overwrite the saved address');
 
         r = await api(port, 'GET', '/api/games');
         const byTitle = Object.fromEntries(r.body.games.map(g => [g.title, g]));
