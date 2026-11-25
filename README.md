@@ -38,8 +38,23 @@ The menu runs on Windows too. The differences from Linux:
   adds Start menu and desktop shortcuts and starts it) and `Emulator-Menu-Portable-<version>.exe` (runs without installing).
   To pin it, start the menu, right-click its icon on the taskbar and choose **Pin to taskbar**; the installer's Start menu entry
   can be pinned too. Press **F11** for full screen, or start it with `--fullscreen`. `npm run dist:win` builds only the portable
-  file. The program has to be built on the system it is for, so building it on Linux needs Wine. Not tested on a real Windows
-  computer (the settings were checked as far as a Linux machine can).
+  file. The program has to be built on the system it is for, so building it on Linux needs Wine.
+
+  **Every build gets its own version.** The `version` in `package.json` is `major.minor.patch` and names the files, so raise it
+  *before* building, never after:
+
+  | Part | Raise it for |
+  |---|---|
+  | patch (`1.1.0` -> `1.1.1`) | bug fixes only |
+  | minor (`1.1.0` -> `1.2.0`) | new or extended features |
+  | major (`1.1.0` -> `2.0.0`) | changes to how the menu works as a whole |
+
+  Then delete the old `Emulator-Menu-*.exe` (and `.exe.blockmap`) from `dist/` so only the version you just built is there and
+  there is no doubt which file is the new one. `dist/` is not in git, so nothing is committed either way.
+
+  Do not run the tests on Windows. Most of them are written for Linux (`/proc`, `flatpak`, `bluetoothctl`, sysfs), so they fail
+  for reasons that say nothing about the build, and `test/e2e-controllers.test.js` cannot fake an emulator on Windows: it starts
+  the real Ryujinx instead. Run `npm test` on Linux.
 
 # Kiosk mode (Ubuntu)
 
