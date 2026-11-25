@@ -5,8 +5,10 @@ const os = require('os');
 const path = require('path');
 
 const tmp = p => fs.mkdtempSync(path.join(os.tmpdir(), `srvbt-${p}-`));
+const cfgHome = tmp('cfg');
 process.env.HOME = tmp('home');
-process.env.XDG_CONFIG_HOME = tmp('cfg');
+process.env.XDG_CONFIG_HOME = cfgHome;
+process.env.APPDATA = cfgHome;   // config.js reads APPDATA, not XDG_CONFIG_HOME, on win32
 process.env.ROMS_DIR = tmp('roms');
 const server = require('../ui/server');
 
