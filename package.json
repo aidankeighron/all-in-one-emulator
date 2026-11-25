@@ -28,6 +28,9 @@
     "electron": "^44.9.0",
     "electron-builder": "^26.15.3"
   },
+  "overrides": {
+    "@noble/hashes": "1.8.0"
+  },
   "build": {
     "appId": "com.aidankeighron.emulatormenu",
     "productName": "Emulator Menu",
