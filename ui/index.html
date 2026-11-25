@@ -2884,9 +2884,11 @@
 
         async function testRemote() {
             showToast('Testing the connection…');
-            const r = await saveApi('/api/library/test', {});
+            const address = document.getElementById('remote-address').value;
+            const key = document.getElementById('remote-key').value;
+            const r = await saveApi('/api/library/test', { address, key });
+            document.getElementById('remote-status').textContent = r.body.ok ? `Connected to ${r.body.name}: ${r.body.games} game${r.body.games === 1 ? '' : 's'}.` : r.body.message;
             showToast(r.body.ok ? `Connected to ${r.body.name}: ${r.body.games} games` : r.body.message);
-            refreshLibrarySettings();
         }
 
         // ================= SETTINGS =================

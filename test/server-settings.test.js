@@ -10,6 +10,7 @@ const cfgHome = tmp('cfg');
 const roms = tmp('roms');
 process.env.HOME = home;
 process.env.XDG_CONFIG_HOME = cfgHome;
+process.env.APPDATA = cfgHome;   // config.js reads APPDATA, not XDG_CONFIG_HOME, on win32
 process.env.ROMS_DIR = roms;
 fs.mkdirSync(path.join(roms, 'wii'), { recursive: true });
 for (const n of ['Alpha', 'Bravo', 'Charlie']) fs.writeFileSync(path.join(roms, 'wii', `${n}.iso`), 'x');

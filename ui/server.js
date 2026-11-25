@@ -990,8 +990,22 @@ async function handleLibrary(route, req, res) {
             return sendJson(res, 200, librarySettings({ shareError })), true;
         }
         if (route === 'POST /api/library/test') {
-            const idx = await remoteIndex({ force: true, timeoutMs: 6000 });
-            return sendJson(res, 200, idx ? { ok: true, name: idx.name, games: idx.games.length } : { ok: false, ...(remote.error || { message: 'Enter the server address and key first' }) }), true;
+            const body = await readJson(req);
+            const saved = config.getLibrary().remote;
+            const address = typeof body.address === 'string' && body.address ? body.address : saved.address;
+            const key = typeof body.key === 'string' && body.key ? body.key : saved.key;
+            // Testing a typed address never saves it: only Save commits it, so what the box shows stays whatever was last typed
+            if (address === saved.address && key === saved.key) {
+                const idx = await remoteIndex({ force: true, timeoutMs: 6000 });
+                return sendJson(res, 200, idx ? { ok: true, name: idx.name, games: idx.games.length } : { ok: false, ...(remote.error || { message: 'Enter the server address and key first' }) }), true;
+            }
+            if (!address || !key) return sendJson(res, 200, { ok: false, message: 'Enter the server address and key first' }), true;
+            try {
+                const idx = await library.fetchIndex({ address, key, manifest, timeoutMs: 6000 });
+                return sendJson(res, 200, { ok: true, name: idx.name, games: idx.games.length }), true;
+            } catch (err) {
+                return sendJson(res, 200, { ok: false, message: err.message }), true;
+            }
         }
         if (route === 'GET /api/library/download') return sendJson(res, 200, { download: downloadSnapshot() }), true;
         if (route === 'POST /api/library/cancel') {
