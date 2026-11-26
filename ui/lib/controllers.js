@@ -213,6 +213,10 @@ function fromGamepadApi(pads) {
         const nth = seen.get(p.name) || 0;
         seen.set(p.name, nth + 1);
         const isPad = PAD_KINDS.has(kind);
+        // The window joins a left and a right Joy-Con into one gamepad by itself ("Joy-Con L+R", the charging grip's ids).
+        // Nothing else calls it that: to Dolphin it is the pair SDL makes of the same two Joy-Cons, so Dolphin has to be told
+        // to make that pair too.
+        const joyconPair = p.vendor === NINTENDO && p.product === '200e';
         return {
             id: `pad${p.index}`,
             name: p.name,
@@ -226,6 +230,7 @@ function fromGamepadApi(pads) {
             nameIndex: nth,
             xinputIndex: p.xinput ? xinputs++ : null,     // Dolphin reaches Xbox pads through XInput on Windows
             pad: isPad,
+            ...(joyconPair ? { joyconPair: true, sdlName: JOYCON_PAIR_SDL_NAME } : {}),
             player: i + 1
         };
     });
@@ -295,9 +300,12 @@ const JOYCON_PAIR_SDL_NAME = 'Nintendo Switch Joy-Con (L/R)';
 // A controller's lasting identity (its js/event number changes between plugs)
 const keyOf = c => (c.combined ? `pad:combo:${c.memberKeys.map(k => k.replace(/^pad:/, '')).join('+')}` : `pad:${c.vendor || ''}:${c.product || ''}:${c.name}#${c.nameIndex || 0}`);
 
+// A left and right Joy-Con read as one controller: joined by the menu (combined) or by the window itself (joyconPair)
+const isJoyconPair = c => !!(c && (c.combined || c.joyconPair));
+
 // 'L' or 'R' for the two halves of a Joy-Con pair; null for anything else
 function joyconSide(c) {
-    if (c.combined || c.kind !== 'switch') return null;
+    if (isJoyconPair(c) || c.kind !== 'switch') return null;
     if (c.vendor === NINTENDO && c.product === '2006') return 'L';
     if (c.vendor === NINTENDO && c.product === '2007') return 'R';
     if (/\(l\)|left joy-?con/i.test(c.name)) return 'L';
@@ -482,4 +490,4 @@ function batteryOf(c, all) {
     return found.sort((a, b) => LEVELS.indexOf(a.level) - LEVELS.indexOf(b.level) || (a.percent ?? 101) - (b.percent ?? 101))[0];
 }
 
-module.exports = { hidAddress, hidPresent, batteries, batteryOf, createOrder, parseProc, classify, build, detect, hasGcAdapter, fromGamepadApi, report, combine, keyOf, joyconSide, sdlName, crc16, KIND_LABELS, PAD_KINDS, JOYCON_PAIR_SDL_NAME };
+module.exports = { hidAddress, hidPresent, batteries, batteryOf, createOrder, parseProc, classify, build, detect, hasGcAdapter, fromGamepadApi, report, combine, keyOf, joyconSide, isJoyconPair, sdlName, crc16, KIND_LABELS, PAD_KINDS, JOYCON_PAIR_SDL_NAME };

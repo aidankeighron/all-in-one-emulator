@@ -1,0 +1,28 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Emulator Menu: controller watch</title>
+</head>
+<body>
+<script>
+    // Windows only: a hidden window of the app (see electron/main.js) that keeps reading the controllers while a game has the
+    // screen, and tells the menu when Back + Start (− and + on a Nintendo controller) goes down and comes back up. The menu
+    // times the hold and opens the pause menu, the way it does from the joystick devices on Linux. The window is never
+    // shown, so it never takes the focus from the game.
+    // In the standard layout button 8 is Back / View / −, and 9 is Start / Menu / +
+    const BACK = 8, START = 9;
+    let held = false;
+    const pressed = (gp, n) => !!(gp.buttons[n] && gp.buttons[n].pressed);
+    function check() {
+        const pads = navigator.getGamepads ? [...navigator.getGamepads()] : [];
+        const now = pads.some(gp => gp && gp.mapping === 'standard' && pressed(gp, BACK) && pressed(gp, START));
+        if (now === held) return;
+        held = now;
+        fetch('/api/game/pause-combo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ held }) })
+            .catch(() => { held = !now; });     // tried again at the next check
+    }
+    setInterval(check, 50);
+</script>
+</body>
+</html>

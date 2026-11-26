@@ -29,3 +29,30 @@ test('flatpak ps output is read for the app’s sandbox processes', async () => 
     assert.deepStrictEqual(await procs.flatpakPids('org.DolphinEmu.dolphin-emu', fake), [1200, 1234]);
     assert.deepStrictEqual(await procs.flatpakPids('x', (c, a, cb) => cb(new Error('no flatpak'))), []);
 });
+
+test('Windows: one PowerShell suspends and resumes the game, in the order asked', () => {
+    const { EventEmitter } = require('events');
+    const started = [];
+    const fakeSpawn = (cmd, args) => {
+        const child = new EventEmitter();
+        child.lines = [];
+        child.stdin = Object.assign(new EventEmitter(), { destroyed: false, write: l => child.lines.push(l) });
+        started.push({ cmd, args, child });
+        return child;
+    };
+    assert.strictEqual(procs.freeze([], true, { platform: 'win32', spawnImpl: fakeSpawn }), 0, 'nothing to freeze, nothing started');
+    assert.strictEqual(procs.freeze([1234, 5678], true, { platform: 'win32', spawnImpl: fakeSpawn }), 2);
+    assert.strictEqual(procs.freeze([1234, 5678], false, { platform: 'win32', spawnImpl: fakeSpawn }), 2);
+    assert.strictEqual(started.length, 1, 'started once, then reused');
+    const { cmd, args, child } = started[0];
+    assert.strictEqual(cmd, 'powershell.exe');
+    const script = Buffer.from(args[args.indexOf('-EncodedCommand') + 1], 'base64').toString('utf16le');
+    assert.strictEqual(script, procs.FREEZER_SCRIPT);
+    assert.match(script, /NtSuspendProcess/);
+    assert.match(script, /NtResumeProcess/);
+    assert.deepStrictEqual(child.lines, ['S 1234 5678\n', 'R 1234 5678\n']);
+    child.emit('exit', 0);       // gone: the next freeze starts a new one
+    procs.freeze([1], true, { platform: 'win32', spawnImpl: fakeSpawn });
+    assert.strictEqual(started.length, 2);
+    started[1].child.emit('exit', 0);
+});

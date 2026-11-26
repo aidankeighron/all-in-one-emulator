@@ -13,6 +13,7 @@ const startFullscreen = process.argv.includes('--fullscreen') || process.env.FUL
 app.commandLine.appendSwitch('password-store', 'basic');
 let win = null;
 let pauseWin = null;       // the pause menu: a transparent window over everything, so it shows on top of the game
+let padWatchWin = null;    // Windows: a hidden window that keeps reading the controllers while a game runs (ui/padwatch.html)
 let serverPort = 0;
 let hiddenForGame = false;
 
@@ -99,6 +100,29 @@ function onPause(paused) {
     }
 }
 
+// Windows: the menu cannot read the controllers by itself while a game has the screen (on Linux it reads the joystick devices,
+// see ui/lib/hotkey.js), so Back + Start would never open the pause menu. The app's own window can, through its gamepad list,
+// but only while the page counts as visible: a hidden window whose page is kept "visible" (no background throttling) does
+// that, and never takes the focus from the game.
+function createPadWatchWindow() {
+    if (process.platform !== 'win32' || padWatchWin) return;
+    padWatchWin = new BrowserWindow({
+        show: false,
+        width: 200,
+        height: 100,
+        skipTaskbar: true,
+        focusable: false,
+        title: 'Emulator Menu: controller watch',
+        webPreferences: {
+            contextIsolation: true,
+            nodeIntegration: false,
+            backgroundThrottling: false
+        }
+    });
+    padWatchWin.on('closed', () => { padWatchWin = null; });
+    padWatchWin.loadURL(`http://127.0.0.1:${serverPort}/padwatch.html`);
+}
+
 // After an update: start again on the new code, with the same arguments (kiosk mode starts full screen). A "." for the
 // project folder (npm start) is made absolute, since the new process may not start in the same folder.
 function restartApp() {
@@ -134,9 +158,10 @@ async function createWindow() {
             event.preventDefault();
         }
     });
-    win.on('closed', () => { win = null; if (pauseWin) pauseWin.destroy(); });   // the hidden pause window must not keep the app open
+    // the hidden windows must not keep the app open
+    win.on('closed', () => { win = null; if (pauseWin) pauseWin.destroy(); if (padWatchWin) padWatchWin.destroy(); });
     win.loadURL(`http://127.0.0.1:${port}`);
-    win.webContents.once('did-finish-load', createPauseWindow);   // ready (hidden) before it is needed
+    win.webContents.once('did-finish-load', () => { createPauseWindow(); createPadWatchWindow(); });   // ready (hidden) before they are needed
 }
 
 // Windows: choose an emulator's program
