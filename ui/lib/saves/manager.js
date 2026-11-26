@@ -210,12 +210,35 @@ function createManager({ dir, adapters, getCloud, getToken = async () => null, d
         rev: meta ? meta.rev : 0, localRev: st.rev, inCloud: !!meta, pending: !!st.pending, conflict: !!st.conflict
     });
 
+    const pendingCount = () => Object.values(state.slots).filter(st => st.pending && !st.conflict).length;
+
+    let autoTimer = null;
+
+    // Periodically retries queued saves (e.g. a push that failed while offline) without needing
+    // an app restart or a manual "Refresh game list" click.
+    function startAutoSync({ intervalMs = 5 * 60 * 1000 } = {}) {
+        stopAutoSync();
+        autoTimer = setInterval(() => {
+            if (pendingCount() === 0) return;
+            api.syncAll().catch(err => log(`[SAVES] auto-retry: ${err.message}`));
+        }, intervalMs);
+        autoTimer.unref();
+    }
+
+    function stopAutoSync() {
+        if (autoTimer) clearInterval(autoTimer);
+        autoTimer = null;
+    }
+
     // ---------- public API ----------
 
-    return {
+    const api = {
         dir,
         activity: () => activity,
         device,
+        pending: pendingCount,
+        startAutoSync,
+        stopAutoSync,
 
         // The slots of a game, newest first, from the cloud when reachable and from this computer otherwise
         listSlots(game, library = []) {
@@ -471,6 +494,7 @@ function createManager({ dir, adapters, getCloud, getToken = async () => null, d
             });
         }
     };
+    return api;
 }
 
 module.exports = { createManager, SaveError, gameKeyOf };

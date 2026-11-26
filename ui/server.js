@@ -1351,6 +1351,7 @@ function start({ port = 3000, onGameState, onPause, onRestart, onActivity } = {}
             system.refreshKioskSettings().catch(() => {});
             watchControllers();
             applyShareSettings().then(err => err && console.error(`[LIBRARY] ${err}`));
+            saves.startAutoSync(); // retries any save queued while offline, without needing a restart or manual refresh
             resolve({ server, port: actual });
         });
     });

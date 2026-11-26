@@ -24,8 +24,14 @@ function computer(name, url, cloud = {}) {
     const home = tmp(`home-${name}`);
     fs.mkdirSync(path.join(home, '.var/app/io.github.ryubing.Ryujinx/config/Ryujinx/system'), { recursive: true });
     fs.writeFileSync(path.join(home, '.var/app/io.github.ryubing.Ryujinx/config/Ryujinx/system/prod.keys'), 'keys');
+    // Isolate %APPDATA% (where slot roots and the Windows copy of Ryujinx's real data live) into this fake
+    // computer's own home, so two "computers" in the same test run don't collide on the real, shared
+    // %APPDATA%\all-in-one-emulator (or a real Ryujinx install) on the machine actually running the tests.
+    fs.mkdirSync(path.join(home, 'AppData/Roaming/Ryujinx/system'), { recursive: true });
+    fs.writeFileSync(path.join(home, 'AppData/Roaming/Ryujinx/system/prod.keys'), 'keys');
     const settings = { enabled: true, repoUrl: url, deviceName: name, ...cloud };
-    const adapters = adaptersLib.create(home);
+    const env = { ...process.env, APPDATA: path.join(home, 'AppData', 'Roaming') };
+    const adapters = adaptersLib.create({ home, env });
     const manager = createManager({ dir: tmp(`cfg-${name}`), adapters, getCloud: () => settings });
     const adapter = adapters.get('ryujinx');
     // What the emulator would do while the game runs
@@ -162,6 +168,78 @@ test('offline: the save is queued, and goes up on the next sync', async () => {
     const b = computer('Other', remote);
     await b.manager.prepare(game, slot.id);
     assert.strictEqual(b.read(slot.id, 'f.bin'), 'offline-progress');
+});
+
+test('offline: the queued save goes up on its own once the device is back online', async () => {
+    const remote = remoteRepo();
+    const a = computer('Desk PC', path.join(os.tmpdir(), 'definitely-not-a-repo'));
+    const slot = await a.manager.createSlot(game, 'Main run');
+    const r = await playSession(a, slot.id, { 'f.bin': 'offline-progress' });
+    assert.strictEqual(r.status, 'queued');
+    assert.strictEqual(a.manager.pending(), 1);
+
+    a.settings.repoUrl = remote;                          // back online, but nobody clicks "Refresh game list"
+    a.manager.startAutoSync({ intervalMs: 15 });
+    try {
+        for (let i = 0; i < 400 && a.manager.pending() > 0; i++) await new Promise(res => setTimeout(res, 15));
+        assert.strictEqual(a.manager.pending(), 0, 'the scheduler pushed the queued save on its own');
+    } finally {
+        a.manager.stopAutoSync();
+    }
+
+    const b = computer('Other', remote);
+    await b.manager.prepare(game, slot.id);
+    assert.strictEqual(b.read(slot.id, 'f.bin'), 'offline-progress', 'it actually landed in the cloud, not just a flipped flag');
+});
+
+test('startAutoSync leaves things alone when nothing is queued, and stopAutoSync actually stops it', async () => {
+    const remote = remoteRepo();
+    const a = computer('Desk PC', remote);
+    await a.manager.createSlot(game, 'Main run');          // nothing played, nothing pending
+    assert.strictEqual(a.manager.pending(), 0);
+
+    a.manager.startAutoSync({ intervalMs: 10 });
+    await new Promise(res => setTimeout(res, 80));
+    assert.strictEqual(a.manager.activity().state, 'idle', 'no needless sync attempt when nothing is pending');
+    a.manager.stopAutoSync();
+
+    await new Promise(res => setTimeout(res, 40));         // if the timer were still running this would keep ticking harmlessly either way, but confirms stop doesn't throw
+});
+
+test('offline reconnect: the device that was away never overwrites a save someone else pushed in the meantime', async () => {
+    const remote = remoteRepo();
+    const a = computer('Laptop', path.join(os.tmpdir(), 'definitely-not-a-repo')); // "on the plane"
+    const b = computer('Desk PC', remote);
+    const slot = await a.manager.createSlot(game, 'Main run');
+    await playSession(a, slot.id, { 'f.bin': 'before-flight' });   // last known-good, both start from this
+    a.settings.repoUrl = remote;
+    assert.deepStrictEqual((await a.manager.syncAll()).uploaded, ['Main run']);
+
+    a.settings.repoUrl = path.join(os.tmpdir(), 'definitely-not-a-repo'); // back offline for the flight
+    const r = await playSession(a, slot.id, { 'f.bin': 'written-on-the-plane' });
+    assert.strictEqual(r.status, 'queued');
+
+    await b.manager.prepare(game, slot.id);                        // meanwhile, someone else pushes a newer save
+    await playSession(b, slot.id, { 'f.bin': 'pushed-while-a-was-away' });
+
+    a.settings.repoUrl = remote;                                    // landed, back online
+    a.manager.startAutoSync({ intervalMs: 15 });
+    const isConflicted = async () => (await a.manager.listSlots(game)).slots.find(s => s.id === slot.id).conflict;
+    let conflicted = false;
+    try {
+        for (let i = 0; i < 400 && !conflicted; i++) {
+            await new Promise(res => setTimeout(res, 15));
+            conflicted = await isConflicted();
+        }
+    } finally {
+        a.manager.stopAutoSync();
+    }
+
+    assert.ok(conflicted, 'flagged for the user to resolve, not silently decided');
+    assert.strictEqual(a.read(slot.id, 'f.bin'), 'written-on-the-plane', 'local copy untouched');
+    const fresh = computer('Checker', remote);
+    await fresh.manager.prepare(game, slot.id);
+    assert.strictEqual(fresh.read(slot.id, 'f.bin'), 'pushed-while-a-was-away', 'the cloud save was never overwritten by the reconnecting device');
 });
 
 test('syncAll downloads newer saves for slots already on this computer', async () => {
