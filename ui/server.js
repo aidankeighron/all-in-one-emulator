@@ -345,6 +345,7 @@ async function startGame(relPath, slotId, onGameState) {
     lastError = null;
     const started = Date.now();
     const stopWatching = process.env.EMU_NO_HOTKEY ? () => {} : hotkey.start(togglePause, { holdMs: config.getPauseHold() * 1000 });
+    if (runner.platform === 'win32') procs.winFreezer();      // ready before a pause needs it
     if (emu.id === 'dolphin') wiimoteReader.hold(true);       // the Wii Remotes are Dolphin's while it plays
     // Whatever goes wrong after a game (a crash leaves odd state), the menu is told it ended and comes back
     const afterGame = (code, stderr) => {
@@ -418,8 +419,11 @@ async function pauseGame() {
     current.paused = true;
     console.log(`[PAUSE] ${current.emulator}`);
     try {
-        current.frozenPids = await procs.pidsFor(current.child, current.emu.flatpak, undefined);
-        if (!procs.signal(current.frozenPids, 'SIGSTOP')) current.frozenPids = [];
+        const game = current;
+        const pids = await procs.pidsFor(game.child, runner.platform === 'win32' ? null : game.emu.flatpak, undefined);
+        // resumed (or quit) while the processes were being looked up: nothing to freeze any more
+        if (current !== game || !game.paused) return;
+        game.frozenPids = procs.freeze(pids, true) ? pids : [];
     } catch (err) { console.error(`[PAUSE] could not freeze the game: ${err.message}`); current.frozenPids = []; }
     wiimoteReader.hold(false);          // the pause menu is steered with them
     pauseHook(true);
@@ -427,7 +431,7 @@ async function pauseGame() {
 
 function thaw() {
     if (!current) return;
-    if (current.frozenPids && current.frozenPids.length) procs.signal(current.frozenPids, 'SIGCONT');
+    if (current.frozenPids && current.frozenPids.length) procs.freeze(current.frozenPids, false);
     current.frozenPids = [];
 }
 
@@ -441,6 +445,21 @@ function resumeGame() {
 }
 
 function togglePause() { return current && current.paused ? resumeGame() : pauseGame(); }
+
+// Windows has no joystick devices for lib/hotkey.js to read: a hidden window of the app (ui/padwatch.html) watches the
+// controllers instead and says when Back + Start goes down and up. Held for the pause hold time, it pauses or resumes,
+// exactly like the Linux hotkey; it must be let go before it can do so again.
+const combo = { timer: null, fired: false };
+function padCombo(held) {
+    if (!held) {
+        clearTimeout(combo.timer);
+        combo.timer = null;
+        combo.fired = false;
+        return;
+    }
+    if (!current || !current.path || combo.timer || combo.fired) return;
+    combo.timer = setTimeout(() => { combo.timer = null; combo.fired = true; togglePause(); }, config.getPauseHold() * 1000);
+}
 
 // Stops the game and starts it again on the same save (the way new controller settings take effect)
 function restartCurrent() {
@@ -1271,6 +1290,7 @@ function createServer(onGameState) {
                     return sendJson(res, 200, { running: !!current || restarting, controllersChanged, game: current && { emulator: current.emulator, path: current.path }, paused: !!(current && current.paused), frozen: !!(current && current.frozenPids && current.frozenPids.length), error, sync: saves.activity() });
                 }
                 if (route === 'POST /api/game/resume') { resumeGame(); return sendJson(res, 200, { ok: true }); }
+                if (route === 'POST /api/game/pause-combo') { padCombo(!!(await readJson(req)).held); return sendJson(res, 200, { ok: true }); }
                 if (route === 'POST /api/game/quit') { restartTarget = null; restarting = false; stopCurrent(); return sendJson(res, 200, { ok: true }); }
                 if (route === 'POST /api/game/restart') {
                     if (!restartCurrent()) return sendJson(res, 409, { error: 'nothing_running', message: 'No game is running' });

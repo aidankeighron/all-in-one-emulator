@@ -26,7 +26,10 @@ The menu runs on Windows too. The differences from Linux:
 - **Controllers:** the menu sees what the window sees, so press a button on a controller with the menu focused.
   Xbox controllers are set up through XInput and others through SDL. Dolphin handles a real Wii Remote or an
   official GameCube adapter itself (the adapter needs its driver set up in Dolphin first).
-- **The Back + Start pause menu is Linux only.** On Windows use the emulator's own Stop or Exit.
+- **The Back + Start pause menu works on Windows too.** A hidden window of the app keeps reading the controllers while
+  the game has the screen, and the game is frozen while paused (its process is suspended). It reads the controllers the
+  window sees in the standard layout (Xbox pads, Switch Pro Controller, a Joy-Con pair); a real Wii Remote, which Dolphin
+  holds, cannot open it on Windows.
 - **Game library:** a Windows computer can browse and download games from the Linux host the same way. Hosting from
   Windows also works, but Windows Firewall will ask to allow it.
 - **Build a program you can pin to the taskbar** on a Windows machine (needs [Node.js](https://nodejs.org) 18 or newer):

@@ -91,3 +91,15 @@ test('starting a game whose file was renamed or moved says so', async () => {
         assert.strictEqual(r.status, 400);
     } finally { srv.close(); }
 });
+
+test('Windows pause combo: the controller-watch page is served, and Back + Start with no game does nothing', async () => {
+    const { server: srv, port } = await server.start({ port: 0 });
+    try {
+        const page = await fetch(`http://127.0.0.1:${port}/padwatch.html`);
+        assert.strictEqual(page.status, 200);
+        assert.match(await page.text(), /api\/game\/pause-combo/);
+        assert.strictEqual((await api(port, 'POST', '/api/game/pause-combo', { held: true })).status, 200);
+        assert.strictEqual((await api(port, 'POST', '/api/game/pause-combo', { held: false })).status, 200);
+        assert.strictEqual((await api(port, 'GET', '/api/status')).body.paused, false);
+    } finally { srv.close(); }
+});
