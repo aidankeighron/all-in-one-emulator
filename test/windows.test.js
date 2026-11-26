@@ -186,6 +186,28 @@ test('Windows controllers come from the window\'s own gamepad list', () => {
     assert.ok(list.every(c => c.pad));
 });
 
+test('Dolphin on Windows: the window\'s own Joy-Con pair ("Joy-Con L+R") is the pair SDL makes in Dolphin', () => {
+    // The window joins a left and a right Joy-Con into one gamepad by itself; Dolphin has no device by that name
+    const { appdata, ctx } = winCtx();
+    const list = controllers.fromGamepadApi([
+        { index: 0, id: 'Joy-Con L+R (STANDARD GAMEPAD Vendor: 057e Product: 200e)', mapping: 'standard' }
+    ]);
+    assert.strictEqual(list[0].kind, 'switch');
+    assert.ok(controllers.isJoyconPair(list[0]));
+    const result = inputconfig.apply('dolphin', list, { ...ctx, game: 'wii' });
+    assert.strictEqual(result.status, 'configured', result.message);
+    const dir = path.join(appdata, 'Dolphin Emulator', 'Config');
+    const wm = Ini.read(path.join(dir, 'WiimoteNew.ini'));
+    assert.strictEqual(wm.get('Wiimote1', 'Device'), 'SDL/0/Nintendo Switch Joy-Con (L/R)');
+    assert.strictEqual(wm.get('Wiimote1', 'Extension'), 'Nunchuk');
+    // the right half points, the left half is the Nunchuk
+    assert.strictEqual(wm.get('Wiimote1', 'IMUAccelerometer/Up'), '`Accel R Up`');
+    assert.strictEqual(wm.get('Wiimote1', 'Nunchuk/IMUAccelerometer/Up'), '`Accel L Up`');
+    const main = Ini.read(path.join(dir, 'Dolphin.ini'));
+    assert.strictEqual(main.get('SDL_Hints', 'SDL_JOYSTICK_HIDAPI_COMBINE_JOY_CONS'), '1', 'Dolphin must join the two halves too');
+    assert.strictEqual(main.get('SDL_Hints', 'SDL_JOYSTICK_HIDAPI_JOY_CONS'), '1');
+});
+
 test('detect on Windows trusts a recent report and forgets a stale one', () => {
     const pads = [{ index: 0, id: 'Xbox One Controller (XInput STANDARD GAMEPAD)', mapping: 'standard' }];
     controllers.report(pads, 1000);

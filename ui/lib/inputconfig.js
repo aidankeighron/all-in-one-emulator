@@ -72,7 +72,7 @@ function dolphinDevice(c, platform, all = [c], opts = {}) {
     if (platform === 'win32' && c.xinputIndex !== null && c.xinputIndex !== undefined) return `XInput/${c.xinputIndex}/Gamepad`;
     const name = controllersLib.sdlName(c, { platform, ...opts });
     // SDL finds controllers in the order the system numbered them, which is not always the order of the players
-    const order = all.filter(o => !o.adapter && o.kind !== 'wiimote' && (o.js !== null && o.js !== undefined || o.combined || platform === 'win32'))
+    const order = all.filter(o => !o.adapter && o.kind !== 'wiimote' && (o.js !== null && o.js !== undefined || controllersLib.isJoyconPair(o) || platform === 'win32'))
         .map((o, i) => ({ o, i })).sort((a, b) => ((a.o.js ?? 1e6) - (b.o.js ?? 1e6)) || a.i - b.i).map(x => x.o);
     const before = order.slice(0, Math.max(0, order.indexOf(c))).filter(o => controllersLib.sdlName(o, { platform, ...opts }) === name).length;
     return `SDL/${order.includes(c) ? before : c.nameIndex || 0}/${name}`;
@@ -109,7 +109,7 @@ function writeDolphin(controllers, { home, platform, env, exePath, wiiRemotes = 
     const done = [];
     // The GameCube ports are left alone when no gamepad or adapter is involved (only a real Wii Remote, say)
     const touchPorts = adapter || slots.some(s => s.mode === 'pad');
-    const menuPair = slots.some(s => s.controller && s.controller.combined);
+    const menuPair = slots.some(s => controllersLib.isJoyconPair(s.controller));
     const sdlOpts = { hidapiJoycons: menuPair };
 
     // Wii Remotes keep their player number (a game's player 2 is the second remote)
@@ -119,7 +119,7 @@ function writeDolphin(controllers, { home, platform, env, exePath, wiiRemotes = 
             wm.replaceSection(`Wiimote${i + 1}`, [['Source', String(WIIMOTE_NONE)]]);
         } else if (s.mode === 'pad') {
             const device = dolphinDevice(s.controller, platform, controllers, sdlOpts);
-            wm.replaceSection(`Wiimote${i + 1}`, mappings.dolphinSection(s.wii, device, { pair: !!s.controller.combined }));
+            wm.replaceSection(`Wiimote${i + 1}`, mappings.dolphinSection(s.wii, device, { pair: controllersLib.isJoyconPair(s.controller) }));
             done.push(`Player ${i + 1}: ${s.controller.name} (${s.wii.name})`);
         } else if (s.mode === 'real') {
             wm.replaceSection(`Wiimote${i + 1}`, [['Source', String(WIIMOTE_REAL)]]);
@@ -135,7 +135,7 @@ function writeDolphin(controllers, { home, platform, env, exePath, wiiRemotes = 
         const s = pads[port];
         if (s) {
             main.set('Core', `SIDevice${port}`, String(SI_GC_CONTROLLER));
-            gc.replaceSection(`GCPad${port + 1}`, mappings.dolphinSection(s.gc, dolphinDevice(s.controller, platform, controllers, sdlOpts), { pair: !!s.controller.combined }));
+            gc.replaceSection(`GCPad${port + 1}`, mappings.dolphinSection(s.gc, dolphinDevice(s.controller, platform, controllers, sdlOpts), { pair: controllersLib.isJoyconPair(s.controller) }));
         } else if (touchPorts) main.set('Core', `SIDevice${port}`, String(adapter ? SI_GC_ADAPTER : SI_NONE));
     }
     // Dolphin looks for real Wii Remotes once when the game starts, which finds one the computer holds. Looking all the time
