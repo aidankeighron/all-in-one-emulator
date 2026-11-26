@@ -1,9 +1,9 @@
-// joycond (Linux): the counterpart of BetterJoy. The kernel shows each Joy-Con as its own controller; joycond is a small
+// joycond (Linux). The kernel shows each Joy-Con as its own controller; joycond is a small
 // service that joins a left and a right Joy-Con into one "Nintendo Switch Combined Joy-Cons" controller (press L and R
 // together on the two Joy-Cons) and lets a single one be used sideways (press SL + SR). Every emulator then sees one ordinary
 // gamepad, which the menu lists as one controller (see the Joy-Con handling in lib/controllers.js).
 //
-// It has the same shape as lib/betterjoy.js so the menu can run the same setup screen on both systems:
+// What the menu's setup screen for it uses:
 //   installed  the joycond program is on this computer (installed from the distribution's packages, one password prompt)
 //   running    its service is active; "start" turns it on now and at every boot
 //   driver     the kernel has the Nintendo driver (hid-nintendo, Linux 5.16 or newer)

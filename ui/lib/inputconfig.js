@@ -87,6 +87,8 @@ const JOYCON_HINT = ['SDL_Hints', 'SDL_JOYSTICK_HIDAPI_COMBINE_JOY_CONS'];
 // driver; sdlName() already names it as that driver would regardless of platform, so this stays on for every Switch
 // controller on Windows, paired or not.
 const JOYCON_HIDAPI_HINT = ['SDL_Hints', 'SDL_JOYSTICK_HIDAPI_JOY_CONS'];
+// The same for the Switch Pro Controller (Windows only: Linux reads it through the kernel)
+const SWITCH_HIDAPI_HINT = ['SDL_Hints', 'SDL_JOYSTICK_HIDAPI_SWITCH'];
 
 // game: the console of the game about to start ('wii' or 'gamecube'). Each gamepad is then only that console's controller:
 // in a Wii game an (emulated) Wii Remote and no GameCube port, in a GameCube game a GameCube port and no Wii Remote. Written as
@@ -140,9 +142,15 @@ function writeDolphin(controllers, { home, platform, env, exePath, wiiRemotes = 
     // ("continuous scanning") searches Bluetooth over and over, which knocks already connected Wii Remotes off on many
     // adapters: in a game the remote dropped after a little while. So it is off.
     if (slots.some(s => s.mode === 'real') || !wiiSide) main.set('Core', 'WiimoteContinuousScanning', 'False');
+    const switchPads = slots.some(s => s.controller && s.controller.kind === 'switch');
+    const sdlJoycons = platform === 'win32' || menuPair;
+    // Dolphin's own default joins a left and a right Joy-Con into one device whenever SDL reads them itself. The menu names each
+    // Joy-Con on its own unless the person joined them, so on Windows the setting is always written, matching what it names
     if (menuPair) main.set(JOYCON_HINT[0], JOYCON_HINT[1], '1');
-    else if (joyconsSplit) main.set(JOYCON_HINT[0], JOYCON_HINT[1], '0');
-    if (slots.some(s => s.controller && s.controller.kind === 'switch')) main.set(JOYCON_HIDAPI_HINT[0], JOYCON_HIDAPI_HINT[1], platform === 'win32' || menuPair ? '1' : '0');
+    else if (joyconsSplit || (switchPads && sdlJoycons)) main.set(JOYCON_HINT[0], JOYCON_HINT[1], '0');
+    if (switchPads) main.set(JOYCON_HIDAPI_HINT[0], JOYCON_HIDAPI_HINT[1], sdlJoycons ? '1' : '0');
+    // (earlier versions of the menu turned these off while BetterJoy ran)
+    if (switchPads && platform === 'win32') main.set(SWITCH_HIDAPI_HINT[0], SWITCH_HIDAPI_HINT[1], '1');
     if (adapter) done.push('GameCube adapter');
 
     const changed = [save(path.join(dir, 'Dolphin.ini'), main), save(path.join(dir, 'GCPadNew.ini'), gc), save(path.join(dir, 'WiimoteNew.ini'), wm)];
@@ -180,7 +188,7 @@ function ryujinxId(c, all) {
 // Windows gives the menu no SDL id to work from (the browser knows a pad's name and, for some, its vendor and product,
 // but not the version SDL puts in the id). So a pad is matched to an entry Ryujinx already has for it: by the vendor
 // and product inside the id, else by name. The first time a pad is used it is set up once in Ryujinx itself.
-// used: entries already claimed by an earlier player this run (BetterJoy's pads commonly share one generic name, which
+// used: entries already claimed by an earlier player this run (identical pads commonly share one generic name, which
 // would otherwise hand the same Ryujinx entry, and so the same id, to two different players).
 function knownEntry(c, old, used = new Set()) {
     const parts = e => { const m = /^\d+-[0-9a-f]{8}-([0-9a-f]{4})-[0-9a-f]{4}-([0-9a-f]{4})-/i.exec(e.id || ''); return m ? { vendor: m[1].toLowerCase(), product: m[2].toLowerCase() } : {}; };
@@ -192,7 +200,7 @@ function knownEntry(c, old, used = new Set()) {
     return byIds || free.find(sameName);
 }
 
-function writeRyujinx(controllers, { home, platform, env, exePath, players, profiles, betterjoyMotion = 0 }) {
+function writeRyujinx(controllers, { home, platform, env, exePath, players, profiles }) {
     const win = platform === 'win32';
     const root = adapters.create({ platform, home, env, exePath }).get('ryujinx').dataRoot();
     const file = path.join(root, 'Config.json');
@@ -205,7 +213,7 @@ function writeRyujinx(controllers, { home, platform, env, exePath, players, prof
     const old = Array.isArray(config.input_config) ? config.input_config : [];
     const pads = controllers.filter(c => c.js !== null && c.js !== undefined);
     const made = [], unknown = [], notes = [];
-    // Entries already handed to an earlier player this run: BetterJoy's pads commonly share one generic name, which would
+    // Entries already handed to an earlier player this run: identical pads commonly share one generic name, which would
     // otherwise match every player to the same Ryujinx entry (the same id), and so the same physical controller in-game.
     const usedOld = new Set();
     // Ryujinx's own names for Minus and Plus: whichever the person's own entries already use, since the two spellings
@@ -243,9 +251,10 @@ function writeRyujinx(controllers, { home, platform, env, exePath, players, prof
         }
         // Rumble is not part of a layout: it is on out of the box (the player's Switch mapping can turn it off)
         entry.rumble = { ...(entry.rumble || {}), enable_rumble: mappings.ryujinxPatch(s.sw).rumble.enable_rumble };
-        // Motion from BetterJoy's server: a virtual Xbox pad has no sensors of its own
-        if (betterjoyMotion && entry.motion && entry.motion.enable_motion !== false) {
-            entry.motion = { ...entry.motion, motion_backend: 'CemuHook', dsu_server_host: '127.0.0.1', dsu_server_port: betterjoyMotion, slot: s.index, alt_slot: 0, mirror_input: false, sensitivity: entry.motion.sensitivity || 100, gyro_deadzone: entry.motion.gyro_deadzone || 1 };
+        // Earlier versions of the menu pointed motion at BetterJoy's server (port 26760 on this computer): the controller's own
+        // sensors again, now that BetterJoy is gone
+        if (entry.motion && entry.motion.motion_backend === 'CemuHook' && entry.motion.dsu_server_host === '127.0.0.1' && Number(entry.motion.dsu_server_port) === 26760) {
+            entry.motion = { ...entry.motion, motion_backend: 'GamepadDriver' };
         }
         // A single Joy-Con is a Joy-Con to Ryujinx too; anything else keeps the layout it had
         const side = controllersLib.joyconSide(c);
@@ -276,7 +285,7 @@ const writers = { dolphin: writeDolphin, ryujinx: writeRyujinx };
 // context: {home, platform, env, exePath(id), wiiRemotes, players, profiles}. Defaults to this computer.
 function apply(emulatorId, controllers, context = {}) {
     const ctx = {
-        wiiRemotes: context.wiiRemotes || 0, joyconsSplit: !!context.joyconsSplit, game: context.game || null, betterjoyMotion: context.betterjoyMotion || 0, players: context.players, profiles: context.profiles || mappings.createStore(''),
+        wiiRemotes: context.wiiRemotes || 0, joyconsSplit: !!context.joyconsSplit, game: context.game || null, players: context.players, profiles: context.profiles || mappings.createStore(''),
         home: context.home || os.homedir(), platform: context.platform || platformLib.current(), env: context.env || process.env, exePath: context.exePath || (() => null)
     };
     const write = writers[emulatorId];

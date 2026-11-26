@@ -322,6 +322,18 @@ Every game starts with a save called **Default** (made from the emulator's old s
 **X** renames, **Y** deletes, **Start** shows older versions, **B** closes. If the emulator already had a save on
 this computer from before slots existed, **Use my old save** copies it into a new slot (the original is left alone).
 
+Only the save data belongs to a slot: the emulator's settings are shared by every slot. Settings you change while a game
+plays (Ryujinx: full screen, docked or handheld mode, the controllers set up in its Input settings) go back to the
+emulator's own folder when the game closes, so they are there for every game afterwards. (On Windows a slot holds a
+copy of Ryujinx's `Config.json`, because Windows does not let ordinary programs link single files. Before this fix the
+copy was replaced at every start, so those settings were lost.)
+
+**Switch games: smoother play** (Settings → Emulators, on by default). Before each Switch game Ryujinx's `Config.json`
+gets: shader cache and PPTC on (built shaders and translated code are kept on disk, so the stutter when something new
+appears on screen fades as you play and stays gone next time), PPTC loaded with every core, debug and trace logs
+off, and `gclow_latency`, which keeps the .NET garbage collector from pausing the game to collect memory while it plays.
+That last one uses more memory, and it is the one setting that turns spare RAM into less stutter. Ryujinx starts in full screen.
+
 Uploading needs git to be signed in to GitHub, even for a public repository (reading never does). The menu tries, in
 order: whatever git already has (credential helper, SSH key), a token (`cloudToken` in `config.json`, a `cloud-token.txt` file beside the program, the
 `GITHUB_TOKEN` / `GH_TOKEN` variable, or the GitHub CLI after `gh auth login`), then the SSH form of the address.
@@ -423,12 +435,19 @@ offer mappings made for that kind.
 | | Xbox / generic | Nintendo (Switch Pro, Joy-Con) | Official Wii Remote |
 |---|---|---|---|
 | **GameCube** | GameCube (Xbox / generic) | GameCube (Nintendo): the buttons labelled A, B, X, Y act as A, B, X, Y | none: a Wii Remote only plays Wii |
-| **Wii** | Wii Classic Controller (automatic), or Wii Remote + Nunchuk | Wii Classic Controller (Nintendo), or Wii Remote + Nunchuk + gyro (automatic) | Official Wii Remote: used as it is, nothing to map |
+| **Wii** | Wii Remote + Nunchuk (automatic), or Wii Classic Controller | Wii Remote + Nunchuk + motion (automatic), or Wii Classic Controller (Nintendo) | Official Wii Remote: used as it is, nothing to map |
 | **Switch** | Switch (Xbox / generic) | Switch (Nintendo) | none |
 
-The built-in ones have no pointer, shake or tilt (make those yourself); the one exception is the gyro mapping, which
-drives the Wii Remote's motion from a Switch controller's motion sensors (Dolphin has to see them, which it does for a
-Pro Controller or Joy-Con over Bluetooth). It has no pointer either.
+A Wii game gets a Wii Remote with a Nunchuk unless you pick a Classic Controller mapping: nearly every Wii game takes
+a Remote and Nunchuk, and many take nothing else (LEGO Indiana Jones moves nothing with a Classic Controller). Pick the
+Classic ones for games that support it (Virtual Console, Smash Bros. Brawl, Xenoblade).
+
+- **Wii Remote + Nunchuk:** left stick is the Nunchuk stick, the left bumper and trigger are C and Z, the right stick moves
+  the pointer, the right bumper shakes the remote and a left stick click shakes the Nunchuk.
+- **+ motion (Nintendo):** the same, and the controller's motion sensors are the remote's: swing and tilt it, and point by
+  turning it (Dolphin's gyro pointer; click the right stick to centre it). With two Joy-Cons joined into one, the right
+  Joy-Con is the remote and the left one is the Nunchuk, each with its own motion. Dolphin reads the sensors of a Pro
+  Controller or Joy-Con itself, over Bluetooth.
 
 - **Mappings screen** (the **Mappings** tile): each mapping is a small JSON file in `~/.config/all-in-one-emulator/mappings/`
   (`%APPDATA%` on Windows). Built-ins are read-only: **Duplicate to edit**, or **New mapping** to start from the standard
@@ -459,20 +478,21 @@ controller, or splits a pair again (a pair you split stays split).
   sensors are used. Not tested on real Joy-Cons.
 - **Ryujinx** reads one device per player, so a pair is written as its left Joy-Con alone, and the setup message says so.
 
-**One real controller for every emulator (a helper, set up once from the menu).** **Connect a controller** → **2 Joy-Cons**
-→ **Set up joycond** (Windows: **Two Joy-Cons as one**) walks through it; after that it runs by itself.
+**Windows needs no helper.** Dolphin and Ryujinx both read Joy-Cons and Pro Controllers over Bluetooth themselves, motion
+included, and Ryujinx joins a left and a right Joy-Con into one controller by itself. (The menu used to offer BetterJoy
+here. Its virtual Xbox pads put a second program on every Joy-Con, which made the controls lag far behind in games, swapped
+A and B in the menu and took the motion away from Dolphin. A copy the menu installed is stopped and deleted the next time
+the menu starts; its ViGEmBus driver can be removed from Windows' *Installed apps* if wanted.)
 
-| | Windows: BetterJoy | Linux: joycond |
-|---|---|---|
-| What it does | Makes Joy-Cons and the Pro Controller look like Xbox 360 controllers and joins a left and a right Joy-Con into one, with rumble and motion (served on port 26760) | Joins a left and a right Joy-Con into one "Nintendo Switch Combined Joy-Cons" controller (press **L** and **R** together; **SL + SR** makes one a sideways controller) |
-| Setup steps | 1. the ViGEmBus driver (its installer asks Windows' permission once, the menu downloads and runs it) 2. BetterJoy (downloaded and unpacked into the menu's emulators folder, its settings set for Xbox pads and the motion server) 3. pair the Joy-Cons in Windows 4. **Turn on** | 1. checks the kernel is 5.16 or newer 2. installs the `joycond` package (`apt`, `dnf` or `zypper`, password once; on other systems the screen links to the build instructions) 3. connect the Joy-Cons on the Connect screen 4. **Turn on** (`systemctl enable --now joycond`, password once) |
-| Afterwards | The menu starts BetterJoy with itself and before every game, shows its virtual Xbox pads instead of the real Joy-Cons, and uses the Xbox mappings. Ryujinx's motion is pointed at BetterJoy's server | joycond is a system service that starts at boot. The menu shows the combined controller instead of the two halves it joined |
-| Needs | Windows 10/11. Download addresses come from GitHub; set `emulatorUrls.betterjoy` or `emulatorUrls.vigembus` in `config.json` (a web address, or a file on this computer) if they cannot be reached | A distribution that has the `joycond` package |
+**Linux: one real controller for every program (joycond, set up once from the menu).** **Connect a controller** →
+**2 Joy-Cons** → **Set up joycond** walks through it; after that it runs by itself.
 
-Not tested on real Windows or Joy-Cons. The addresses for the downloads (`Davidobot/BetterJoy`, `nefarius/ViGEmBus` on
-GitHub) could not be checked from where this was built, so if **Download BetterJoy** reports a missing zip, download
-BetterJoy yourself and point `emulatorUrls.betterjoy` at it. BetterJoy's own settings file differs between versions, so
-the menu only edits keys that exist; if buttons are swapped, change that in BetterJoy's settings.
+| | joycond |
+|---|---|
+| What it does | Joins a left and a right Joy-Con into one "Nintendo Switch Combined Joy-Cons" controller (press **L** and **R** together; **SL + SR** makes one a sideways controller) |
+| Setup steps | 1. checks the kernel is 5.16 or newer 2. installs the `joycond` package (`apt`, `dnf` or `zypper`, password once; on other systems the screen links to the build instructions) 3. connect the Joy-Cons on the Connect screen 4. **Turn on** (`systemctl enable --now joycond`, password once) |
+| Afterwards | joycond is a system service that starts at boot. The menu shows the combined controller instead of the two halves it joined |
+| Needs | A distribution that has the `joycond` package |
 
 ## Rumble
 
@@ -481,7 +501,7 @@ XInput pad and needs nothing installed). Dolphin gets both motors of the pad on 
 (`Rumble/Motor` = `Motor L` | `Motor R`), and Ryujinx's `rumble.enable_rumble` is turned on, on Windows and Linux. Every
 mapping has a **Rumble (vibration)** setting (on by default) in the mapping editor to turn it off. A controller without
 motors simply does nothing. On Linux the pad needs force-feedback support in the kernel (the `xpad` driver has it). With
-BetterJoy or joycond, rumble goes through the same way.
+joycond, rumble goes through the same way.
 
 ## Connecting Wii Remotes and Switch controllers
 

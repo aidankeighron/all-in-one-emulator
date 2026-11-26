@@ -87,7 +87,9 @@ test('the Dolphin section follows the mapping: extension, settings and quoting',
     assert.strictEqual(nunchuk.Extension, 'Nunchuk');
     assert.strictEqual(nunchuk['Nunchuk/Stick/Up'], '`Left Y+`');
     assert.strictEqual(nunchuk['Buttons/Home'], 'Guide');
-    assert.ok(!Object.keys(nunchuk).some(k => /^(IR|IMU|Shake|Tilt|Swing)/.test(k)), 'no pointer or motion unless you add them');
+    assert.strictEqual(nunchuk['IR/Up'], '`Right Y+`', 'the right stick moves the pointer');
+    assert.strictEqual(nunchuk['Shake/X'], '`Shoulder R`', 'the right bumper shakes the remote');
+    assert.ok(!Object.keys(nunchuk).some(k => /^(IMU|Tilt|Swing|Nunchuk\/IMU)/.test(k)), 'an Xbox-style pad has no motion sensors to map');
 
     const classic = Object.fromEntries(mappings.dolphinSection(store.get('wii-classic'), 'SDL/0/Pad'));
     assert.strictEqual(classic.Extension, 'Classic');
@@ -104,10 +106,22 @@ test('the gyro mapping drives the Wii Remote’s motion from the controller’s 
     const single = Object.fromEntries(mappings.dolphinSection(store.get('wii-nunchuk-gyro'), 'SDL/0/Nintendo Switch Pro Controller'));
     assert.strictEqual(single['IMUGyroscope/Pitch Up'], '`Gyro Pitch Up`');
     assert.strictEqual(single['IMUAccelerometer/Forward'], '`Accel Forward`');
-    assert.ok(!single['IMUIR/Recenter'] && !Object.keys(single).some(k => k.startsWith('IR/')), 'no pointer');
+    assert.strictEqual(single['IMUIR/Recenter'], '`Thumb R`', 'the gyro pointer is centred with a right stick click');
+    assert.strictEqual(single['IR/Left'], '`Right X-`', 'the right stick moves the pointer as well');
+    assert.strictEqual(single['Nunchuk/IMUAccelerometer/Up'], '`Accel L Up`', 'one controller: the left half is not there, so the Nunchuk has no motion of its own');
     const pair = Object.fromEntries(mappings.dolphinSection(store.get('wii-nunchuk-gyro'), 'SDL/0/Nintendo Switch Joy-Con (L/R)', { pair: true }));
     assert.strictEqual(pair['IMUGyroscope/Pitch Up'], '`Gyro R Pitch Up`');
     assert.strictEqual(pair['IMUAccelerometer/Forward'], '`Accel R Forward`');
+    assert.strictEqual(pair['Nunchuk/IMUAccelerometer/Forward'], '`Accel L Forward`', 'the left Joy-Con of a pair is the Nunchuk, motion included');
+});
+
+test('every Wii Remote mapping for a gamepad has the Nunchuk unless it is a Classic Controller one', () => {
+    const store = mappings.createStore(tmp());
+    for (const family of ['generic', 'nintendo']) {
+        const p = store.get(mappings.defaultFor('wii', family));
+        assert.strictEqual(p.extension, 'nunchuk', `${family}: a game that only takes a Remote and Nunchuk (LEGO Indiana Jones) needs its sticks there`);
+        assert.strictEqual(p.entries['Nunchuk/Stick/Up'], 'Left Y+');
+    }
 });
 
 test('mappings are made for a kind of controller, and the inputs on offer follow it', () => {
@@ -173,7 +187,7 @@ test('players: explicit choices win, automatic players take what is left, contro
     assert.strictEqual(slots[1].sw.id, 'switch-generic');
     assert.strictEqual(slots[0].gc.id, 'gc-nintendo');
     assert.strictEqual(slots[1].controller.name, 'Xbox 360 Controller');
-    assert.strictEqual(slots[1].wii.id, 'wii-classic', 'automatic mapping is the standard one for an Xbox-style pad');
+    assert.strictEqual(slots[1].wii.id, 'wii-nunchuk', 'automatic mapping is the standard one for an Xbox-style pad');
 
     // Two identical pads stay distinguishable by their order
     slots = players.resolve([xbox, second], { players: [{ device: 'auto' }, { device: players.padKey(second) }] }, get);
@@ -202,13 +216,13 @@ test('a mapping follows the kind of controller: Nintendo pads, Xbox-style pads a
     const xbox = pad(), pro = switchPad();
     let slots = players.resolve([pro, xbox], { players: [] }, get);
     assert.deepStrictEqual([slots[0].wii.id, slots[0].gc.id, slots[0].sw.id], ['wii-nunchuk-gyro', 'gc-nintendo', 'switch-nintendo']);
-    assert.deepStrictEqual([slots[1].wii.id, slots[1].gc.id, slots[1].sw.id], ['wii-classic', 'gc-default', 'switch-generic']);
+    assert.deepStrictEqual([slots[1].wii.id, slots[1].gc.id, slots[1].sw.id], ['wii-nunchuk', 'gc-default', 'switch-generic']);
     slots = players.resolve([], { players: [{ device: 'real' }] }, get);
     assert.strictEqual(slots[0].family, 'wiimote');
     assert.strictEqual(slots[0].wii.id, 'wii-remote');
     // A mapping for the wrong console, or a real-remote one picked for a gamepad, is not used
     slots = players.resolve([xbox], { players: [{ device: 'auto', wii: 'gc-default', gc: 'wii-classic', sw: 'wii-remote' }] }, get);
-    assert.deepStrictEqual([slots[0].wii.id, slots[0].gc.id, slots[0].sw.id], ['wii-classic', 'gc-default', 'switch-generic']);
+    assert.deepStrictEqual([slots[0].wii.id, slots[0].gc.id, slots[0].sw.id], ['wii-nunchuk', 'gc-default', 'switch-generic']);
     // a chosen one wins, and stays chosen when the player's controller changes
     slots = players.resolve([pro], { players: [{ device: 'auto', wii: 'wii-classic-nintendo' }] }, get);
     assert.strictEqual(slots[0].wii.id, 'wii-classic-nintendo');

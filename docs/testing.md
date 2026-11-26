@@ -89,9 +89,10 @@ Linux needs Bluetooth (the menu offers to install it) and kernel 5.16 or newer f
 
 ## 5. Joy-Cons as one controller, and rumble
 
-- **Windows:** Controllers page -> **Connect a controller** -> **Use two Joy-Cons as one controller**. Run the four steps (the driver
-  step shows a Windows permission prompt). Afterwards the Joy-Cons should show as one *Xbox 360 Controller* card, BetterJoy should start by
-  itself when the menu starts, and games should see one pad. Check `[BETTERJOY]` lines in the terminal.
+- **Windows:** pair both Joy-Cons in Windows' Bluetooth settings. On the Controllers page they show as two Switch controller
+  cards; hold L on one and R on the other together and they become one *Joy-Con pair* card. Press A on a Joy-Con in the menu:
+  it should choose (not go back). In a Wii game the left stick is the Nunchuk, the right stick moves the pointer, and turning
+  the right Joy-Con aims. In Ryujinx, set the pair up once under Input; it should still be there the next time.
 - **Linux:** same screen: install joycond (password), pair both Joy-Cons, **Turn on**, press L + R together. One
   *Nintendo Switch Combined Joy-Cons* card replaces the two halves.
 - **Rumble:** with a wired Xbox controller start a Wii or GameCube game and trigger rumble; in Ryujinx check
