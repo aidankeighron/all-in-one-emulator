@@ -1495,8 +1495,39 @@
         }
         window.addEventListener('resize', () => { if (fitGrid()) { if (page >= pageCount()) page = pageCount() - 1; renderPage(); if (sheet.open) setSheetHeight(); } });
 
+        // What the game tiles on screen show (pictures aside). The list is fetched again while pictures download (every few
+        // seconds) and after other changes: when the tiles would be the same, they are kept. Rebuilt under a resting mouse,
+        // the tile there lost its hover look and got it back a moment later: the flicker on the home screen.
+        let gridKey = null;
+        const tilesKey = () => (onControllers() ? null : JSON.stringify([page, pageCount(), COLUMNS, CHANNELS_PER_PAGE,
+            (gamePages()[page] || []).map(g => [g.path, g.title, g.console, !!g.installed, !!g.favorite, !!g.remote, g.size || 0])]));
+
+        // Pictures that arrived since the tiles were made go into them as they are
+        function patchArt(grid) {
+            for (const game of gamePages()[page] || []) {
+                if (!game.art || game.remote) continue;
+                const tile = [...grid.querySelectorAll('.wii-channel')].find(t => t.dataset.path === game.path);
+                if (!tile) continue;
+                const old = tile.querySelector('img.channel-art');
+                if (old && old.getAttribute('src') === game.art) continue;
+                const img = document.createElement('img');
+                img.className = 'channel-art'; img.alt = ''; img.draggable = false; img.src = game.art;
+                img.addEventListener('error', () => { img.remove(); tile.classList.remove('has-art'); });
+                if (old) old.replaceWith(img); else tile.insertBefore(img, tile.querySelector('.channel-badge'));
+                tile.classList.add('has-art');
+            }
+        }
+
         function renderPage() {
             const grid = document.getElementById('channel-grid');
+            const key = tilesKey();
+            if (key !== null && key === gridKey && grid.querySelector('.wii-channel')) {
+                patchArt(grid);
+                ensureValidFocus();
+                renderFocus();
+                return;
+            }
+            gridKey = key;
             grid.innerHTML = '';
             grid.classList.toggle('pads', onControllers());
             if (onControllers()) { grid.style.gridTemplateColumns = grid.style.gridTemplateRows = grid.style.maxWidth = grid.style.maxHeight = ''; }
@@ -1552,6 +1583,7 @@
                 } else if (game) {
                     const badgeClass = `badge-${game.console}`;
                     channel.className = `wii-channel ${game.installed ? '' : 'channel-uninstalled'} ${game.art ? 'has-art' : ''}`;
+                    channel.dataset.path = game.path;
                     channel.innerHTML = `
                         ${starHtml(game)}
                         ${game.art ? `<img class="channel-art" src="${game.art}" alt="" draggable="false">` : ''}
@@ -1744,9 +1776,7 @@
             // (a Switch controller with no address is two joined Joy-Cons: the server finds them — except on Windows,
             // where this app does not control Bluetooth at all, so there is nothing to look up there either)
             if (!addresses.length && padPlatform === 'win32') {
-                return showToast(c.kind === 'switch' && padBetterjoy
-                    ? `${c.name} is BetterJoy's stand-in for your Joy-Con/Pro Controller. Turn the controller off, or close BetterJoy, to remove it from this list.`
-                    : `${c.name}: this app does not control Bluetooth or USB on Windows. Unplug it (if wired) or turn it off (if wireless) to remove it from this list.`);
+                return showToast(`${c.name}: this app does not control Bluetooth or USB on Windows. Unplug it (if wired) or turn it off (if wireless) to remove it from this list.`);
             }
             if (!addresses.length && c.kind !== 'switch') return showToast(`${c.name} is plugged in. Unplug it to remove it.`);
             const again = c.kind === 'wiimote' ? 'press a button on it' : 'press any button on it';
@@ -2018,7 +2048,6 @@
 
         // Windows has no way for the server to see controllers, so this window says which it can see
         let padPlatform = null;
-        let padBetterjoy = false;   // is BetterJoy standing in for the real Switch controllers right now
         async function reportPads() {
             const pads = (navigator.getGamepads ? [...navigator.getGamepads()] : []).filter(Boolean).map(g => ({ index: g.index, id: g.id, mapping: g.mapping }));
             await fetch('/api/controllers/report', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pads }) });
@@ -2037,7 +2066,6 @@
             padKeyMap = data.keyMap || {};
             padProfiles = data.profiles || [];
             padAccess = data.wiimoteAccess || null;
-            padBetterjoy = !!data.betterjoy;
             updateControllerChip();
             return changed;
         }
@@ -3926,7 +3954,7 @@
         async function pairRefresh() {
             try { pair.info = await (await fetch('/api/bluetooth')).json(); pair.job = pair.info.job || null; pair.error = ''; }
             catch { pair.error = 'The menu could not check Bluetooth.'; }
-            try { pair.helper = await (await fetch('/api/betterjoy')).json(); } catch { pair.helper = null; }
+            try { pair.helper = await (await fetch('/api/joycon-helper')).json(); } catch { pair.helper = null; }
             if (pair.open) renderPair();
         }
 
@@ -3988,6 +4016,7 @@
                 body = `<ol class="pair-steps">
                         <li>Press <b>Open Bluetooth settings</b>, then <b>Add a device &rarr; Bluetooth</b>.</li>
                         <li>Switch controller: hold its sync button. Wii Remote: press <b>1</b> + <b>2</b>, pick <b>Nintendo RVL-CNT-01</b> and connect without a code.</li>
+                        <li>Two Joy-Cons as one player: on the Controllers page, hold L on one and R on the other together.</li>
                     </ol>`;
                 add('Open Bluetooth settings', 'open-settings', true);
                 if (pair.helper && pair.helper.supported) add('Two Joy-Cons as one', 'helper-open');
@@ -4058,14 +4087,14 @@
             return '<div class="guide-box off">Dolphin needs your permission once to use a Wii Remote connected to this computer.</div>';
         }
 
-        // ----- two Joy-Cons as one: BetterJoy on Windows, joycond on Linux (the server picks, see lib/betterjoy.js, lib/joycond.js) -----
+        // ----- two Joy-Cons as one in every program: joycond on Linux (lib/joycond.js). Windows needs no helper -----
         function helperStartPoll() {
             clearInterval(pair.helperPoll);
             pair.helperPoll = setInterval(async () => {
                 if (!pair.open || pair.screen !== 'helper') return clearInterval(pair.helperPoll);
                 try {
                     const before = pair.helper && pair.helper.job && pair.helper.job.phase;
-                    pair.helper = await (await fetch('/api/betterjoy')).json();
+                    pair.helper = await (await fetch('/api/joycon-helper')).json();
                     const phase = pair.helper.job && pair.helper.job.phase;
                     if (phase !== 'running') { clearInterval(pair.helperPoll); if (before === 'running') { Sfx.play(phase === 'done' ? 'select' : 'error'); refreshControllers(); } }
                     renderPair();
@@ -4073,11 +4102,11 @@
             }, 800);
         }
 
-        // joycond's install, on and off need the administrator (BetterJoy on Windows asks in its own way)
+        // joycond's install, on and off need the administrator
         function helperCall(step) { return withAdmin(() => helperCallNow(step)); }
         async function helperCallNow(step) {
             try {
-                const res = await fetch(`/api/betterjoy/${step}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+                const res = await fetch(`/api/joycon-helper/${step}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
                 const data = await res.json();
                 if (!res.ok) pair.error = data.message || 'That did not work.'; else { pair.error = ''; pair.helper = data; }
             } catch { pair.error = 'The menu could not be reached.'; }
@@ -4087,22 +4116,15 @@
 
         function helperScreen() {
             const h = pair.helper, job = h.job;
-            const win = h.name === 'BetterJoy';
             const buttons = [];
             const add = (label, act, primary) => buttons.push({ label, act, primary });
-            const title = win ? 'Joy-Cons as one controller (BetterJoy)' : 'Joy-Cons as one controller (joycond)';
-            const steps = win ? [
-                { done: h.driver, name: 'Controller driver', text: 'ViGEmBus lets BetterJoy make virtual Xbox controllers. Windows asks for permission once: choose Yes.', act: 'helper:driver', label: 'Install the driver' },
-                { done: h.installed, name: 'BetterJoy', text: 'The menu downloads it and unpacks it into its own folder.', act: 'helper:install', label: 'Download BetterJoy' },
-                { done: null, name: 'Pair the Joy-Cons in Windows', text: 'Hold each Joy-Con’s sync button and add both under Bluetooth. Skip this if they are already paired.', act: 'open-settings', label: 'Open Bluetooth settings' },
-                { done: h.enabled && h.running, name: 'Turn it on', text: 'The menu then starts BetterJoy by itself, also before every game. A left and a right Joy-Con become one Xbox controller, with rumble and motion.', act: 'helper:enable', label: 'Turn on' }
-            ] : [
+            const title = 'Joy-Cons as one controller (joycond)';
+            const steps = [
                 { done: h.driver, name: 'Linux kernel', text: h.driver ? 'This kernel can use Switch controllers.' : 'This kernel is older than 5.16 and cannot use Switch controllers. Update the system.', act: null },
                 { done: h.installed, name: 'joycond', text: 'A small service that joins two Joy-Cons into one controller. It is installed from the system’s packages; you are asked for your password once.', act: 'helper:install', label: 'Install joycond' },
                 { done: h.running, name: 'Turn it on', text: 'Starts joycond now and at every boot (password once). Then press L on the left Joy-Con and R on the right one together: they become one controller. SL + SR together makes a single Joy-Con a sideways controller.', act: 'helper:enable', label: 'Turn on' }
             ];
-            let body = `<p>${win ? 'BetterJoy makes Joy-Cons and the Pro Controller look like Xbox controllers, and joins a left and right Joy-Con into one.' : 'joycond joins a left and a right Joy-Con into one controller.'} After this one-time setup it runs by itself, like every other controller.</p>
-                ${win ? '<div class="guide-box">Usually not needed: Dolphin and Ryujinx read Switch controllers themselves, motion included. If the controls lag behind in games, turn BetterJoy off.</div>' : ''}
+            let body = `<p>joycond joins a left and a right Joy-Con into one controller. After this one-time setup it runs by itself, like every other controller.</p>
                 <ol class="pair-steps" style="list-style:none;padding-left:0">${steps.map(st => `<li style="margin-bottom:8px"><b>${st.done ? '✓' : '○'} ${escapeHtml(st.name)}</b><br><span style="font-size:13px;color:var(--tx-6b747c)">${escapeHtml(st.text)}</span></li>`).join('')}</ol>`;
             if (job && job.phase === 'running') {
                 body += `<div class="guide-box"><span class="spinner" style="vertical-align:-3px;margin-right:8px"></span>${escapeHtml(job.message || 'Working…')}</div>`;
@@ -4763,9 +4785,18 @@
             if (target) target.scrollTop += amount * 24;
         }
 
+        // A and B count when they go down, not while they are held. Screens that ask "press A again" (Quit to menu, Reset,
+        // Close menu) then take the second press however quickly it comes: with only a pause after each press, a natural
+        // press-press landed in that pause and was lost, so it took three presses.
+        let padPrev = { a: false, b: false };
         function pollGamepad() {
             const st = readPads();
             const now = Date.now();
+            const pressA = st.a && !padPrev.a, pressB = st.b && !padPrev.b;
+            padPrev = { a: st.a, b: st.b };
+            // Everywhere below, A and B are that one press: a held button never repeats, nor reaches the screen it opened
+            st.a = pressA; st.b = pressB;
+            const ready = now > lastInputTime;      // past the pause given to a screen that just opened
             updatePadStatus(st, now);
             if (st.scroll && st.count > 0 && (!gameRunning || pause.open)) padScroll(st.scroll);
             const pairChord = pair.open && pair.screen !== 'helper' && !joycondOn();
@@ -4786,10 +4817,10 @@
                         else if (st.right) { pwMove(0, 1); lastInputTime = now; }
                     }
                 } else if (cf.open) {
-                    if (now - lastInputTime > 180) {
-                        if (st.a) { confirmPress(); lastInputTime = now + 300; }
-                        else if (st.b) { confirmClose(); lastInputTime = now + 400; }
-                        else if (st.left || st.up) { confirmMove(-1); lastInputTime = now; }
+                    if (pressA && ready) { confirmPress(); lastInputTime = now; }
+                    else if (pressB && ready) { confirmClose(); lastInputTime = now + 400; }
+                    else if (now - lastInputTime > 180) {
+                        if (st.left || st.up) { confirmMove(-1); lastInputTime = now; }
                         else if (st.right || st.down) { confirmMove(1); lastInputTime = now; }
                     }
                 } else if (pm.open) {
@@ -4807,10 +4838,10 @@
                         else if (st.up) { ddMove(-1); lastInputTime = now; }
                     }
                 } else if (mps.open) {
-                    if (now - lastInputTime > 150) {
-                        const dir = st.down ? 'down' : st.up ? 'up' : st.right ? 'right' : st.left ? 'left' : null;
-                        if (st.a) { mpsPress(1); lastInputTime = now + 250; }
-                        else if (st.x) { mpsPress(-1); lastInputTime = now + 250; }
+                    const dir = st.down ? 'down' : st.up ? 'up' : st.right ? 'right' : st.left ? 'left' : null;
+                    if (pressA && ready) { mpsPress(1); lastInputTime = now; }      // "press Delete again" takes a quick second press
+                    else if (now - lastInputTime > 150) {
+                        if (st.x) { mpsPress(-1); lastInputTime = now + 250; }
                         else if (st.b) { closeMaps(); lastInputTime = now + 400; }
                         else if (dir) { mpsMove(dir); lastInputTime = now; }
                     }
@@ -4832,10 +4863,10 @@
                         else if (st.left) { pairMove('left'); lastInputTime = now; }
                     }
                 } else if (pause.open) {
-                    if (now - lastInputTime > 180) {
-                        if (st.a) { pausePress(); lastInputTime = now + 400; }
-                        else if (st.b) { pauseResume(); lastInputTime = now + 400; }
-                        else if (st.down) { pauseMove('down'); lastInputTime = now; }
+                    if (pressA && ready) { pausePress(); lastInputTime = now; }
+                    else if (pressB && ready) { pauseResume(); lastInputTime = now + 400; }
+                    else if (now - lastInputTime > 180) {
+                        if (st.down) { pauseMove('down'); lastInputTime = now; }
                         else if (st.up) { pauseMove('up'); lastInputTime = now; }
                         else if (st.right) { pauseMove('right'); lastInputTime = now; }
                         else if (st.left) { pauseMove('left'); lastInputTime = now; }
@@ -4848,11 +4879,11 @@
                 } else if (sheet.open) {
                     if (now - lastInputTime > 180) sheetInput(st, now);
                 } else if (settingsOpen) {
-                    if (now - lastInputTime > 180) {
-                        const dir = st.down ? 'down' : st.up ? 'up' : st.right ? 'right' : st.left ? 'left' : null;
-                        if (st.a) { pressFocused(); lastInputTime = now + 300; }
-                        else if (st.b) { closeSettings(); } // B closes settings
-                        else if (st.rb) { cycleTab(1); lastInputTime = now + 150; }
+                    const dir = st.down ? 'down' : st.up ? 'up' : st.right ? 'right' : st.left ? 'left' : null;
+                    if (pressA && ready) { pressFocused(); lastInputTime = now; }
+                    else if (pressB && ready) { closeSettings(); } // B closes settings
+                    else if (now - lastInputTime > 180) {
+                        if (st.rb) { cycleTab(1); lastInputTime = now + 150; }
                         else if (st.lb) { cycleTab(-1); lastInputTime = now + 150; }
                         else if (dir) { moveFocus(dir); lastInputTime = now; }
                     }

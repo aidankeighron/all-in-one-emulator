@@ -2,6 +2,7 @@ const http = require('http');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { execFile } = require('child_process');
 
 const config = require('./lib/config');
 const platformLib = require('./lib/platform');
@@ -28,7 +29,6 @@ const library = require('./lib/library');
 const bluetoothLib = require('./lib/bluetooth');
 const mappingsLib = require('./lib/mappings');
 const playersLib = require('./lib/players');
-const betterjoyLib = require('./lib/betterjoy');
 const joycondLib = require('./lib/joycond');
 const systemLib = require('./lib/system');
 const wifiLib = require('./lib/wifi');
@@ -156,37 +156,47 @@ function artworkFor(romsDir) {
 
 const mappings = mappingsLib.createStore(config.mappingsDir);
 
-// BetterJoy (Windows) turns Switch controllers into virtual Xbox pads. While it runs, those stand in for the real ones.
-// Linux has the same thing in joycond: it joins the two Joy-Cons into one controller in the system, so no pad is swapped here
-const helper = runner.platform === 'win32'
-    ? betterjoyLib.createBetterJoy({ platform: runner.platform, emulatorsDir: config.emulatorsDir, getUrls: config.getEmulatorUrls })
-    : joycondLib.createJoycond({ log: console.log });
+// joycond (Linux) joins two Joy-Cons into one controller in the system. Windows needs no helper: Dolphin and Ryujinx read Joy-Cons
+// and Pro Controllers over Bluetooth themselves, motion included, and Ryujinx joins a left and a right Joy-Con by itself.
+// (The menu used to offer BetterJoy there. Its virtual Xbox pads put a second program on every Joy-Con, which made the
+// controls lag in games, swapped A and B in the menu and took the motion away from Dolphin. See forgetBetterJoy.)
+const NO_HELPER = { supported: false, name: 'none', running: async () => false, status: async () => ({ supported: false }) };
+const helper = runner.platform === 'win32' ? NO_HELPER : joycondLib.createJoycond({ log: console.log });
 const bj = { running: false, job: null };
-// Running counts, whoever started it: its virtual pads stand in for the real controllers either way (BetterJoy started by
-// hand with the menu's switch off would otherwise list every Joy-Con twice, the real one and its stand-in)
-const betterjoyOn = () => helper.name === 'BetterJoy' && bj.running;
-async function refreshBetterJoy() {
+async function refreshHelper() {
     if (!helper.supported) return;
     try { bj.running = await helper.running(); } catch { bj.running = false; }
 }
-// Starts BetterJoy when the person turned it on and it is installed; never stops a game or the menu from starting
-async function ensureBetterJoy() {
-    if (helper.name !== 'BetterJoy' || !helper.supported || !config.getBetterJoy().enabled || !helper.installed()) return;
-    try { await helper.start(); } catch (err) { console.error(`[BETTERJOY] ${err.message}`); }
-    await refreshBetterJoy();
+
+// Windows: a BetterJoy the menu installed before is stopped and its folder removed, once. (Its ViGEmBus driver is a part of
+// Windows now and does nothing by itself; it is removed from Windows' "Installed apps" if wanted.)
+function forgetBetterJoy() {
+    if (runner.platform !== 'win32') return;
+    const dir = path.join(config.emulatorsDir, 'betterjoy');
+    if (!fs.existsSync(dir)) return;
+    console.log('[CONTROLLERS] BetterJoy is no longer used: stopping it and removing the copy the menu installed');
+    execFile('taskkill', ['/IM', 'BetterJoyForCemu.exe', '/F'], { windowsHide: true }, () => {
+        setTimeout(() => {
+            try { fs.rmSync(dir, { recursive: true, force: true }); } catch (err) { console.error(`[CONTROLLERS] ${err.message}`); }
+        }, 1500);
+    });
+    config.setJoyconHelper({ enabled: false });
 }
 
 // What is plugged in now, with any Switch controllers the person put together shown as one
 const wiimoteReader = wiimoteLib.createReader();
 const keepOrder = controllers.createOrder();
-const detectPads = () => keepOrder(controllers.detect({ platform: runner.platform, merge: config.getJoyconPairs(), hideNintendo: betterjoyOn() }));
+const detectPads = () => keepOrder(controllers.detect({ platform: runner.platform, merge: config.getJoyconPairs(), }));
 
 // Writes the controller settings of one emulator (or all installed ones) from what is plugged in now
 // The last problem lines in the emulator's own log file (Ryujinx keeps one per run), for a game that closed right away
-function emulatorLogTail(emu) {
+// Ryujinx writes its logs under the data folder it was started with: the save slot's own folder when a slot was played
+function emulatorLogTail(emu, slotRoot = null) {
     try {
         if (emu.id !== 'ryujinx') return [];
-        const dir = path.join(slotAdapters.get('ryujinx').dataRoot(), 'Logs');
+        const dirs = [slotRoot && path.join(slotRoot, 'Logs'), path.join(slotAdapters.get('ryujinx').dataRoot(), 'Logs')].filter(Boolean);
+        const dir = dirs.find(d => fs.existsSync(d));
+        if (!dir) return [];
         const newest = fs.readdirSync(dir).filter(n => /\.log$/i.test(n)).map(n => ({ n, t: fs.statSync(path.join(dir, n)).mtimeMs })).sort((a, b) => b.t - a.t)[0];
         if (!newest || Date.now() - newest.t > 60000) return [];
         const lines = fs.readFileSync(path.join(dir, newest.n), 'utf8').split('\n').map(l => l.trim()).filter(Boolean);
@@ -225,7 +235,7 @@ function setupControllers(emulatorIds, { game = null } = {}) {
     }
     const connected = detectPads();
     const results = emulatorIds.map(id => {
-        const result = inputconfig.apply(id, connected, { ...platformCtx, wiiRemotes: config.getWiiRemotes(), game: id === 'dolphin' ? game : null, players: config.getPlayers(), profiles: mappings, betterjoyMotion: betterjoyOn() ? betterjoyLib.MOTION_PORT : 0, joyconsSplit: config.getJoyconPairs().splits.length > 0 });
+        const result = inputconfig.apply(id, connected, { ...platformCtx, wiiRemotes: config.getWiiRemotes(), game: id === 'dolphin' ? game : null, players: config.getPlayers(), profiles: mappings, joyconsSplit: config.getJoyconPairs().splits.length > 0 });
         console.log(`[PADS] ${id}: ${result.status}${result.message ? ` (${result.message})` : ''}`);
         return result;
     });
@@ -300,7 +310,6 @@ async function startGame(relPath, slotId, onGameState) {
     }
 
     await runner.grantAccess(emu, romsDir);
-    await ensureBetterJoy();
     // Dolphin plays Wii and GameCube games: each gets only its own console's controllers
     const gameConsole = emu.id === 'dolphin' && ['wii', 'gamecube'].includes(folder) ? folder : null;
     if (config.getAutoControllers() && !skipSetup.delete(emu.id)) setupControllers([emu.id], { game: gameConsole });
@@ -369,7 +378,7 @@ async function startGame(relPath, slotId, onGameState) {
         if (!asked && Date.now() - started < 8000) {
             // It ended by itself right after starting. If the menu had just changed its controller settings, put them back
             // (and leave them alone next time) in case they are what it could not start with.
-            const logTail = emulatorLogTail(emu);
+            const logTail = emulatorLogTail(emu, slot && slotAdapters.has(emu.id) ? slotAdapters.get(emu.id).slotRoot(slot.id) : null);
             const tail = ((logTail.length ? logTail : (stderr || '').trim().split('\n')).slice(-3)).join(' | ');
             if (logTail.length) console.error(`[LAUNCH] ${emu.name} log:\n${logTail.join('\n')}`);
             const undone = inputconfig.restore(emu.id, platformCtx);
@@ -649,47 +658,46 @@ async function handleSystem(route, req, res) {
     return false;
 }
 
-// BetterJoy: what the setup screen shows, and the steps it runs (one at a time, polled while running)
-async function betterjoyView() {
+// The Joy-Con helper (joycond, Linux): what its setup screen shows, and the steps it runs (one at a time, polled while running)
+async function helperView() {
     const st = await helper.status();
-    bj.running = st.running;
-    return { ...st, name: helper.name, enabled: config.getBetterJoy().enabled, job: bj.job && { kind: bj.job.kind, phase: bj.job.phase, message: bj.job.message, lines: bj.job.lines.slice(-4) } };
+    bj.running = !!st.running;
+    return { ...st, name: helper.name, enabled: config.getJoyconHelper().enabled, job: bj.job && { kind: bj.job.kind, phase: bj.job.phase, message: bj.job.message, lines: bj.job.lines.slice(-4) } };
 }
 
-function runBetterJoyStep(kind, work) {
+function runHelperStep(kind, work) {
     if (bj.job && bj.job.phase === 'running') return false;
     const job = bj.job = { kind, phase: 'running', message: '', lines: [] };
     const onLine = line => { job.message = line; job.lines.push(line); };
     work(onLine).then(() => { job.phase = 'done'; if (!job.message) job.message = 'Done'; })
-        .catch(err => { job.phase = 'failed'; job.message = err.message; console.error(`[BETTERJOY] ${kind}: ${err.message}`); });
+        .catch(err => { job.phase = 'failed'; job.message = err.message; console.error(`[JOYCOND] ${kind}: ${err.message}`); });
     return true;
 }
 
-async function handleBetterJoy(route, req, res) {
+async function handleHelper(route, req, res) {
     try {
-        if (route === 'GET /api/betterjoy') return sendJson(res, 200, await betterjoyView()), true;
+        if (route === 'GET /api/joycon-helper') return sendJson(res, 200, await helperView()), true;
         if (!route.startsWith('POST ')) return false;
-        if (!helper.supported) return sendJson(res, 409, { error: 'unsupported', message: 'This system has no Joy-Con helper' }), true;
-        const step = route.slice('POST /api/betterjoy/'.length);
-        if (step === 'driver') runBetterJoyStep('driver', onLine => helper.installDriver({ onLine }));
-        else if (step === 'install') runBetterJoyStep('install', onLine => helper.install({ onLine }));
+        if (!helper.supported) return sendJson(res, 409, { error: 'unsupported', message: 'This system needs no Joy-Con helper' }), true;
+        const step = route.slice('POST /api/joycon-helper/'.length);
+        if (step === 'install') runHelperStep('install', onLine => helper.install({ onLine }));
         else if (step === 'enable') {
-            if (!helper.installed()) return sendJson(res, 409, { error: 'not_installed', message: 'Install BetterJoy first' }), true;
-            if (!helper.driverInstalled()) return sendJson(res, 409, { error: 'no_driver', message: helper.name === 'BetterJoy' ? 'Install the controller driver first' : 'This kernel cannot use Switch controllers' }), true;
-            config.setBetterJoy({ enabled: true });
-            runBetterJoyStep('enable', async onLine => { onLine(`Starting ${helper.name}…`); if (helper.name === 'BetterJoy') await ensureBetterJoy(); else { await helper.start({ onLine }); await refreshBetterJoy(); } onLine(bj.running ? `${helper.name} is running` : `${helper.name} was started, give it a few seconds`); await syncNow(); });
+            if (!helper.installed()) return sendJson(res, 409, { error: 'not_installed', message: `Install ${helper.name} first` }), true;
+            if (!helper.driverInstalled()) return sendJson(res, 409, { error: 'no_driver', message: 'This kernel cannot use Switch controllers' }), true;
+            config.setJoyconHelper({ enabled: true });
+            runHelperStep('enable', async onLine => { onLine(`Starting ${helper.name}…`); await helper.start({ onLine }); await refreshHelper(); onLine(bj.running ? `${helper.name} is running` : `${helper.name} was started, give it a few seconds`); await syncNow(); });
         } else if (step === 'disable') {
-            config.setBetterJoy({ enabled: false });
+            config.setJoyconHelper({ enabled: false });
             await helper.stop(); bj.running = false;
             await syncNow();
         } else if (step === 'uninstall') {
-            config.setBetterJoy({ enabled: false });
+            config.setJoyconHelper({ enabled: false });
             await helper.uninstall(); bj.running = false;
             await syncNow();
         } else return false;
-        return sendJson(res, 200, await betterjoyView()), true;
+        return sendJson(res, 200, await helperView()), true;
     } catch (err) {
-        console.error(`[BETTERJOY] ${route}: ${err.message}`);
+        console.error(`[JOYCOND] ${route}: ${err.message}`);
         return sendJson(res, 500, { error: 'failed', message: err.message }), true;
     }
 }
@@ -771,7 +779,6 @@ function controllersView() {
     for (const c of controllers.detect({ platform: runner.platform })) if (c.keys && c.keys.length) keyMap[`${c.vendor}:${c.product}`] = c.keys;
     return {
         platform: runner.platform,
-        betterjoy: betterjoyOn(),
         controllers: ordered,
         keyMap,
         slots: view.slots.map(s => ({ index: s.index, mode: s.mode, controller: s.controller ? s.controller.name : (s.mode === 'real' ? 'Wii Remote' : null) })),
@@ -925,9 +932,7 @@ async function handlePlayers(route, req, res) {
                 if (!addresses.length && c.kind === 'switch' && runner.platform !== 'win32') addresses = await joyconsBehind(list);
                 if (!addresses.length) {
                     const message = runner.platform === 'win32'
-                        ? (c.kind === 'switch' && betterjoyOn()
-                            ? `${c.name} is BetterJoy's stand-in for your Joy-Con/Pro Controller. This app does not control Bluetooth on Windows — turn the controller off, or close BetterJoy, to remove it from this list.`
-                            : `${c.name}: this app does not control Bluetooth or USB on Windows. Unplug it (if wired) or turn it off (if wireless) to remove it from this list.`)
+                        ? `${c.name}: this app does not control Bluetooth or USB on Windows. Unplug it (if wired) or turn it off (if wireless) to remove it from this list.`
                         : c.kind === 'switch'
                             ? `${c.name}: Bluetooth has no Joy-Con connected for it. Turn the Joy-Cons off to remove it.`
                             : `${c.name} is plugged in. Unplug it to remove it.`;
@@ -1167,8 +1172,8 @@ function createServer(onGameState) {
                 if (url.pathname.startsWith('/api/system')) {
                     if (await handleSystem(route, req, res)) return;
                 }
-                if (url.pathname.startsWith('/api/betterjoy')) {
-                    if (await handleBetterJoy(route, req, res)) return;
+                if (url.pathname.startsWith('/api/joycon-helper')) {
+                    if (await handleHelper(route, req, res)) return;
                 }
                 if (url.pathname.startsWith('/api/bluetooth')) {
                     if (await handleBluetooth(route, req, res)) return;
@@ -1320,8 +1325,8 @@ function start({ port = 3000, onGameState, onPause, onRestart, onActivity } = {}
             console.log(`Menu running at: http://localhost:${actual}`);
             console.log(`ROMs folder: ${config.getRomsDir()}`);
             processRoms(); // pick up any zips dropped in while the app was closed
-            ensureBetterJoy();
-            if (helper.supported) setInterval(refreshBetterJoy, 3000).unref();
+            forgetBetterJoy();
+            if (helper.supported) { refreshHelper(); setInterval(refreshHelper, 3000).unref(); }
             if (system.refreshKiosk()) console.log('[SYSTEM] kiosk mode now starts the menu again if it closes by accident');
             system.refreshKioskSettings().catch(() => {});
             watchControllers();

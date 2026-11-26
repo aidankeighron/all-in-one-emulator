@@ -153,24 +153,16 @@ test('button codes are listed in the order the joystick device numbers them', ()
     assert.deepStrictEqual(dev.keys, [0x130, 0x131, 0x13c, 0x197, 0x19c, 0x101, 0x102]);
 });
 
-// ---- Windows: BetterJoy's virtual Xbox pad stands in for a real Joy-Con/Pro Controller
-test('fromGamepadApi labels an XInput pad as switch when BetterJoy stands in for it', () => {
-    const pads = [{ index: 0, id: 'Xbox 360 Controller (XInput STANDARD GAMEPAD)', mapping: 'standard' }];
-    const [c] = controllers.fromGamepadApi(pads, { treatXinputAsSwitch: true });
-    assert.strictEqual(c.kind, 'switch');
-    assert.strictEqual(c.label, 'Switch Controller');
-});
-
-test('fromGamepadApi keeps an XInput pad labelled xbox when BetterJoy is not involved', () => {
+// ---- Windows: what the browser reports
+test('fromGamepadApi labels an XInput pad as an Xbox controller', () => {
     const pads = [{ index: 0, id: 'Xbox 360 Controller (XInput STANDARD GAMEPAD)', mapping: 'standard' }];
     const [c] = controllers.fromGamepadApi(pads);
     assert.strictEqual(c.kind, 'xbox');
     assert.strictEqual(c.label, 'Xbox Controller');
 });
 
-test('detect(win32) relabels the reported pad as switch when hideNintendo is on and does not filter it out', () => {
-    controllers.report([{ index: 0, id: 'Xbox 360 Controller (XInput STANDARD GAMEPAD)', mapping: 'standard' }]);
-    const found = controllers.detect({ platform: 'win32', hideNintendo: true });
-    assert.strictEqual(found.length, 1);
-    assert.strictEqual(found[0].kind, 'switch');
+test('detect(win32) lists a Joy-Con as the Switch controller it is (no stand-in pads any more)', () => {
+    controllers.report([{ index: 0, id: 'Joy-Con (L) (STANDARD GAMEPAD Vendor: 057e Product: 2006)', mapping: 'standard' }, { index: 1, id: 'Xbox 360 Controller (XInput STANDARD GAMEPAD)', mapping: 'standard' }]);
+    const found = controllers.detect({ platform: 'win32' });
+    assert.deepStrictEqual(found.map(c => c.kind), ['switch', 'xbox']);
 });

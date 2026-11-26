@@ -162,7 +162,7 @@ test('knownEntry does not hand the same old entry to two different pads of the s
     assert.strictEqual(e2.id, 'id-B');
 });
 
-test('Ryujinx on Windows: two BetterJoy pads sharing one generic name get two different Ryujinx players, not one', () => {
+test('Ryujinx on Windows: two pads sharing one generic name get two different Ryujinx players, not one', () => {
     const home = fs.mkdtempSync(path.join(os.tmpdir(), 'ryuw2-'));
     const dir = path.join(home, 'AppData', 'Roaming', 'Ryujinx');
     fs.mkdirSync(dir, { recursive: true });
@@ -273,7 +273,7 @@ test('Ryujinx: the Switch mapping is written, a layout made in Ryujinx is kept u
     assert.strictEqual(read().length, 1);
 });
 
-test('Ryujinx: rumble is on out of the box, and with BetterJoy running motion comes from its server', () => {
+test('Ryujinx: rumble is on out of the box, and motion an older menu pointed at BetterJoy comes from the controller again', () => {
     const mappings = require('../ui/lib/mappings');
     const profiles = mappings.createStore(tmpHome());
     const home = tmpHome();
@@ -287,13 +287,17 @@ test('Ryujinx: rumble is on out of the box, and with BetterJoy running motion co
     assert.notStrictEqual(read().motion.motion_backend, 'CemuHook');
     // a layout made in Ryujinx is kept on automatic, but rumble still comes on
     const mine = read(); mine.rumble.enable_rumble = false; mine.right_joycon.button_a = 'Y';
+    mine.motion = { ...mine.motion, motion_backend: 'CemuHook', dsu_server_host: '127.0.0.1', dsu_server_port: 26760 };
     fs.writeFileSync(path.join(dir, 'Config.json'), JSON.stringify({ input_config: [mine] }));
-    inputconfig.apply('ryujinx', [xpad], { home, platform: 'linux', profiles, betterjoyMotion: 26760 });
+    inputconfig.apply('ryujinx', [xpad], { home, platform: 'linux', profiles });
     assert.strictEqual(read().right_joycon.button_a, 'Y');
     assert.strictEqual(read().rumble.enable_rumble, true);
+    assert.strictEqual(read().motion.motion_backend, 'GamepadDriver');
+    // a motion server of the person's own (another computer, another port) is left alone
+    const own = read(); own.motion = { ...own.motion, motion_backend: 'CemuHook', dsu_server_host: '192.168.1.5', dsu_server_port: 26760 };
+    fs.writeFileSync(path.join(dir, 'Config.json'), JSON.stringify({ input_config: [own] }));
+    inputconfig.apply('ryujinx', [xpad], { home, platform: 'linux', profiles });
     assert.strictEqual(read().motion.motion_backend, 'CemuHook');
-    assert.strictEqual(read().motion.dsu_server_port, 26760);
-    assert.strictEqual(read().motion.dsu_server_host, '127.0.0.1');
 });
 
 test('Ryujinx: the config from before the menu changed it can be put back', () => {

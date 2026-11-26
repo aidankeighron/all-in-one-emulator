@@ -1,4 +1,4 @@
-// Settings changed in an emulator while it plays a save slot are kept; Dolphin and BetterJoy do not fight over a Joy-Con;
+// Settings changed in an emulator while it plays a save slot are kept; Dolphin reads Joy-Cons itself on Windows;
 // Ryujinx is set up for smoother play
 const test = require('node:test');
 const assert = require('node:assert');
@@ -86,13 +86,12 @@ test('the Ryujinx adapter settles into its real folder', () => {
     assert.strictEqual(fs.readFileSync(path.join(real, 'Config.json'), 'utf8'), '{"a": 2}');
 });
 
-// ---------- Dolphin and BetterJoy ----------
+// ---------- Dolphin on Windows ----------
 
 const joycon = (side, n, over = {}) => ({ id: `pad${n}`, name: `Joy-Con (${side})`, kind: 'switch', vendor: '057e', product: side === 'L' ? '2006' : '2007', js: null, sdlIndex: n, nameIndex: 0, xinputIndex: null, pad: true, player: n + 1, ...over });
-const stand = n => ({ id: `pad${n}`, name: 'Xbox 360 Controller', kind: 'switch', vendor: '', product: '', js: null, sdlIndex: n, nameIndex: n, xinputIndex: n, pad: true, player: n + 1 });
 const dolphinIni = (home, env) => Ini.read(path.join(env.APPDATA, 'Dolphin Emulator', 'Config', 'Dolphin.ini'));
 
-test('Windows, no BetterJoy: Dolphin reads each Joy-Con itself, on its own, as the menu names it', () => {
+test('Windows: Dolphin reads each Joy-Con itself, on its own, as the menu names it', () => {
     const home = tmp('home'), env = { APPDATA: path.join(home, 'AppData', 'Roaming') };
     const r = inputconfig.apply('dolphin', [joycon('L', 0), joycon('R', 1)], { home, env, platform: 'win32', game: 'wii' });
     assert.strictEqual(r.status, 'configured');
@@ -103,18 +102,6 @@ test('Windows, no BetterJoy: Dolphin reads each Joy-Con itself, on its own, as t
     const wm = Ini.read(path.join(env.APPDATA, 'Dolphin Emulator', 'Config', 'WiimoteNew.ini'));
     assert.strictEqual(wm.get('Wiimote1', 'Device'), 'SDL/0/Nintendo Switch Joy-Con (L)');
     assert.strictEqual(wm.get('Wiimote1', 'Extension'), 'Nunchuk');
-});
-
-test('Windows with BetterJoy: Dolphin plays on its Xbox pads and leaves the real Switch controllers to BetterJoy', () => {
-    const home = tmp('home'), env = { APPDATA: path.join(home, 'AppData', 'Roaming') };
-    inputconfig.apply('dolphin', [stand(0)], { home, env, platform: 'win32', game: 'wii', betterjoyMotion: 26760 });
-    const main = dolphinIni(home, env);
-    assert.strictEqual(main.get('SDL_Hints', 'SDL_JOYSTICK_HIDAPI_JOY_CONS'), '0', 'two programs reading one Joy-Con over Bluetooth is what lags');
-    assert.strictEqual(main.get('SDL_Hints', 'SDL_JOYSTICK_HIDAPI_SWITCH'), '0');
-    const wm = Ini.read(path.join(env.APPDATA, 'Dolphin Emulator', 'Config', 'WiimoteNew.ini'));
-    assert.strictEqual(wm.get('Wiimote1', 'Device'), 'XInput/0/Gamepad');
-    assert.strictEqual(wm.get('Wiimote1', 'Extension'), 'Nunchuk', 'BetterJoy’s stand-in is a Switch controller, so it gets the Nunchuk mapping');
-    assert.strictEqual(wm.get('Wiimote1', 'Nunchuk/Stick/Up'), '`Left Y+`');
 });
 
 // ---------- Ryujinx for smoother play ----------
