@@ -755,6 +755,7 @@ function controllersView() {
     for (const c of controllers.detect({ platform: runner.platform })) if (c.keys && c.keys.length) keyMap[`${c.vendor}:${c.product}`] = c.keys;
     return {
         platform: runner.platform,
+        betterjoy: betterjoyOn(),
         controllers: ordered,
         keyMap,
         slots: view.slots.map(s => ({ index: s.index, mode: s.mode, controller: s.controller ? s.controller.name : (s.mode === 'real' ? 'Wii Remote' : null) })),
@@ -902,9 +903,20 @@ async function handlePlayers(route, req, res) {
                 key = playersLib.padKey(c);
                 addresses = c.addresses && c.addresses.length ? c.addresses : c.address ? [c.address] : [];
                 // A Switch controller with no address of its own (two Joy-Cons joycond joined, made by the computer) is removed
-                // through the Joy-Cons Bluetooth has connected that are not on the list as controllers of their own
-                if (!addresses.length && c.kind === 'switch') addresses = await joyconsBehind(list);
-                if (!addresses.length) return sendJson(res, 409, { error: 'wired', message: c.kind === 'switch' ? `${c.name}: Bluetooth has no Joy-Con connected for it. Turn the Joy-Cons off to remove it.` : `${c.name} is plugged in. Unplug it to remove it.` }), true;
+                // through the Joy-Cons Bluetooth has connected that are not on the list as controllers of their own.
+                // Windows has no such lookup (this app does not control Bluetooth there at all, see lib/bluetooth.js), so
+                // there is nothing to try: go straight to telling the person what actually removes it.
+                if (!addresses.length && c.kind === 'switch' && runner.platform !== 'win32') addresses = await joyconsBehind(list);
+                if (!addresses.length) {
+                    const message = runner.platform === 'win32'
+                        ? (c.kind === 'switch' && betterjoyOn()
+                            ? `${c.name} is BetterJoy's stand-in for your Joy-Con/Pro Controller. This app does not control Bluetooth on Windows — turn the controller off, or close BetterJoy, to remove it from this list.`
+                            : `${c.name}: this app does not control Bluetooth or USB on Windows. Unplug it (if wired) or turn it off (if wireless) to remove it from this list.`)
+                        : c.kind === 'switch'
+                            ? `${c.name}: Bluetooth has no Joy-Con connected for it. Turn the Joy-Cons off to remove it.`
+                            : `${c.name} is plugged in. Unplug it to remove it.`;
+                    return sendJson(res, 409, { error: 'wired', message }), true;
+                }
                 player = view.playerOf[c.id] ? view.playerOf[c.id] - 1 : null;
             }
             for (const address of addresses) {

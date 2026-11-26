@@ -144,6 +144,58 @@ test('Ryujinx on Windows: a pad Ryujinx already knows is put on the right player
     assert.strictEqual(inputconfig.apply('ryujinx', [stranger], { home, platform: 'win32', env }).status, 'skipped');
 });
 
+test('knownEntry does not hand the same old entry to two different pads of the same name', () => {
+    const old = [
+        { id: 'id-A', name: 'Xbox 360 Controller (0)' },
+        { id: 'id-B', name: 'Xbox 360 Controller (1)' }
+    ];
+    const pad1 = { name: 'Xbox 360 Controller', vendor: '', product: '' };
+    const pad2 = { name: 'Xbox 360 Controller', vendor: '', product: '' };
+    const used = new Set();
+    const e1 = inputconfig.knownEntry(pad1, old, used);
+    used.add(e1);
+    const e2 = inputconfig.knownEntry(pad2, old, used);
+    assert.notStrictEqual(e1, e2);
+    assert.strictEqual(e1.id, 'id-A');
+    assert.strictEqual(e2.id, 'id-B');
+});
+
+test('Ryujinx on Windows: two BetterJoy pads sharing one generic name get two different Ryujinx players, not one', () => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'ryuw2-'));
+    const dir = path.join(home, 'AppData', 'Roaming', 'Ryujinx');
+    fs.mkdirSync(dir, { recursive: true });
+    const entryA = { id: 'id-A', name: 'Xbox 360 Controller (0)', backend: 'GamepadSDL2', player_index: 'Player3', controller_type: 'ProController', right_joycon: { button_a: 'B' } };
+    const entryB = { id: 'id-B', name: 'Xbox 360 Controller (1)', backend: 'GamepadSDL2', player_index: 'Player4', controller_type: 'ProController', right_joycon: { button_a: 'B' } };
+    fs.writeFileSync(path.join(dir, 'Config.json'), JSON.stringify({ input_config: [entryA, entryB] }));
+    const pad1 = { id: 'pad0', name: 'Xbox 360 Controller', kind: 'switch', pad: true, vendor: '', product: '', nameIndex: 0, js: null };
+    const pad2 = { id: 'pad1', name: 'Xbox 360 Controller', kind: 'switch', pad: true, vendor: '', product: '', nameIndex: 1, js: null };
+    const env = { APPDATA: path.join(home, 'AppData', 'Roaming') };
+    const r = inputconfig.apply('ryujinx', [pad1, pad2], { home, platform: 'win32', env });
+    assert.strictEqual(r.status, 'configured');
+    const out = JSON.parse(fs.readFileSync(path.join(dir, 'Config.json'), 'utf8')).input_config;
+    const byPlayer = Object.fromEntries(out.map(e => [e.player_index, e.id]));
+    assert.strictEqual(byPlayer.Player1, 'id-A');
+    assert.strictEqual(byPlayer.Player2, 'id-B');
+    assert.notStrictEqual(byPlayer.Player1, byPlayer.Player2, 'the two players must not share a Ryujinx controller id');
+});
+
+test('Ryujinx on Windows: a third same-named pad with no Ryujinx entry left needs its own one-time setup, instead of stealing one', () => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'ryuw3-'));
+    const dir = path.join(home, 'AppData', 'Roaming', 'Ryujinx');
+    fs.mkdirSync(dir, { recursive: true });
+    const entryA = { id: 'id-A', name: 'Xbox 360 Controller (0)', backend: 'GamepadSDL2', player_index: 'Player1', controller_type: 'ProController', right_joycon: { button_a: 'B' } };
+    const entryB = { id: 'id-B', name: 'Xbox 360 Controller (1)', backend: 'GamepadSDL2', player_index: 'Player2', controller_type: 'ProController', right_joycon: { button_a: 'B' } };
+    fs.writeFileSync(path.join(dir, 'Config.json'), JSON.stringify({ input_config: [entryA, entryB] }));
+    const pads = [0, 1, 2].map(i => ({ id: `pad${i}`, name: 'Xbox 360 Controller', kind: 'switch', pad: true, vendor: '', product: '', nameIndex: i, js: null }));
+    const env = { APPDATA: path.join(home, 'AppData', 'Roaming') };
+    const r = inputconfig.apply('ryujinx', pads, { home, platform: 'win32', env });
+    assert.strictEqual(r.status, 'configured');
+    const out = JSON.parse(fs.readFileSync(path.join(dir, 'Config.json'), 'utf8')).input_config;
+    assert.strictEqual(out.length, 2, 'the third pad is left alone, not given a duplicate id');
+    assert.notStrictEqual(out[0].id, out[1].id);
+    assert.match(r.message, /Xbox 360 Controller/, 'the third pad is named as needing a one-time setup in Ryujinx');
+});
+
 test('Dolphin: a Joy-Con pair is one device, motion comes from its right half, and SDL is told to join them', () => {
     const controllers = require('../ui/lib/controllers');
     const j = (side, n) => ({ id: `js${n}`, name: `Joy-Con (${side})`, kind: 'switch', vendor: '057e', product: side === 'L' ? '2006' : '2007', bus: '0005', version: '0001', js: n, sdlIndex: n, nameIndex: 0, pad: true, connection: 'Bluetooth', player: n });

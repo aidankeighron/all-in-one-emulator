@@ -211,4 +211,7 @@ test('Dolphin config on Windows: written to %APPDATA%\\Dolphin Emulator\\Config,
     assert.strictEqual(wm.get('Wiimote1', 'Device'), 'XInput/0/Gamepad');
     assert.strictEqual(wm.get('Wiimote2', 'Device'), 'SDL/0/Nintendo Switch Pro Controller');
     assert.strictEqual(Ini.read(path.join(dir, 'Dolphin.ini')).get('Core', 'SIDevice0'), '6');
+    // Windows has no kernel driver fallback, so SDL's own Joy-Con/Pro Controller driver has to stay on for Dolphin to see
+    // the controller (and its motion sensors) at all, not just when a pair was combined
+    assert.strictEqual(Ini.read(path.join(dir, 'Dolphin.ini')).get('SDL_Hints', 'SDL_JOYSTICK_HIDAPI_JOY_CONS'), '1');
 });

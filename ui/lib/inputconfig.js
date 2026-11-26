@@ -82,7 +82,10 @@ function dolphinDevice(c, platform, all = [c], opts = {}) {
 const JOYCON_HINT = ['SDL_Hints', 'SDL_JOYSTICK_HIDAPI_COMBINE_JOY_CONS'];
 // Whether SDL reads Joy-Cons itself (HIDAPI) or through the kernel's driver. On Linux the menu decides, so that the names it
 // writes are the names Dolphin sees: through the kernel (the same controllers the menu lists, a joycond pair included),
-// unless a pair the menu joined is in use, which only SDL itself can join.
+// unless a pair the menu joined is in use, which only SDL itself can join. Windows has no kernel driver to fall back to at
+// all, so a Joy-Con is only visible to Dolphin (buttons, and the motion a Wii mapping needs) through SDL's own HIDAPI
+// driver; sdlName() already names it as that driver would regardless of platform, so this stays on for every Switch
+// controller on Windows, paired or not.
 const JOYCON_HIDAPI_HINT = ['SDL_Hints', 'SDL_JOYSTICK_HIDAPI_JOY_CONS'];
 
 // game: the console of the game about to start ('wii' or 'gamecube'). Each gamepad is then only that console's controller:
@@ -139,7 +142,7 @@ function writeDolphin(controllers, { home, platform, env, exePath, wiiRemotes = 
     if (slots.some(s => s.mode === 'real') || !wiiSide) main.set('Core', 'WiimoteContinuousScanning', 'False');
     if (menuPair) main.set(JOYCON_HINT[0], JOYCON_HINT[1], '1');
     else if (joyconsSplit) main.set(JOYCON_HINT[0], JOYCON_HINT[1], '0');
-    if (platform !== 'win32' && slots.some(s => s.controller && s.controller.kind === 'switch')) main.set(JOYCON_HIDAPI_HINT[0], JOYCON_HIDAPI_HINT[1], menuPair ? '1' : '0');
+    if (slots.some(s => s.controller && s.controller.kind === 'switch')) main.set(JOYCON_HIDAPI_HINT[0], JOYCON_HIDAPI_HINT[1], platform === 'win32' || menuPair ? '1' : '0');
     if (adapter) done.push('GameCube adapter');
 
     const changed = [save(path.join(dir, 'Dolphin.ini'), main), save(path.join(dir, 'GCPadNew.ini'), gc), save(path.join(dir, 'WiimoteNew.ini'), wm)];
@@ -177,11 +180,16 @@ function ryujinxId(c, all) {
 // Windows gives the menu no SDL id to work from (the browser knows a pad's name and, for some, its vendor and product,
 // but not the version SDL puts in the id). So a pad is matched to an entry Ryujinx already has for it: by the vendor
 // and product inside the id, else by name. The first time a pad is used it is set up once in Ryujinx itself.
-function knownEntry(c, old) {
+// used: entries already claimed by an earlier player this run (BetterJoy's pads commonly share one generic name, which
+// would otherwise hand the same Ryujinx entry, and so the same id, to two different players).
+function knownEntry(c, old, used = new Set()) {
     const parts = e => { const m = /^\d+-[0-9a-f]{8}-([0-9a-f]{4})-[0-9a-f]{4}-([0-9a-f]{4})-/i.exec(e.id || ''); return m ? { vendor: m[1].toLowerCase(), product: m[2].toLowerCase() } : {}; };
     const swap = h => (h && h.length === 4 ? h.slice(2) + h.slice(0, 2) : h);   // the id prints the product's two bytes swapped
-    const byIds = c.vendor && c.product ? old.find(e => { const p = parts(e); return p.vendor === c.vendor && p.product === swap(c.product); }) : null;
-    return byIds || old.find(e => String(e.name || '').replace(/\s*\(\d+\)$/, '').toLowerCase() === c.name.toLowerCase());
+    const sameIds = e => { const p = parts(e); return p.vendor === c.vendor && p.product === swap(c.product); };
+    const sameName = e => String(e.name || '').replace(/\s*\(\d+\)$/, '').toLowerCase() === c.name.toLowerCase();
+    const free = old.filter(e => !used.has(e));
+    const byIds = c.vendor && c.product ? free.find(sameIds) : null;
+    return byIds || free.find(sameName);
 }
 
 function writeRyujinx(controllers, { home, platform, env, exePath, players, profiles, betterjoyMotion = 0 }) {
@@ -197,6 +205,9 @@ function writeRyujinx(controllers, { home, platform, env, exePath, players, prof
     const old = Array.isArray(config.input_config) ? config.input_config : [];
     const pads = controllers.filter(c => c.js !== null && c.js !== undefined);
     const made = [], unknown = [], notes = [];
+    // Entries already handed to an earlier player this run: BetterJoy's pads commonly share one generic name, which would
+    // otherwise match every player to the same Ryujinx entry (the same id), and so the same physical controller in-game.
+    const usedOld = new Set();
     // Ryujinx's own names for Minus and Plus: whichever the person's own entries already use, since the two spellings
     // belong to different versions of it
     const spelling = old.some(e => e.left_joycon && e.left_joycon.button_minus === 'Minus') ? { Back: 'Minus', Start: 'Plus' } : {};
@@ -209,8 +220,9 @@ function writeRyujinx(controllers, { home, platform, env, exePath, players, prof
         if (s.controller.combined) notes.push(`${s.controller.name} is read as ${s.controller.memberNames[0]} alone by Ryujinx: it takes one device per player`);
         let id, template;
         if (win) {
-            const known = knownEntry(c, old);
+            const known = knownEntry(c, old, usedOld);
             if (!known) { unknown.push(s.controller.name); continue; }
+            usedOld.add(known);
             id = known.id; template = known;
         } else {
             id = ryujinxId(c, pads);
@@ -302,4 +314,4 @@ function restore(emulatorId, context = {}) {
     } catch { return false; }
 }
 
-module.exports = { apply, restore, describe, slotsFor, dolphinDevice, ryujinxId };
+module.exports = { apply, restore, describe, slotsFor, dolphinDevice, ryujinxId, knownEntry };

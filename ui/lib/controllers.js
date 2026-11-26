@@ -196,7 +196,10 @@ function build(procDevices, usbIds = []) {
 //   "Xbox 360 Controller (XInput STANDARD GAMEPAD)"  or  "Pro Controller (STANDARD GAMEPAD Vendor: 057e Product: 2009)"
 
 // pads: [{index, id, mapping}] as reported by navigator.getGamepads()
-function fromGamepadApi(pads) {
+// treatXinputAsSwitch: BetterJoy is running, so an XInput pad is its virtual stand-in for a real Joy-Con/Pro Controller
+// (hidden elsewhere, see detect()'s hideNintendo), not a genuine Xbox pad. There is no vendor/product in an XInput id for
+// Chrome to tell the two apart by, so a real Xbox pad connected at the same time as BetterJoy is labelled Switch too; accepted.
+function fromGamepadApi(pads, { treatXinputAsSwitch = false } = {}) {
     const usable = (pads || []).filter(p => p && typeof p.id === 'string')
         .map(p => {
             const ids = p.id.match(/Vendor:\s*([0-9a-f]{4})\s+Product:\s*([0-9a-f]{4})/i);
@@ -209,7 +212,7 @@ function fromGamepadApi(pads) {
     const seen = new Map();
     let xinputs = 0, order = 0;
     return usable.map((p, i) => {
-        const kind = p.xinput ? 'xbox' : classify(p);
+        const kind = p.xinput ? (treatXinputAsSwitch ? 'switch' : 'xbox') : classify(p);
         const nth = seen.get(p.name) || 0;
         seen.set(p.name, nth + 1);
         const isPad = PAD_KINDS.has(kind);
@@ -276,7 +279,7 @@ const withAddresses = (devices, opts) => devices.map(d => {
 
 function detect({ platform = process.platform, procFile = '/proc/bus/input/devices', usbRoot, sysRoot, now = Date.now(), merge, hideNintendo = false } = {}) {
     let found;
-    if (platform === 'win32') found = now - reported.at < REPORT_TTL_MS ? fromGamepadApi(reported.pads) : [];
+    if (platform === 'win32') found = now - reported.at < REPORT_TTL_MS ? fromGamepadApi(reported.pads, { treatXinputAsSwitch: hideNintendo }) : [];
     else {
         let text = '';
         try { text = fs.readFileSync(procFile, 'utf8'); } catch { /* no input subsystem */ }

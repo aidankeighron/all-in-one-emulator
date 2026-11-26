@@ -1734,7 +1734,13 @@
                     [{ label: 'Let it go', run: () => call({ key: 'real', player: c.player }, `Player ${c.player} is free`) }]);
             }
             const addresses = c.addresses && c.addresses.length ? c.addresses : c.address ? [c.address] : [];
-            // (a Switch controller with no address is two joined Joy-Cons: the server finds them)
+            // (a Switch controller with no address is two joined Joy-Cons: the server finds them — except on Windows,
+            // where this app does not control Bluetooth at all, so there is nothing to look up there either)
+            if (!addresses.length && padPlatform === 'win32') {
+                return showToast(c.kind === 'switch' && padBetterjoy
+                    ? `${c.name} is BetterJoy's stand-in for your Joy-Con/Pro Controller. Turn the controller off, or close BetterJoy, to remove it from this list.`
+                    : `${c.name}: this app does not control Bluetooth or USB on Windows. Unplug it (if wired) or turn it off (if wireless) to remove it from this list.`);
+            }
             if (!addresses.length && c.kind !== 'switch') return showToast(`${c.name} is plugged in. Unplug it to remove it.`);
             const again = c.kind === 'wiimote' ? 'press a button on it' : 'press any button on it';
             askChoice(`Remove ${c.name}?`, `Disconnect turns it off from this computer; ${again} to connect it again. Forget unpairs it: it has to be paired again (Connect a controller).`, [
@@ -2005,6 +2011,7 @@
 
         // Windows has no way for the server to see controllers, so this window says which it can see
         let padPlatform = null;
+        let padBetterjoy = false;   // is BetterJoy standing in for the real Switch controllers right now
         async function reportPads() {
             const pads = (navigator.getGamepads ? [...navigator.getGamepads()] : []).filter(Boolean).map(g => ({ index: g.index, id: g.id, mapping: g.mapping }));
             await fetch('/api/controllers/report', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pads }) });
@@ -2023,6 +2030,7 @@
             padKeyMap = data.keyMap || {};
             padProfiles = data.profiles || [];
             padAccess = data.wiimoteAccess || null;
+            padBetterjoy = !!data.betterjoy;
             updateControllerChip();
             return changed;
         }

@@ -100,13 +100,15 @@ test('BetterJoy: a refused permission prompt, a missing driver and a zip without
     await assert.rejects(linux.install(), /only for Windows/);
 });
 
-test('with BetterJoy running, the real Switch controllers are left out and its Xbox pads are used', () => {
+test('with BetterJoy running, the real Switch controllers are left out and its virtual pad stands in as a Switch controller', () => {
     const real = (name, product) => ({ index: product === '2006' ? 0 : 1, id: `${name} (STANDARD GAMEPAD Vendor: 057e Product: ${product})`, mapping: 'standard' });
     const xinput = { index: 2, id: 'Xbox 360 Controller (XInput STANDARD GAMEPAD)', mapping: 'standard' };
     controllers.report([real('Joy-Con (L)', '2006'), real('Joy-Con (R)', '2007'), xinput]);
     assert.strictEqual(controllers.detect({ platform: 'win32', merge: { auto: false } }).length, 3);
     const hidden = controllers.detect({ platform: 'win32', merge: { auto: true }, hideNintendo: true });
-    assert.deepStrictEqual(hidden.map(c => c.kind), ['xbox']);
+    // BetterJoy's virtual XInput pad stands in for the Joy-Cons it hid, so the menu (and so Ryujinx) treats it as the
+    // Switch controller it really is, not as an unrelated Xbox pad (see controllers.js: fromGamepadApi's treatXinputAsSwitch)
+    assert.deepStrictEqual(hidden.map(c => c.kind), ['switch']);
 });
 
 // ---------- joycond (Linux) ----------
