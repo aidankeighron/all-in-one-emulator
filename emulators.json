@@ -59,6 +59,7 @@
       ],
       "env": { "SDL_JOYSTICK_HIDAPI_JOY_CONS": "0" },
       "args": [
+        "--fullscreen",
         "{rom}"
       ],
       "windows": {

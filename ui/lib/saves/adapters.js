@@ -28,14 +28,60 @@ function linkEntry(target, link, win) {
             if (isDir && sameTarget(fs.readlinkSync(link), target)) return;
             fs.rmSync(link);
         } else if (win && !isDir) {
-            fs.rmSync(link);                       // an earlier copy of a file: refresh it
+            // An earlier copy of a file: refresh it. One the emulator changed since and that never went back (the menu was
+            // closed while the game ran) goes back to the real file first, see settleFiles
+            try {
+                if (existing.mtimeMs > fs.statSync(target).mtimeMs + 1000 && !sameContent(target, link)) {
+                    fs.copyFileSync(link, `${target}.emulator-menu-${process.pid}.tmp`);
+                    fs.renameSync(`${target}.emulator-menu-${process.pid}.tmp`, target);
+                }
+            } catch { /* keep the real one */ }
+            fs.rmSync(link);
         } else {
             return;                                // something the emulator made inside the slot: leave it
         }
     }
     if (isDir) fs.symlinkSync(target, link, win ? 'junction' : 'dir');
-    else if (win) fs.copyFileSync(target, link);
+    else if (win) copyStamped(target, link);
     else fs.symlinkSync(target, link);
+}
+
+// A copy that carries the time of the file it was copied from, so that a change made to the copy later (the emulator
+// saving its settings into the slot) is seen by settleFiles as newer than the real file
+function copyStamped(from, to) {
+    fs.copyFileSync(from, to);
+    const st = fs.statSync(from);
+    fs.utimesSync(to, st.atime, st.mtime);
+}
+
+const sameContent = (a, b) => { try { return fs.readFileSync(a).equals(fs.readFileSync(b)); } catch { return false; } };
+
+// After a game: the emulator saves its settings into the slot's files. On Windows those files are copies (it has no file
+// links for ordinary users), and the next start refreshes the copies from the real ones: every setting changed in a game
+// (full screen, docked mode, the controllers set up in Ryujinx) was thrown away. So a copy that changed is put back into
+// the real folder first, where every slot and the emulator opened on its own read it. On Linux the slot's files are links
+// and the emulator writes straight through them; one it replaced with a file of its own is put back and linked again.
+// Returns the names that were brought back.
+function settleFiles(realDir, slotDir, win = platformLib.current() === 'win32') {
+    const back = [];
+    let names = [];
+    try { names = fs.readdirSync(realDir); } catch { return back; }
+    for (const name of names) {
+        const real = path.join(realDir, name), slot = path.join(slotDir, name);
+        try {
+            const r = fs.statSync(real), l = fs.lstatSync(slot);
+            if (!r.isFile() || !l.isFile()) continue;                // folders are linked; a link is the real file itself
+            if (l.mtimeMs > r.mtimeMs + 1000 && !sameContent(real, slot)) {
+                const tmp = `${real}.emulator-menu-${process.pid}.tmp`;
+                fs.copyFileSync(slot, tmp);
+                fs.renameSync(tmp, real);
+                back.push(name);
+            }
+            if (win) copyStamped(real, slot);
+            else { fs.rmSync(slot); fs.symlinkSync(real, slot); }
+        } catch { /* not in the slot, or busy: the next start sorts it out */ }
+    }
+    return back;
 }
 
 // Links every entry of realDir into slotDir except the named ones
@@ -94,6 +140,11 @@ function ryujinx(ctx) {
             linkExcept(path.join(real, 'bis', 'user'), path.join(slotRoot, 'bis', 'user'), ['save', 'saveMeta'], win);
             linkExcept(path.join(real, 'bis', 'system'), path.join(slotRoot, 'bis', 'system'), ['save'], win);
             for (const d of perSlot) mkdir(path.join(slotRoot, d));
+        },
+        // The game closed: settings Ryujinx saved into the slot (Config.json) go back to its real folder
+        settle(slotRoot) {
+            const real = realRoot();
+            return fs.existsSync(real) ? settleFiles(real, slotRoot, win) : [];
         }
     };
 }
@@ -139,6 +190,11 @@ function dolphin(ctx) {
                 linkExcept(path.join(data, 'Wii', 'title'), path.join(slotRoot, 'Wii', 'title'), ['00010000'], win);
             }
             for (const d of perSlot) mkdir(path.join(slotRoot, d));
+        },
+        // Dolphin's settings are in its Config folder, which is linked as a whole; only loose files at the top need this
+        settle(slotRoot) {
+            const user = win ? dolphinWindowsUser(ctx) : path.join(flatpakApp, 'data', 'dolphin-emu');
+            return fs.existsSync(user) ? settleFiles(user, slotRoot, win) : [];
         }
     };
 }
@@ -153,4 +209,4 @@ function create(context = os.homedir()) {
     return new Map([ryujinx(ctx), dolphin(ctx)].map(a => [a.id, a]));
 }
 
-module.exports = { create, linkExcept, dolphinWindowsUser };
+module.exports = { create, linkExcept, settleFiles, dolphinWindowsUser };

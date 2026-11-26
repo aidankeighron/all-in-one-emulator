@@ -1055,6 +1055,13 @@
                 <div id="flatpak-warning" class="notice" style="display:none">Needs Flatpak: run <code>sudo apt install flatpak</code>, then reopen the menu.</div>
                 <div id="windows-note" class="notice" style="display:none"></div>
                 <div id="emulator-list"></div>
+                <div class="emu-row">
+                    <div class="info">
+                        <div class="name">Smoother Switch games</div>
+                        <div class="desc">Ryujinx keeps built shaders and uses spare memory to avoid pauses. Stutter in a new area fades as you play.</div>
+                    </div>
+                    <button class="btn" id="switch-tuning-button" onclick="toggleSwitchTuning()">On</button>
+                </div>
                 </section>
             </div>
 
@@ -4095,6 +4102,7 @@
                 { done: h.running, name: 'Turn it on', text: 'Starts joycond now and at every boot (password once). Then press L on the left Joy-Con and R on the right one together: they become one controller. SL + SR together makes a single Joy-Con a sideways controller.', act: 'helper:enable', label: 'Turn on' }
             ];
             let body = `<p>${win ? 'BetterJoy makes Joy-Cons and the Pro Controller look like Xbox controllers, and joins a left and right Joy-Con into one.' : 'joycond joins a left and a right Joy-Con into one controller.'} After this one-time setup it runs by itself, like every other controller.</p>
+                ${win ? '<div class="guide-box">Usually not needed: Dolphin and Ryujinx read Switch controllers themselves, motion included. If the controls lag behind in games, turn BetterJoy off.</div>' : ''}
                 <ol class="pair-steps" style="list-style:none;padding-left:0">${steps.map(st => `<li style="margin-bottom:8px"><b>${st.done ? '✓' : '○'} ${escapeHtml(st.name)}</b><br><span style="font-size:13px;color:var(--tx-6b747c)">${escapeHtml(st.text)}</span></li>`).join('')}</ol>`;
             if (job && job.phase === 'running') {
                 body += `<div class="guide-box"><span class="spinner" style="vertical-align:-3px;margin-right:8px"></span>${escapeHtml(job.message || 'Working…')}</div>`;
@@ -4286,6 +4294,7 @@
             const folders = [...new Set(data.emulators.flatMap(e => e.folders))];
             document.getElementById('folder-list').innerHTML = folders.map(f => `<code>${escapeHtml(f)}</code>`).join(' ');
             renderAutoButton(data.autoControllers);
+            document.getElementById('switch-tuning-button').textContent = data.switchTuning === false ? 'Off' : 'On';
             showPauseHold(data.pauseHold === undefined ? 1.5 : data.pauseHold);
             renderIdle(data.idle);
             applyTheme(data.theme || 'system');
@@ -4377,6 +4386,15 @@
         async function cycleVolume(key) {
             await saveSound({ [key]: Sfx.nextLevel(Sfx.settings[key]) });
             Sfx.play(key === 'sfxVolume' ? 'select' : 'toggle');
+        }
+
+        async function toggleSwitchTuning() {
+            const button = document.getElementById('switch-tuning-button');
+            const on = button.textContent !== 'On';
+            await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ switchTuning: on }) });
+            button.textContent = on ? 'On' : 'Off';
+            Sfx.play('toggle');
+            showToast(on ? 'Ryujinx is set up for smoother play before each game' : 'Ryujinx’s own settings are left as they are');
         }
 
         async function toggleAutoControllers() {

@@ -55,8 +55,10 @@ test('Dolphin: gamepad becomes GameCube port 1 and an emulated Wii Remote with N
 
     const wm = Ini.read(path.join(dir, 'WiimoteNew.ini'));
     assert.strictEqual(wm.get('Wiimote1', 'Source'), '1');
-    assert.strictEqual(wm.get('Wiimote1', 'Extension'), 'Classic', 'an Xbox-style pad is a Classic Controller unless told otherwise');
-    assert.strictEqual(wm.get('Wiimote1', 'Classic/Buttons/A'), '`Button A`');
+    assert.strictEqual(wm.get('Wiimote1', 'Extension'), 'Nunchuk', 'an Xbox-style pad is a Wii Remote with Nunchuk unless told otherwise');
+    assert.strictEqual(wm.get('Wiimote1', 'Nunchuk/Stick/Up'), '`Left Y+`', 'the left stick is the Nunchuk stick');
+    assert.strictEqual(wm.get('Wiimote1', 'IR/Up'), '`Right Y+`', 'the right stick is the pointer');
+    assert.strictEqual(wm.get('Wiimote1', 'Buttons/A'), '`Button A`');
     assert.strictEqual(wm.get('Wiimote2', 'Source'), '0');
 });
 
@@ -93,7 +95,7 @@ test('Ryujinx is skipped until it has been opened once', () => {
 
 test('describe says where each controller plays', () => {
     const view = inputconfig.describe([pad(), wiimote(), adapter], {});
-    assert.deepStrictEqual(view.roles.js0, ['Player 1', 'Wii: Wii Classic Controller (Xbox / generic)', 'GameCube: GameCube (Xbox / generic)', 'Switch: Switch (Xbox / generic)']);
+    assert.deepStrictEqual(view.roles.js0, ['Player 1', 'Wii: Wii Remote + Nunchuk (Xbox / generic)', 'GameCube: GameCube (Xbox / generic)', 'Switch: Switch (Xbox / generic)']);
     assert.deepStrictEqual(view.roles.js1, ['Player 2', 'Wii: Official Wii Remote']);
     assert.deepStrictEqual(view.playerOf, { js0: 1, js1: 2 });
     assert.deepStrictEqual(view.waiting, []);

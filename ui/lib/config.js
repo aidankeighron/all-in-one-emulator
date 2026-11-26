@@ -69,6 +69,15 @@ function setAutoControllers(on) {
     save({ ...load(), autoControllers: !!on });
 }
 
+// Ryujinx's settings for smoother play (lib/ryujinxtune.js) are written before each Switch game unless turned off
+function getSwitchTuning() {
+    return load().switchTuning !== false;
+}
+
+function setSwitchTuning(on) {
+    save({ ...load(), switchTuning: !!on });
+}
+
 // Light or dark look: 'system' (follow the computer's setting), 'light' or 'dark'
 const THEMES = ['system', 'light', 'dark'];
 function getTheme() {
@@ -259,4 +268,4 @@ const mappingsDir = path.join(path.dirname(configFile), 'mappings');
 const artworkDir = path.join(path.dirname(configFile), 'artwork');
 const soundsDir = process.env.SOUNDS_DIR || path.join(path.dirname(configFile), 'sounds');
 
-module.exports = { getIdle, setIdle, IDLE_ACTIONS, IDLE_MINUTES, getRomsDir, setRomsDir, getAutoControllers, setAutoControllers, getWiiRemotes, setWiiRemotes, getTheme, setTheme, THEMES, getPauseHold, setPauseHold, PAUSE_HOLD_STEPS, getFavorites, setFavorite, getPlayers, setPlayers, getJoyconPairs, setJoyconPairs, getBetterJoy, setBetterJoy, getSound, setSound, getCloud, getCloudToken, getLibrary, setLibrary, libraryCacheFile, getEmulatorPaths, getEmulatorUrls, setEmulatorPath, emulatorsDir, configFile, mappingsDir, artworkDir, soundsDir };
+module.exports = { getIdle, setIdle, IDLE_ACTIONS, IDLE_MINUTES, getRomsDir, setRomsDir, getAutoControllers, setAutoControllers, getSwitchTuning, setSwitchTuning, getWiiRemotes, setWiiRemotes, getTheme, setTheme, THEMES, getPauseHold, setPauseHold, PAUSE_HOLD_STEPS, getFavorites, setFavorite, getPlayers, setPlayers, getJoyconPairs, setJoyconPairs, getBetterJoy, setBetterJoy, getSound, setSound, getCloud, getCloudToken, getLibrary, setLibrary, libraryCacheFile, getEmulatorPaths, getEmulatorUrls, setEmulatorPath, emulatorsDir, configFile, mappingsDir, artworkDir, soundsDir };

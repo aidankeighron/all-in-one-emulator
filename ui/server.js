@@ -23,6 +23,7 @@ const artwork = require('./lib/artwork');
 const sounds = require('./lib/sounds');
 const { createManager, SaveError } = require('./lib/saves/manager');
 const saveAdapters = require('./lib/saves/adapters');
+const ryujinxTune = require('./lib/ryujinxtune');
 const library = require('./lib/library');
 const bluetoothLib = require('./lib/bluetooth');
 const mappingsLib = require('./lib/mappings');
@@ -161,7 +162,9 @@ const helper = runner.platform === 'win32'
     ? betterjoyLib.createBetterJoy({ platform: runner.platform, emulatorsDir: config.emulatorsDir, getUrls: config.getEmulatorUrls })
     : joycondLib.createJoycond({ log: console.log });
 const bj = { running: false, job: null };
-const betterjoyOn = () => helper.name === 'BetterJoy' && config.getBetterJoy().enabled && bj.running;
+// Running counts, whoever started it: its virtual pads stand in for the real controllers either way (BetterJoy started by
+// hand with the menu's switch off would otherwise list every Joy-Con twice, the real one and its stand-in)
+const betterjoyOn = () => helper.name === 'BetterJoy' && bj.running;
 async function refreshBetterJoy() {
     if (!helper.supported) return;
     try { bj.running = await helper.running(); } catch { bj.running = false; }
@@ -301,6 +304,11 @@ async function startGame(relPath, slotId, onGameState) {
     // Dolphin plays Wii and GameCube games: each gets only its own console's controllers
     const gameConsole = emu.id === 'dolphin' && ['wii', 'gamecube'].includes(folder) ? folder : null;
     if (config.getAutoControllers() && !skipSetup.delete(emu.id)) setupControllers([emu.id], { game: gameConsole });
+    // Before the save slot copies Ryujinx's settings (Windows): the slot then starts with them too
+    if (emu.id === 'ryujinx' && config.getSwitchTuning()) {
+        const tuned = ryujinxTune.apply(slotAdapters.get('ryujinx').dataRoot());
+        if (tuned.length) console.log(`[LAUNCH] Ryujinx settings for smoother play: ${tuned.join(', ')}`);
+    }
     if (emu.id === 'dolphin' && gameConsole !== 'gamecube' && runner.platform === 'linux') {
         dolphinLog.enable(platformCtx);
         await wiimoteReport();
@@ -347,6 +355,14 @@ async function startGame(relPath, slotId, onGameState) {
         const wasPaused = !!(current && current.paused);
         const asked = !!(current && current.stopping);
         current = null;
+        // Settings changed in the game (Ryujinx: full screen, docked mode, its own controller setup) were saved into the slot;
+        // they go back to the emulator's real folder before anything else touches it, or the next start would undo them
+        if (slot && slotAdapters.has(emu.id) && slotAdapters.get(emu.id).settle) {
+            try {
+                const back = slotAdapters.get(emu.id).settle(slotAdapters.get(emu.id).slotRoot(slot.id));
+                if (back.length) console.log(`[SAVES] ${emu.name} settings kept: ${back.join(', ')}`);
+            } catch (err) { console.error(`[SAVES] ${emu.name} settings: ${err.message}`); }
+        }
         // Controller changes made during the game go into the emulator's files now that it has closed
         if (pendingSetup.delete(emu.id)) setupControllers([emu.id], { game: gameConsole });
         let quickUndone = false;
@@ -1180,7 +1196,7 @@ function createServer(onGameState) {
                     return sendJson(res, 200, { setup: setupControllers(ids) });
                 }
                 if (route === 'GET /api/settings') {
-                    return sendJson(res, 200, { romsDir: config.getRomsDir(), autoControllers: config.getAutoControllers(), sound: config.getSound(), pauseHold: config.getPauseHold(), theme: config.getTheme(), idle: config.getIdle(), ...await emulatorStates() });
+                    return sendJson(res, 200, { romsDir: config.getRomsDir(), autoControllers: config.getAutoControllers(), switchTuning: config.getSwitchTuning(), sound: config.getSound(), pauseHold: config.getPauseHold(), theme: config.getTheme(), idle: config.getIdle(), ...await emulatorStates() });
                 }
                 if (route === 'POST /api/settings') {
                     const body = await readJson(req);
@@ -1193,6 +1209,7 @@ function createServer(onGameState) {
                         roms.createDefaultFolders(config.getRomsDir(), manifest);
                     }
                     if (typeof body.autoControllers === 'boolean') config.setAutoControllers(body.autoControllers);
+                    if (typeof body.switchTuning === 'boolean') config.setSwitchTuning(body.switchTuning);
                     if (body.theme !== undefined) {
                         if (!config.THEMES.includes(body.theme)) return sendJson(res, 400, { error: 'invalid', message: 'The theme is system, light or dark' });
                         config.setTheme(body.theme);

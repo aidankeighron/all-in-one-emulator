@@ -87,12 +87,14 @@ const JOYCON_HINT = ['SDL_Hints', 'SDL_JOYSTICK_HIDAPI_COMBINE_JOY_CONS'];
 // driver; sdlName() already names it as that driver would regardless of platform, so this stays on for every Switch
 // controller on Windows, paired or not.
 const JOYCON_HIDAPI_HINT = ['SDL_Hints', 'SDL_JOYSTICK_HIDAPI_JOY_CONS'];
+// The same for the Switch Pro Controller (Windows only: Linux reads it through the kernel)
+const SWITCH_HIDAPI_HINT = ['SDL_Hints', 'SDL_JOYSTICK_HIDAPI_SWITCH'];
 
 // game: the console of the game about to start ('wii' or 'gamecube'). Each gamepad is then only that console's controller:
 // in a Wii game an (emulated) Wii Remote and no GameCube port, in a GameCube game a GameCube port and no Wii Remote. Written as
 // both, a Wii game that also takes GameCube controllers (Smash Bros. Brawl) sees every gamepad twice: two players moving
 // together. Without a game (settings changed in the menu) both are written; the game's start writes them again.
-function writeDolphin(controllers, { home, platform, env, exePath, wiiRemotes = 0, players, profiles, joyconsSplit = false, game = null }) {
+function writeDolphin(controllers, { home, platform, env, exePath, wiiRemotes = 0, players, profiles, joyconsSplit = false, game = null, betterjoy = false }) {
     const wiiSide = game !== 'gamecube';
     const gcSide = game !== 'wii';
     const adapter = controllers.some(c => c.adapter);
@@ -140,9 +142,17 @@ function writeDolphin(controllers, { home, platform, env, exePath, wiiRemotes = 
     // ("continuous scanning") searches Bluetooth over and over, which knocks already connected Wii Remotes off on many
     // adapters: in a game the remote dropped after a little while. So it is off.
     if (slots.some(s => s.mode === 'real') || !wiiSide) main.set('Core', 'WiimoteContinuousScanning', 'False');
+    // While BetterJoy runs, the players are its virtual Xbox pads (reached through XInput): Dolphin's SDL must leave the real
+    // Switch controllers to BetterJoy. Two programs talking to the same Joy-Con over Bluetooth (each asking for its reports,
+    // its motion data and rumble) is what makes the controls lag far behind.
+    const switchPads = slots.some(s => s.controller && s.controller.kind === 'switch');
+    const sdlJoycons = !betterjoy && (platform === 'win32' || menuPair);
+    // Dolphin's own default joins a left and a right Joy-Con into one device whenever SDL reads them itself. The menu names each
+    // Joy-Con on its own unless the person joined them, so on Windows the setting is always written, matching what it names
     if (menuPair) main.set(JOYCON_HINT[0], JOYCON_HINT[1], '1');
-    else if (joyconsSplit) main.set(JOYCON_HINT[0], JOYCON_HINT[1], '0');
-    if (slots.some(s => s.controller && s.controller.kind === 'switch')) main.set(JOYCON_HIDAPI_HINT[0], JOYCON_HIDAPI_HINT[1], platform === 'win32' || menuPair ? '1' : '0');
+    else if (joyconsSplit || (switchPads && sdlJoycons)) main.set(JOYCON_HINT[0], JOYCON_HINT[1], '0');
+    if (switchPads) main.set(JOYCON_HIDAPI_HINT[0], JOYCON_HIDAPI_HINT[1], sdlJoycons ? '1' : '0');
+    if (switchPads && platform === 'win32') main.set(SWITCH_HIDAPI_HINT[0], SWITCH_HIDAPI_HINT[1], betterjoy ? '0' : '1');
     if (adapter) done.push('GameCube adapter');
 
     const changed = [save(path.join(dir, 'Dolphin.ini'), main), save(path.join(dir, 'GCPadNew.ini'), gc), save(path.join(dir, 'WiimoteNew.ini'), wm)];
@@ -276,7 +286,7 @@ const writers = { dolphin: writeDolphin, ryujinx: writeRyujinx };
 // context: {home, platform, env, exePath(id), wiiRemotes, players, profiles}. Defaults to this computer.
 function apply(emulatorId, controllers, context = {}) {
     const ctx = {
-        wiiRemotes: context.wiiRemotes || 0, joyconsSplit: !!context.joyconsSplit, game: context.game || null, betterjoyMotion: context.betterjoyMotion || 0, players: context.players, profiles: context.profiles || mappings.createStore(''),
+        wiiRemotes: context.wiiRemotes || 0, joyconsSplit: !!context.joyconsSplit, betterjoy: !!(context.betterjoy || context.betterjoyMotion), game: context.game || null, betterjoyMotion: context.betterjoyMotion || 0, players: context.players, profiles: context.profiles || mappings.createStore(''),
         home: context.home || os.homedir(), platform: context.platform || platformLib.current(), env: context.env || process.env, exePath: context.exePath || (() => null)
     };
     const write = writers[emulatorId];

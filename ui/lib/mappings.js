@@ -38,6 +38,7 @@ const WII_CONTROLS = [
     c('Nunchuk/Buttons/C', 'C', 'Nunchuk', 'nunchuk'), c('Nunchuk/Buttons/Z', 'Z', 'Nunchuk', 'nunchuk'),
     ...dirs('Nunchuk/Stick', 'Nunchuk stick', 'nunchuk'),
     ...['X', 'Y', 'Z'].map(a => c(`Nunchuk/Shake/${a}`, `Shake ${a}`, 'Nunchuk shake', 'nunchuk')),
+    ...['Up', 'Down', 'Left', 'Right', 'Forward', 'Backward'].map(d => c(`Nunchuk/IMUAccelerometer/${d}`, d, 'Nunchuk motion', 'nunchuk')),
     ...['A', 'B', 'X', 'Y', 'ZL', 'ZR', '-', '+', 'Home'].map(b => c(`Classic/Buttons/${b}`, b, 'Classic Controller buttons', 'classic')),
     ...dirs('Classic/Left Stick', 'Classic left stick', 'classic'),
     ...dirs('Classic/Right Stick', 'Classic right stick', 'classic'),
@@ -133,7 +134,13 @@ const SOURCES = [
         { value: `${side} X+`, label: `${label} stick right`, nl: `${label} stick right`, group: `${label} stick`, stick: true }
     ]),
     ...['Up', 'Down', 'Left', 'Right', 'Forward', 'Backward'].map(d => ({ value: `Accel ${d}`, label: null, nl: `Move ${d.toLowerCase()} (motion sensor)`, group: 'Motion sensors', motion: true })),
-    ...['Pitch Up', 'Pitch Down', 'Roll Left', 'Roll Right', 'Yaw Left', 'Yaw Right'].map(d => ({ value: `Gyro ${d}`, label: null, nl: `Turn: ${d.toLowerCase()} (motion sensor)`, group: 'Motion sensors', motion: true }))
+    ...['Pitch Up', 'Pitch Down', 'Roll Left', 'Roll Right', 'Yaw Left', 'Yaw Right'].map(d => ({ value: `Gyro ${d}`, label: null, nl: `Turn: ${d.toLowerCase()} (motion sensor)`, group: 'Motion sensors', motion: true })),
+    // A joined Joy-Con pair has a set of sensors in each half. The plain ones above are the right half's on a pair (the hand
+    // that points); these name one half. On anything that is not a pair they do nothing.
+    ...[['L', 'Left'], ['R', 'Right']].flatMap(([side, label]) => [
+        ...['Up', 'Down', 'Left', 'Right', 'Forward', 'Backward'].map(d => ({ value: `Accel ${side} ${d}`, label: null, nl: `${label} Joy-Con: move ${d.toLowerCase()}`, group: `${label} Joy-Con motion (pair)`, motion: true })),
+        ...['Pitch Up', 'Pitch Down', 'Roll Left', 'Roll Right', 'Yaw Left', 'Yaw Right'].map(d => ({ value: `Gyro ${side} ${d}`, label: null, nl: `${label} Joy-Con: turn ${d.toLowerCase()}`, group: `${label} Joy-Con motion (pair)`, motion: true }))
+    ])
 ];
 const SOURCE_VALUES = new Set(SOURCES.map(s => s.value));
 const MOTION_VALUES = new Set(SOURCES.filter(s => s.motion).map(s => s.value));
@@ -177,13 +184,17 @@ const NUNCHUK_PART = {
     ...stickDirs('Nunchuk/Stick', 'Left')
 };
 
+// One button shakes on all three axes (the way Dolphin's own default does it)
+const SHAKE = (prefix, source) => Object.fromEntries(['X', 'Y', 'Z'].map(a => [`${prefix}/${a}`, source]));
+
 const motionEntries = () => ({
     ...Object.fromEntries(['Up', 'Down', 'Left', 'Right', 'Forward', 'Backward'].map(d => [`IMUAccelerometer/${d}`, `Accel ${d}`])),
     ...Object.fromEntries(['Pitch Up', 'Pitch Down', 'Roll Left', 'Roll Right', 'Yaw Left', 'Yaw Right'].map(d => [`IMUGyroscope/${d}`, `Gyro ${d}`]))
 });
 
-// Pointers and motion (aiming, shaking, tilting) are not part of the built-in mappings except the gyro one: make those
-// yourself in the editor, where every one of them is available.
+// The Wii mappings are Wii Remote + Nunchuk unless named Classic: nearly every Wii game takes a Remote and Nunchuk, and many
+// take nothing else (LEGO Indiana Jones, for one: a Classic Controller there moves nothing). The Classic ones are for the games
+// that support it (Virtual Console, Smash Bros. Brawl, Xenoblade). Tilting and swings beyond shaking are in the editor.
 const BUILTIN = [
     {
         id: 'wii-remote', target: 'wii', family: 'wiimote', extension: 'none', name: 'Official Wii Remote',
@@ -220,20 +231,24 @@ const BUILTIN = [
     },
     {
         id: 'wii-nunchuk', target: 'wii', family: 'generic', extension: 'nunchuk', name: 'Wii Remote + Nunchuk (Xbox / generic)',
-        description: 'Buttons only, no pointer or motion: left stick is the Nunchuk stick, bumper and trigger on the left are C and Z. Add a pointer or shake yourself by making a copy.',
+        description: 'What almost every Wii game expects. Left stick: Nunchuk stick; LB, LT: C, Z. A is A, RT or B is B, X and Y are 1 and 2. Right stick: pointer. RB shakes the remote, a left stick click shakes the Nunchuk.',
         entries: {
-            'Buttons/A': 'Button A', 'Buttons/B': 'Trigger R', 'Buttons/1': 'Button X', 'Buttons/2': 'Button Y',
+            'Buttons/A': 'Button A', 'Buttons/B': 'Trigger R | Button B', 'Buttons/1': 'Button X', 'Buttons/2': 'Button Y',
             'Buttons/-': 'Back', 'Buttons/+': 'Start', 'Buttons/Home': 'Guide',
-            ...dpadPad('D-Pad'), ...NUNCHUK_PART
+            ...dpadPad('D-Pad'), ...NUNCHUK_PART, ...stickDirs('IR', 'Right'),
+            ...SHAKE('Shake', 'Shoulder R'), ...SHAKE('Nunchuk/Shake', 'Thumb L')
         }
     },
     {
-        id: 'wii-nunchuk-gyro', target: 'wii', family: 'nintendo', extension: 'nunchuk', name: 'Wii Remote + Nunchuk + gyro (Nintendo)',
-        description: 'For Switch Pro Controller and Joy-Con: the buttons labelled A, B act as the remote’s A, B; the controller’s motion sensors drive the remote’s motion (swings and tilts). No pointer. Dolphin must be able to see the sensors, which it does for a Pro Controller or Joy-Con connected over Bluetooth.',
+        id: 'wii-nunchuk-gyro', target: 'wii', family: 'nintendo', extension: 'nunchuk', name: 'Wii Remote + Nunchuk + motion (Nintendo)',
+        description: 'Left stick: Nunchuk stick; L, ZL: C, Z. A is A, ZR or B is B, Y and X are 1 and 2. Swing, tilt and turn the controller to aim; the right stick aims too, its click re-centres. Two joined Joy-Cons: right is the remote, left the Nunchuk. R shakes.',
         entries: {
-            'Buttons/A': 'Button B', 'Buttons/B': 'Trigger R', 'Buttons/1': 'Button X', 'Buttons/2': 'Button Y',
+            'Buttons/A': 'Button B', 'Buttons/B': 'Trigger R | Button A', 'Buttons/1': 'Button X', 'Buttons/2': 'Button Y',
             'Buttons/-': 'Back', 'Buttons/+': 'Start', 'Buttons/Home': 'Guide',
-            ...motionEntries(), ...dpadPad('D-Pad'), ...NUNCHUK_PART
+            ...motionEntries(), ...dpadPad('D-Pad'), ...NUNCHUK_PART, ...stickDirs('IR', 'Right'),
+            'IMUIR/Recenter': 'Thumb R',
+            ...SHAKE('Shake', 'Shoulder R'), ...SHAKE('Nunchuk/Shake', 'Thumb L'),
+            ...Object.fromEntries(['Up', 'Down', 'Left', 'Right', 'Forward', 'Backward'].map(d => [`Nunchuk/IMUAccelerometer/${d}`, `Accel L ${d}`]))
         }
     },
     {
@@ -284,7 +299,7 @@ const BUILTIN = [
 
 // The mapping a controller gets when its player has not chosen one
 const DEFAULT_BY_FAMILY = {
-    wii: { generic: 'wii-classic', nintendo: 'wii-nunchuk-gyro', wiimote: 'wii-remote' },
+    wii: { generic: 'wii-nunchuk', nintendo: 'wii-nunchuk-gyro', wiimote: 'wii-remote' },
     gamecube: { generic: 'gc-default', nintendo: 'gc-nintendo', wiimote: 'gc-default' },
     switch: { generic: 'switch-generic', nintendo: 'switch-nintendo', wiimote: 'switch-generic' }
 };
@@ -402,7 +417,8 @@ function createStore(dir) {
 // Dolphin writes names that contain spaces or symbols between backticks
 const q = name => (/^\w+$/.test(name) ? name : `\`${name}\``);
 // A Joy-Con pair has its sensors on each half; the right one is the hand that points, so it drives the motion
-const expression = (value, pair) => value.split(' | ').map(part => q(pair ? part.replace(/^(Accel|Gyro) /, '$1 R ') : part)).join(' | ');
+// (a sensor that already names its half is left as it is)
+const expression = (value, pair) => value.split(' | ').map(part => q(pair ? part.replace(/^(Accel|Gyro) (?![LR] )/, '$1 R ') : part)).join(' | ');
 
 // The lines of a [Wiimote N] or [GCPadN] section for this profile and gamepad (device: Dolphin's device name)
 function dolphinSection(profile, device, { pair = false } = {}) {
