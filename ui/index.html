@@ -262,7 +262,7 @@
             z-index: 12;
         }
         .validation-badge:hover .validation-tooltip,
-        .wii-channel.selected .validation-badge .validation-tooltip {
+        .validation-badge:focus-visible .validation-tooltip {
             opacity: 1;
             transform: translateY(0);
         }
@@ -1045,6 +1045,7 @@
         :root[data-theme="dark"] body { background: radial-gradient(ellipse 80% 55% at 50% 0%, #26323e 0%, rgba(38, 50, 62, 0) 70%), linear-gradient(to bottom, #151c24 0%, #0d1218 100%); }
         :root[data-theme="dark"] .toast, :root[data-theme="dark"] .dd { color: #dbe3ea; }
 </style>
+    <link rel="stylesheet" href="/assets/wii-menu.css">
 </head>
 <body>
 
@@ -1069,12 +1070,32 @@
 
     <!-- Icons: Feather (MIT); the controller icon is from Lucide (ISC) -->
     <div class="bottom-bar">
-        <div class="left-buttons">
-            <div class="round-button" id="bb-rescan" onclick="rescan()" title="Refresh game list">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+        <svg class="wii-dock-svg" viewBox="0 0 1440 118" preserveAspectRatio="none" aria-hidden="true">
+            <defs>
+                <linearGradient id="wiiDockGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="var(--wii-dock-fill-top)"/>
+                    <stop offset="100%" stop-color="var(--wii-dock-fill-bottom)"/>
+                </linearGradient>
+            </defs>
+            <path d="M 0,10 L 245,10 C 345,10 388,46 495,46 L 945,46 C 1052,46 1095,10 1195,10 L 1440,10 L 1440,118 L 0,118 Z" fill="url(#wiiDockGrad)"/>
+            <path d="M 0,10 L 245,10 C 345,10 388,46 495,46 L 945,46 C 1052,46 1095,10 1195,10 L 1440,10" fill="none" stroke="var(--wii-dock-rim)" stroke-width="2.5"/>
+        </svg>
+        <div class="dock-wing left-buttons">
+            <div class="dock-slot">
+                <div class="dock-well">
+                    <div class="round-button" id="bb-rescan" onclick="rescan()" title="Refresh game list">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                    </div>
+                </div>
+                <span class="dock-caption">Refresh</span>
             </div>
-            <div class="round-button" id="bb-import" onclick="importRoms()" title="Import ROM zips">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+            <div class="dock-slot">
+                <div class="dock-well">
+                    <div class="round-button" id="bb-import" onclick="importRoms()" title="Import ROM zips">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+                    </div>
+                </div>
+                <span class="dock-caption">Import</span>
             </div>
         </div>
         <div class="center-time">
@@ -1082,23 +1103,28 @@
             <div class="date-display" id="date">Mon 10/19</div>
         </div>
         <div class="pad-hints" id="pad-hints"></div>
-        <div class="left-buttons">
-        <div class="round-button" id="bb-maps" onclick="openMaps()" title="Mappings">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" x2="10" y1="11" y2="11"/><line x1="8" x2="8" y1="9" y2="13"/><line x1="15" x2="15.01" y1="12" y2="12"/><line x1="18" x2="18.01" y1="10" y2="10"/><path d="M17.32 5H6.68a4 4 0 0 0-3.978 3.59c-.006.052-.01.101-.017.152C2.604 9.416 2 14.456 2 16a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.414-1.414A2 2 0 0 1 9.828 16h4.344a2 2 0 0 1 1.414.586L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-1.545-.604-6.584-.685-7.258-.007-.05-.011-.1-.017-.151A4 4 0 0 0 17.32 5z"/></svg>
-        </div>
-        <div class="round-button" id="bb-settings" onclick="openSettings()" title="Settings">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-        </div>
+        <div class="dock-wing left-buttons">
+            <div class="dock-slot">
+                <div class="dock-well">
+                    <div class="round-button" id="bb-settings" onclick="openSettings()" title="Settings">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                    </div>
+                </div>
+                <span class="dock-caption">Settings</span>
+            </div>
         </div>
     </div>
 
-    <div class="overlay" id="settings-overlay" onclick="if (event.target === this) closeSettings()">
+    <div class="overlay" id="settings-overlay" style="z-index:57" onclick="if (event.target === this) closeSettings()">
         <div class="panel">
             <div class="settings-head">
-                <h2>Settings</h2>
+                <div class="settings-title-group">
+                    <h2>Settings</h2>
+                </div>
                 <div class="tabs" role="tablist" aria-label="Settings sections">
                     <button class="tab active" role="tab" data-tab="games" onclick="setTab('games')">Games</button>
                     <button class="tab" role="tab" data-tab="general" onclick="setTab('general')">Sound &amp; controls</button>
+                    <button class="tab" role="tab" data-tab="mappings" onclick="setTab('mappings')">Mappings</button>
                     <button class="tab" role="tab" data-tab="library" onclick="setTab('library')">Game library</button>
                     <button class="tab" role="tab" data-tab="system" onclick="setTab('system')">System</button>
                 </div>
@@ -1112,9 +1138,9 @@
                     <button class="btn" id="browse-button" onclick="browseRomsDir()">Browse</button>
                     <button class="btn primary" onclick="saveRomsDir()">Save</button>
                 </div>
-                <div class="desc" style="margin-top:8px">Folders: <span id="folder-list"></span></div>
-
+                <div class="folder-chips"><span>Console folders:</span><span id="folder-list" style="display:inline-flex;gap:6px;flex-wrap:wrap"></span></div>
                 </section>
+
                 <section class="set-card wide">
                 <h3>Emulators</h3>
                 <div id="flatpak-warning" class="notice" style="display:none">Needs Flatpak: run <code>sudo apt install flatpak</code>, then reopen the menu.</div>
@@ -1125,56 +1151,119 @@
                         <div class="name">Smoother Switch games</div>
                         <div class="desc">Ryujinx keeps built shaders and uses spare memory to avoid pauses. Stutter in a new area fades as you play.</div>
                     </div>
-                    <button class="btn" id="switch-tuning-button" onclick="toggleSwitchTuning()">On</button>
+                    <div class="setting-actions">
+                        <button class="btn" id="switch-tuning-button" onclick="toggleSwitchTuning()">On</button>
+                    </div>
                 </div>
                 </section>
             </div>
 
             <div class="tab-pane" data-pane="general" hidden>
                 <section class="set-card">
-                <h3>Sound</h3>
-                <div class="emu-row" style="border-top:none">
+                <h3>Menu audio</h3>
+                <div class="emu-row">
                     <div class="info">
                         <div class="name">Menu sounds</div>
-                        <div class="desc" id="sound-desc"></div>
+                        <div class="desc" id="sound-desc">Built-in Wii-inspired audio</div>
                     </div>
-                    <button class="btn" id="sound-toggle-button" onclick="toggleSound()">On</button>
-                    <button class="btn" id="sfx-volume-button" onclick="cycleVolume('sfxVolume')">Effects</button>
-                    <button class="btn" id="music-volume-button" onclick="cycleVolume('musicVolume')">Music</button>
-                </div>
-
-                </section>
-                <section class="set-card tall">
-                <h3>Controllers</h3>
-                <div class="emu-row" style="border-top:none">
-                    <div class="info">
-                        <div class="name">Set up controllers before each game</div>
+                    <div class="setting-actions">
+                        <button class="btn" id="sound-toggle-button" onclick="toggleSound()">On</button>
                     </div>
-                    <button class="btn" id="auto-controllers-button" onclick="toggleAutoControllers()">On</button>
                 </div>
                 <div class="emu-row">
                     <div class="info">
-                        <div class="name">Pause: hold Back + Start <span id="pause-hold-value">1.5 s</span></div>
+                        <div class="name">Effects volume</div>
+                        <div class="desc">Click, navigation, and launch sounds</div>
+                    </div>
+                    <div class="setting-actions">
+                        <button class="btn" id="sfx-volume-button" onclick="cycleVolume('sfxVolume')">Effects</button>
+                    </div>
+                </div>
+                <div class="emu-row">
+                    <div class="info">
+                        <div class="name">Music volume</div>
+                        <div class="desc">Background menu ambiance</div>
+                    </div>
+                    <div class="setting-actions">
+                        <button class="btn" id="music-volume-button" onclick="cycleVolume('musicVolume')">Music</button>
+                    </div>
+                </div>
+                </section>
+
+                <section class="set-card">
+                <h3>Controllers &amp; Look</h3>
+                <div class="emu-row">
+                    <div class="info">
+                        <div class="name">Auto-configure before launch</div>
+                        <div class="desc">Write connected controllers into emulator configs automatically</div>
+                    </div>
+                    <div class="setting-actions">
+                        <button class="btn" id="auto-controllers-button" onclick="toggleAutoControllers()">On</button>
+                    </div>
+                </div>
+                <div class="emu-row">
+                    <div class="info">
+                        <div class="name">Pause hold · <span id="pause-hold-value">1.5 s</span></div>
+                        <div class="desc">Hold Back + Start while playing to pause</div>
                     </div>
                     <div class="slider-box">
                         <input type="range" id="pause-hold" min="0" max="2" step="0.5" value="1.5" aria-label="Seconds to hold Back and Start">
                         <div class="slider-ticks"><span>0</span><span>0.5</span><span>1</span><span>1.5</span><span>2 s</span></div>
                     </div>
                 </div>
-
-                </section>
-                <section class="set-card">
-                <h3>Look</h3>
-                <div class="emu-row" style="border-top:none">
+                <div class="emu-row">
                     <div class="info">
                         <div class="name">Theme</div>
+                        <div class="desc" id="theme-desc">Follows this computer's setting.</div>
                     </div>
-                    <button class="btn" id="theme-button" onclick="cycleTheme()">System</button>
+                    <div class="setting-actions">
+                        <button class="btn" id="theme-button" onclick="cycleTheme()">System</button>
+                    </div>
                 </div>
                 </section>
             </div>
 
+            <div class="tab-pane maps-pane" data-pane="mappings" hidden>
+                <div class="mp-wrap settings-mp-wrap">
+                    <div class="mp-list" id="maps-list"></div>
+                    <div class="mp-edit-col">
+                        <div class="mp-edit" id="maps-edit"></div>
+                        <div class="mp-actions" id="maps-actions"></div>
+                    </div>
+                </div>
+            </div>
+
             <div class="tab-pane" data-pane="system" hidden>
+                <section class="set-card wide">
+                <h3>Software &amp; Build</h3>
+                <div class="software-bar">
+                    <div class="build-grid">
+                        <div class="build-stat">
+                            <div class="build-stat-label">Version</div>
+                            <div class="build-stat-value" id="build-version">—</div>
+                        </div>
+                        <div class="build-stat">
+                            <div class="build-stat-label">Build Number</div>
+                            <div class="build-stat-value" id="build-number">—</div>
+                        </div>
+                        <div class="build-stat">
+                            <div class="build-stat-label">Build Date</div>
+                            <div class="build-stat-value" id="build-date">—</div>
+                        </div>
+                    </div>
+                    <div class="emu-row software-update-row">
+                        <div class="info">
+                            <div class="name" id="update-name">Updates</div>
+                            <div class="desc" id="update-desc">Checking for updates…</div>
+                        </div>
+                        <div class="setting-actions">
+                            <button class="btn" id="update-button" onclick="sysUpdate()" disabled>…</button>
+                        </div>
+                    </div>
+                </div>
+                <div id="update-job" class="notice" style="display:none;white-space:pre-line"></div>
+                </section>
+
                 <section class="set-card">
                 <h3>Power</h3>
                 <div class="power-row">
@@ -1188,83 +1277,50 @@
                         <div class="name">When idle</div>
                         <div class="desc" id="idle-desc"></div>
                     </div>
-                    <button class="btn" id="idle-action" onclick="idleCycle('action')">Off</button>
-                    <button class="btn" id="idle-minutes" onclick="idleCycle('minutes')">30 min</button>
+                    <div class="setting-actions">
+                        <button class="btn" id="idle-action" onclick="idleCycle('action')">Off</button>
+                        <button class="btn" id="idle-minutes" onclick="idleCycle('minutes')">30 min</button>
+                    </div>
                 </div>
-
                 </section>
-                <section class="set-card">
-                <h3>Sound</h3>
-                <div class="emu-row" style="border-top:none">
-                    <div class="info">
-                        <div class="name">Volume <span id="vol-value"></span></div>
-                        <div class="desc" id="vol-desc"></div>
-                    </div>
-                    <div class="slider-box" style="width:180px;flex:none"><input type="range" id="vol-range" min="0" max="100" step="5" aria-label="Volume" disabled></div>
-                    <button class="btn" id="vol-mute" onclick="volumeSet({ mute: !(snd.data && snd.data.audio.muted) })" disabled>Mute</button>
-                </div>
-                <div class="emu-row" id="out-row">
-                    <div class="info">
-                        <div class="name">Output</div>
-                        <div class="desc" id="out-desc">…</div>
-                    </div>
-                    <button class="btn" id="out-button" onclick="volumeNextOutput()" disabled>Change</button>
-                </div>
-                <div class="emu-row" id="tv-row" style="display:none">
-                    <div class="info">
-                        <div class="name">TV volume</div>
-                        <div class="desc" id="tv-desc"></div>
-                    </div>
-                    <button class="btn" id="tv-down" onclick="tvKey('down')" disabled>−</button>
-                    <button class="btn" id="tv-up" onclick="tvKey('up')" disabled>+</button>
-                    <button class="btn" id="tv-mute" onclick="tvKey('mute')" disabled>Mute</button>
-                    <button class="btn" id="tv-install" onclick="tvInstall()" style="display:none">Install</button>
-                </div>
 
-                </section>
-                <section class="set-card">
-                <h3>Software</h3>
-                <div class="emu-row" style="border-top:none">
-                    <div class="info">
-                        <div class="name" id="update-name">Version</div>
-                        <div class="desc" id="update-desc">Checking for updates…</div>
-                    </div>
-                    <button class="btn" id="update-button" onclick="sysUpdate()" disabled>…</button>
-                </div>
-                <div id="update-job" class="notice" style="display:none;white-space:pre-line"></div>
-
-                </section>
                 <section class="set-card">
                 <h3>Kiosk mode</h3>
-                <div class="emu-row" style="border-top:none" id="kiosk-row">
+                <div class="emu-row" id="kiosk-row">
                     <div class="info">
                         <div class="name" id="kiosk-state"></div>
                         <div class="desc" id="kiosk-desc"></div>
                     </div>
-                    <button class="btn" id="kiosk-button" onclick="sysKiosk()" disabled>…</button>
+                    <div class="setting-actions">
+                        <button class="btn" id="kiosk-button" onclick="sysKiosk()" disabled>…</button>
+                    </div>
                 </div>
                 <div id="kiosk-job" class="notice" style="display:none"></div>
                 <div id="kiosk-checks"></div>
-
                 </section>
-                <section class="set-card wide">
-                <div id="wifi-section">
+
+                <section class="set-card wide" id="wifi-card" style="display:none">
+                <div id="wifi-section" style="display:none">
                     <h3>Wi-Fi</h3>
-                    <div class="emu-row" style="border-top:none">
+                    <div class="emu-row">
                         <div class="info">
                             <div class="name">Status</div>
                             <div class="desc" id="wifi-verdict">Checking…</div>
                         </div>
-                        <button class="btn" id="wifi-more" onclick="wifiState.details = !wifiState.details; renderWifi()">Details</button>
-                        <button class="btn" id="wifi-check" onclick="wifiRefresh(true)">Check</button>
-                        <button class="btn primary" id="wifi-repair" onclick="wifiRepair()">Repair</button>
+                        <div class="setting-actions">
+                            <button class="btn" id="wifi-more" onclick="wifiState.details = !wifiState.details; renderWifi()">Details</button>
+                            <button class="btn" id="wifi-check" onclick="wifiRefresh(true)">Check</button>
+                            <button class="btn primary" id="wifi-repair" onclick="wifiRepair()">Repair</button>
+                        </div>
                     </div>
                     <pre id="wifi-details" class="wifi-details" style="display:none"></pre>
                     <div class="emu-row">
                         <div class="info">
                             <div class="name">Keep Wi-Fi working after sleep <span id="wifi-fix-state"></span></div>
                         </div>
-                        <button class="btn" id="wifi-fix" onclick="wifiSleepFix()" disabled>…</button>
+                        <div class="setting-actions">
+                            <button class="btn" id="wifi-fix" onclick="wifiSleepFix()" disabled>…</button>
+                        </div>
                     </div>
                     <div id="wifi-job" class="notice" style="display:none"></div>
                 </div>
@@ -1273,43 +1329,55 @@
 
             <div class="tab-pane" data-pane="library" hidden>
                 <section class="set-card wide">
-                <div class="emu-row" style="border-top:none">
+                <div class="emu-row">
                     <div class="info">
                         <div class="name">Share games between computers</div>
+                        <div class="desc">Stream your game library over your home network or Tailscale so another PC can browse and download games.</div>
                     </div>
-                    <button class="btn primary" id="guide-button" onclick="openGuide()">How it works</button>
+                    <div class="setting-actions">
+                        <button class="btn primary" id="guide-button" onclick="openGuide()">How it works</button>
+                    </div>
                 </div>
-
                 </section>
+
                 <section class="set-card">
-                <h3>This computer has the games</h3>
-                <div class="emu-row" style="border-top:none">
+                <h3>Host · Share this computer</h3>
+                <div class="emu-row">
                     <div class="info">
                         <div class="name">Share this computer's games</div>
                         <div class="progress" id="share-status"></div>
                     </div>
-                    <button class="btn" id="share-toggle-button" onclick="toggleShare()">Off</button>
+                    <div class="setting-actions">
+                        <button class="btn" id="share-toggle-button" onclick="toggleShare()">Off</button>
+                    </div>
                 </div>
-                <div id="share-details" style="display:none">
+                <div id="share-details" style="display:none;margin-top:8px">
                     <div class="share-box">
                         <div class="share-item"><div class="share-label">Address</div><div class="share-value" id="share-address"></div></div>
                         <div class="share-item"><div class="share-label">Access key</div><div class="share-value key" id="share-key"></div></div>
                         <button class="btn" onclick="newShareKey()">New key</button>
                     </div>
-                    <div class="desc" style="margin-top:6px">Enter both on the other computer.</div>
+                    <div class="desc" style="margin-top:8px">Enter both on the other computer.</div>
                 </div>
-
                 </section>
+
                 <section class="set-card">
-                <h3>Get games from another computer</h3>
-                <div class="row"><input type="text" id="remote-address" spellcheck="false" placeholder="Address, e.g. 192.168.1.20:8765"><button class="btn" onclick="testRemote()">Test</button></div>
-                <div class="row" style="margin-top:8px"><input type="password" id="remote-key" spellcheck="false" placeholder="Access key"><button class="btn primary" onclick="saveRemote()">Save</button></div>
-                <div class="desc" id="remote-status" style="margin-top:8px"></div>
+                <h3>Client · Get games from another PC</h3>
+                <div class="setting-field-group">
+                    <div class="setting-field-label">Host address</div>
+                    <div class="row"><input type="text" id="remote-address" spellcheck="false" placeholder="e.g. 192.168.1.20:8765"><button class="btn" onclick="testRemote()">Test</button></div>
+                    <div class="setting-field-label">Access key</div>
+                    <div class="row"><input type="password" id="remote-key" spellcheck="false" placeholder="Access key"><button class="btn primary" onclick="saveRemote()">Save</button></div>
+                    <div class="desc" id="remote-status"></div>
+                </div>
                 </section>
             </div>
 
-            <div class="row settings-foot">
-                <span class="desc">LB / RB: switch sections</span>
+            <div class="settings-foot">
+                <div class="settings-foot-meta">
+                    <span>LB / RB: switch sections</span>
+                    <span id="settings-build-summary"></span>
+                </div>
                 <button class="btn" onclick="closeSettings()">Close (B)</button>
             </div>
         </div>
@@ -1379,21 +1447,7 @@
         </div>
     </div>
 
-    <div class="overlay" id="maps-overlay" style="z-index:57" onclick="if (event.target === this) closeMaps()">
-        <div class="panel wide">
-            <div class="wiihead"><div class="eyebrow" style="font-size:12px;font-weight:800;letter-spacing:.14em;text-transform:uppercase">Controllers</div>
-            <h2>Mappings</h2></div>
-            <div class="mp-wrap">
-                <div class="mp-list" id="maps-list"></div>
-                <div>
-                    <div class="mp-edit" id="maps-edit"></div>
-                    <div class="mp-actions" id="maps-actions"></div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="overlay" id="pair-overlay" style="z-index:56" onclick="if (event.target === this) closePair()">
+    <div class="overlay" id="pair-overlay" style="z-index:58" onclick="if (event.target === this) closePair()">
         <div class="panel guide">
             <div class="eyebrow">Controllers</div>
             <h2 id="pair-title" style="margin-top:4px">Connect a controller</h2>
@@ -1432,9 +1486,9 @@
         let CHANNELS_PER_PAGE = 12;
         const TILE_W = 300, TILE_H = 190, GRID_GAP = 18;
         const CONTROLLERS_PAGE = -1;          // the page to the left of the first games page
-        const BOTTOM_BUTTONS = ['bb-rescan', 'bb-import', 'bb-maps', 'bb-settings'];
+        const BOTTOM_BUTTONS = ['bb-rescan', 'bb-import', 'bb-settings'];
         const cols = () => onControllers() ? 4 : COLUMNS;
-        const bottomColumn = i => [0, 1, cols() - 1, cols() - 1][i];   // which grid column each bottom button sits under
+        const bottomColumn = i => [0, 1, cols() - 1][i];   // which grid column each bottom button sits under
 
         let allGames = [];
         let padList = [];
@@ -1571,6 +1625,8 @@
                 g.console,
                 !!g.installed,
                 !!g.favorite,
+                !!g.backlog,
+                g.lastPlayed || 0,
                 !!g.remote,
                 g.size || 0,
                 g.validation ? `${g.validation.status}:${g.validation.code || ''}:${g.validation.reason || ''}` : ''
@@ -1644,8 +1700,7 @@
                     channel.innerHTML = `
                         <span class="channel-badge badge-${escapeHtml(game.console)}">${escapeHtml(game.console)}</span>
                         <span class="remote-dl" title="Download from the server"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="15"/><polyline points="6 10 12 16 18 10"/><line x1="5" y1="20" x2="19" y2="20"/></svg></span>
-                        <div class="channel-title">${escapeHtml(game.title)}</div>
-                        <div class="channel-note remote-note">On server &middot; ${escapeHtml(fmtBytes(game.size))}</div>`;
+                        <div class="channel-title">${escapeHtml(game.title)}</div>`;
                     channel.addEventListener('mouseenter', () => {
                         if (sheet.open) return;
                         if (zone !== 'grid' || selectedIndex !== i) Sfx.play('move');
@@ -1653,19 +1708,19 @@
                         selectedIndex = i;
                         renderFocus();
                     });
-                    channel.addEventListener('click', () => openSaveSheet(game));
+                    channel.addEventListener('click', () => {
+                        const live = allGames.find(g => g.path === game.path) || game;
+                        openSaveSheet(live);
+                    });
                 } else if (game) {
                     const badgeClass = `badge-${game.console}`;
-                    const invalid = !!(game.validation && game.validation.status === 'error');
-                    channel.className = `wii-channel ${game.installed ? '' : 'channel-uninstalled'} ${game.art ? 'has-art' : ''} ${invalid ? 'channel-invalid' : ''}`;
+                    channel.className = `wii-channel ${game.installed ? '' : 'channel-uninstalled'} ${game.art ? 'has-art' : ''}`;
                     channel.dataset.path = game.path;
                     channel.innerHTML = `
                         ${starHtml(game)}
-                        ${validationBadgeHtml(game)}
                         ${game.art ? `<img class="channel-art" src="${game.art}" alt="" draggable="false">` : ''}
                         <span class="channel-badge ${badgeClass}">${escapeHtml(game.console)}</span>
                         <div class="channel-title">${escapeHtml(game.title)}</div>
-                        <div class="channel-note">${game.installed ? '' : 'Emulator not installed'}</div>
                     `;
                     const img = channel.querySelector('img');
                     if (img) img.addEventListener('error', () => { img.remove(); channel.classList.remove('has-art'); });
@@ -1677,19 +1732,40 @@
                         selectedIndex = i;
                         renderFocus();
                     });
-                    channel.addEventListener('click', () => openSaveSheet(game));
+                    channel.addEventListener('click', () => {
+                        const live = allGames.find(g => g.path === game.path) || game;
+                        openSaveSheet(live);
+                    });
                 } else {
                     channel.className = 'wii-channel channel-empty';
                     channel.innerHTML = `<span class="channel-badge badge-empty"></span><div class="channel-title"></div>`;
                 }
 
                 const star = channel.querySelector('.fav-star');
-                if (star) star.addEventListener('click', e => { e.stopPropagation(); toggleFavorite(game); });
+                if (star) {
+                    star.addEventListener('click', e => {
+                        e.stopPropagation();
+                        const live = game ? (allGames.find(g => g.path === game.path) || game) : null;
+                        toggleFavorite(live);
+                    });
+                }
                 grid.appendChild(channel);
             }
         }
 
-        const starHtml = game => `<button type="button" class="fav-star ${game.favorite ? 'on' : ''}" title="${game.favorite ? 'Remove from favorites' : 'Add to favorites'} (X or Y)" aria-label="${game.favorite ? 'Remove from favorites' : 'Add to favorites'}" aria-pressed="${!!game.favorite}"><svg viewBox="0 0 24 24" width="18" height="18" stroke-linejoin="round" stroke-width="2"><path d="M12 3.2l2.6 5.6 6.1.7-4.5 4.2 1.2 6-5.4-3-5.4 3 1.2-6-4.5-4.2 6.1-.7z"/></svg></button>`;
+        function starHtml(game) {
+            const status = game.favorite ? 'star' : game.backlog ? 'backlog' : 'none';
+            const cls = status === 'star' ? 'on' : status === 'backlog' ? 'backlog' : '';
+            const title = status === 'star'
+                ? 'Starred · Press for Backlog (X or Y)'
+                : status === 'backlog'
+                    ? 'Backlog · Press to clear (X or Y)'
+                    : 'Star or add to Backlog (X or Y)';
+            const icon = status === 'backlog'
+                ? '<svg viewBox="0 0 24 24" width="16" height="16" stroke-linejoin="round" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="3.5"/></svg>'
+                : '<svg viewBox="0 0 24 24" width="18" height="18" stroke-linejoin="round" stroke-width="2"><path d="M12 3.2l2.6 5.6 6.1.7-4.5 4.2 1.2 6-5.4-3-5.4 3 1.2-6-4.5-4.2 6.1-.7z"/></svg>';
+            return `<button type="button" class="fav-star ${cls}" title="${title}" aria-label="${title}" aria-pressed="${status !== 'none'}">${icon}</button>`;
+        }
 
         const WARNING_ICON_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
 
@@ -1711,19 +1787,71 @@
             return `<div class="sheet-validation-banner" role="alert">${WARNING_ICON_SVG}<span>${escapeHtml(prefix + reason)}</span></div>`;
         }
 
-        // Favourites come first. The game stays selected wherever it lands.
+        function gameTierRank(game) {
+            if (game.remote) {
+                return 3;
+            }
+            if (game.favorite) {
+                return 0;
+            }
+            if (game.backlog) {
+                return 1;
+            }
+            return 2;
+        }
+
+        function sortGamesList(list) {
+            return list.sort((a, b) => {
+                const tierDiff = gameTierRank(a) - gameTierRank(b);
+                if (tierDiff !== 0) {
+                    return tierDiff;
+                }
+                const playedDiff = (b.lastPlayed || 0) - (a.lastPlayed || 0);
+                if (playedDiff !== 0) {
+                    return playedDiff;
+                }
+                return a.title.localeCompare(b.title);
+            });
+        }
+
+        // Cycles none -> star -> backlog (green square) -> none. The game stays selected wherever it lands.
         async function toggleFavorite(game) {
-            if (!game) return;
-            if (game.remote) { Sfx.play('error'); return showToast('Download the game to star it'); }
-            const on = !game.favorite;
-            game.favorite = on;
-            Sfx.play(on ? 'select' : 'back');
-            allGames.sort((a, b) => (!!a.remote - !!b.remote) || (!!b.favorite - !!a.favorite) || a.title.localeCompare(b.title));
-            if (!onControllers()) { page = gamePages().findIndex(p => p.includes(game)); selectedIndex = gamePages()[page].indexOf(game); zone = 'grid'; }
+            if (!game) {
+                return;
+            }
+            if (game.remote) {
+                Sfx.play('error');
+                return showToast('Download the game to star or backlog it');
+            }
+            const current = game.favorite ? 'star' : game.backlog ? 'backlog' : 'none';
+            const nextStatus = current === 'none' ? 'star' : current === 'star' ? 'backlog' : 'none';
+            game.favorite = nextStatus === 'star';
+            game.backlog = nextStatus === 'backlog';
+            game.status = nextStatus;
+            Sfx.play(nextStatus === 'star' ? 'select' : nextStatus === 'backlog' ? 'toggle' : 'back');
+            sortGamesList(allGames);
+            if (!onControllers()) {
+                page = Math.max(0, gamePages().findIndex(p => p.includes(game)));
+                selectedIndex = Math.max(0, gamePages()[page].indexOf(game));
+                zone = 'grid';
+            }
             renderPage();
-            showToast(on ? `${game.title} added to favorites` : `${game.title} removed from favorites`);
-            try { await fetch('/api/favorites', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: game.path, favorite: on }) }); }
-            catch { showToast('Could not save the favorite'); }
+            const toastText = nextStatus === 'star'
+                ? `${game.title} starred`
+                : nextStatus === 'backlog'
+                    ? `${game.title} added to backlog`
+                    : `${game.title} cleared from star & backlog`;
+            showToast(toastText);
+            try {
+                await fetch('/api/favorites', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path: game.path, status: nextStatus })
+                });
+            }
+            catch {
+                showToast('Could not save game priority');
+            }
         }
 
         // ================= CONTROLLERS PAGE =================
@@ -2311,11 +2439,13 @@
             if (game) openSaveSheet(game);
         }
 
+        let toastTimer = null;
         function showToast(msg) {
             const toast = document.getElementById('toast');
             toast.innerText = msg;
             toast.classList.add('show');
-            setTimeout(() => toast.classList.remove('show'), 3000);
+            clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => toast.classList.remove('show'), 3200);
         }
 
         async function rescan() {
@@ -2405,6 +2535,7 @@
             }
             Sfx.duck(false);
             lastInputTime = Date.now() + 500;
+            loadGames();
             watchSyncAfterGame();
         }
 
@@ -3061,25 +3192,59 @@
         }
 
         // ================= SETTINGS =================
-        async function openSettings() {
+        async function openSettings(initialTab = 'games') {
             Sfx.play('open');
             settingsOpen = true;
-            setTab('games', true);
+            setTab(TABS.includes(initialTab) ? initialTab : 'games', true);
             document.getElementById('settings-overlay').classList.add('open');
             await refreshSettings();
-            setPadFocus(firstFocusable());
+            if (settingsTab === 'mappings') {
+                mpsHighlight();
+            }
+            else {
+                setPadFocus(firstFocusable());
+            }
         }
 
-        // ---- Settings tabs: Games / Sound & controls / Game library (LB and RB switch) ----
-        const TABS = ['games', 'general', 'library', 'system'];
+        // ---- Settings tabs: Games / Sound & controls / Mappings / Game library / System (LB and RB switch) ----
+        const TABS = ['games', 'general', 'mappings', 'library', 'system'];
         let settingsTab = 'games';
 
         function setTab(name, quiet) {
+            if (settingsTab === 'mappings' && name !== 'mappings') {
+                mps.open = false;
+            }
             settingsTab = name;
             document.querySelectorAll('#settings-overlay .tab-pane').forEach(p => { p.hidden = p.dataset.pane !== name; });
             document.querySelectorAll('#settings-overlay .tab').forEach(t => { t.classList.toggle('active', t.dataset.tab === name); t.setAttribute('aria-selected', String(t.dataset.tab === name)); });
-            if (name === 'system') { sysRefresh().then(() => wifiRefresh(false)); updateAutoCheck(); volumeRefresh(); }
-            if (!quiet) { Sfx.play('page'); setPadFocus(document.querySelector('#settings-overlay .tab.active')); }
+            if (name === 'system') {
+                sysRefresh().then(() => {
+                    if (sys.data && sys.data.platform !== 'win32') {
+                        wifiRefresh(false);
+                    }
+                });
+                updateAutoCheck();
+            }
+            if (name === 'mappings') {
+                setPadFocus(null);
+                Object.assign(mps, { open: true, zone: 'list', error: '', notice: '', warned: false, confirmDel: false });
+                if (!mps.data) {
+                    mps.draft = null;
+                    renderMaps();
+                }
+                mpsLoad().then(() => {
+                    if (mps.data && mps.data.profiles) {
+                        mps.i = Math.max(0, mps.data.profiles.findIndex(p => p.id === mps.sel));
+                    }
+                    mpsHighlight();
+                });
+            }
+            if (!quiet) {
+                Sfx.play('page');
+                if (name !== 'mappings') {
+                    setPadFocus(document.querySelector('#settings-overlay .tab.active'));
+                }
+            }
         }
 
         // ---- System tab: restart, shut down, close the menu, kiosk mode (Ubuntu) ----
@@ -3178,10 +3343,59 @@
             }));
         }
 
+        function formatBuildDate(iso) {
+            if (!iso) {
+                return 'Dev (unpackaged)';
+            }
+            const parsed = new Date(iso);
+            if (Number.isNaN(parsed.getTime())) {
+                return String(iso);
+            }
+            return parsed.toLocaleString(undefined, {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+        function renderBuildInfo(build) {
+            if (!build) {
+                return;
+            }
+            const versionText = build.version ? `v${build.version}` : 'v—';
+            const buildNumText = build.buildNumber ? `#${build.buildNumber}` : 'Dev';
+            const commitSuffix = build.commit ? ` (${build.commit})` : '';
+            const dateText = formatBuildDate(build.buildDate);
+
+            const vEl = document.getElementById('build-version');
+            const nEl = document.getElementById('build-number');
+            const dEl = document.getElementById('build-date');
+            const sumEl = document.getElementById('settings-build-summary');
+
+            if (vEl) {
+                vEl.textContent = versionText;
+            }
+            if (nEl) {
+                nEl.textContent = `${buildNumText}${commitSuffix}`;
+            }
+            if (dEl) {
+                dEl.textContent = dateText;
+                dEl.title = build.buildDate || 'Unpackaged development copy';
+            }
+            if (sumEl) {
+                sumEl.textContent = `${versionText} · Build ${buildNumText} · ${dateText}`;
+            }
+        }
+
         // ---- Software update: pull the new version from GitHub and start again on it (a git checkout: npm start, kiosk mode) ----
         const upd = { info: null, checking: false };
         async function updateRefresh() {
             try { upd.info = await (await fetch('/api/system/update')).json(); } catch { upd.info = null; }
+            if (upd.info && upd.info.build) {
+                renderBuildInfo(upd.info.build);
+            }
             renderUpdate();
         }
         function renderUpdate() {
@@ -3191,9 +3405,9 @@
             const busy = !!(job && job.phase === 'running');
             const show = (text, off) => { box.style.display = text ? '' : 'none'; box.textContent = text || ''; box.classList.toggle('off', !!off); };
             desc.style.color = '';
-            if (!i) { name.textContent = 'Version'; desc.textContent = 'Could not check.'; btn.style.display = 'none'; return show(''); }
-            if (!i.supported) { name.textContent = 'Version'; desc.textContent = i.reason; btn.style.display = 'none'; return show(''); }
-            name.textContent = `Version ${i.version.date.replace(/-/g, '.')}`;
+            if (!i) { name.textContent = 'GitHub Updates'; desc.textContent = 'Could not check.'; btn.style.display = 'none'; return show(''); }
+            if (!i.supported) { name.textContent = 'Packaged Build'; desc.textContent = i.reason; btn.style.display = 'none'; return show(''); }
+            name.textContent = `GitHub · ${i.version.date.replace(/-/g, '.')}`;
             const ready = i.checked && i.behind > 0 && !i.dirty.length && !i.ahead;
             btn.style.display = i.dirty.length || i.ahead ? 'none' : '';
             btn.disabled = busy || upd.checking;
@@ -3258,6 +3472,10 @@
         const wifiState = { data: null, poll: null, details: false };
 
         async function wifiRefresh(sound) {
+            if (sys.data && sys.data.platform === 'win32') {
+                renderWifi();
+                return;
+            }
             if (sound) Sfx.play('select');
             try { wifiState.data = await (await fetch('/api/system/wifi')).json(); } catch { wifiState.data = null; }
             renderWifi();
@@ -3268,8 +3486,14 @@
 
         function renderWifi() {
             const d = wifiState.data;
+            const card = document.getElementById('wifi-card');
             const section = document.getElementById('wifi-section');
-            if (sys.data && sys.data.platform === 'win32') { section.style.display = 'none'; return; }
+            if (!sys.data || sys.data.platform === 'win32') {
+                if (card) card.style.display = 'none';
+                section.style.display = 'none';
+                return;
+            }
+            if (card) card.style.display = '';
             section.style.display = '';
             const verdict = document.getElementById('wifi-verdict'), details = document.getElementById('wifi-details');
             const repair = document.getElementById('wifi-repair'), fix = document.getElementById('wifi-fix'), job = document.getElementById('wifi-job');
@@ -3340,72 +3564,19 @@
             sysConfirm(labels[0], labels[1], 'Press again', () => send(false));
         }
 
-        // ---- Sound: the computer's volume and output, and the TV's own volume over HDMI-CEC ----
-        const snd = { data: null };
+        function renderVolume() {
+            const range = document.getElementById('vol-range');
+            if (!range) {
+                return;
+            }
+        }
         async function volumeRefresh() {
-            try { snd.data = await (await fetch('/api/system/sound')).json(); } catch { snd.data = null; }
             renderVolume();
         }
-        function renderVolume() {
-            const d = snd.data, a = d && d.audio, t = d && d.tv;
-            const range = document.getElementById('vol-range'), mute = document.getElementById('vol-mute');
-            const ok = !!(a && a.supported && a.volume !== null);
-            range.disabled = mute.disabled = !ok;
-            document.getElementById('vol-desc').textContent = !a ? 'Could not check.' : !a.supported ? a.reason : '';
-            if (ok && document.activeElement !== range) { range.value = a.volume; range.style.setProperty('--fill', `${a.volume}%`); }
-            document.getElementById('vol-value').textContent = ok ? `· ${a.muted ? 'muted' : `${a.volume}%`}` : '';
-            mute.textContent = a && a.muted ? 'Unmute' : 'Mute';
-            const outs = (a && a.outputs) || [];
-            document.getElementById('out-row').style.display = outs.length ? '' : 'none';
-            const cur = outs.find(o => o.name === a.output);
-            document.getElementById('out-desc').textContent = cur ? cur.description : '…';
-            document.getElementById('out-button').disabled = outs.length < 2;
-            const tvOk = !!(t && t.supported);
-            ['tv-down', 'tv-up', 'tv-mute'].forEach(id => { const b = document.getElementById(id); b.disabled = !tvOk; b.style.display = t && t.install ? 'none' : ''; });
-            const inst = document.getElementById('tv-install');
-            inst.style.display = t && t.install ? '' : 'none';
-            document.getElementById('tv-row').style.display = tvOk || (t && t.install) ? '' : 'none';
-            document.getElementById('tv-desc').textContent = t && t.install ? 'Needs v4l-utils.' : '';
-        }
-        async function volumeSet(body) {
-            try {
-                const res = await fetch('/api/system/sound', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-                const data = await res.json();
-                if (!res.ok) { Sfx.play('error'); return showToast(data.message || 'That did not work'); }
-                snd.data = data;
-                renderVolume();
-            } catch { showToast('The menu could not be reached.'); }
-        }
-        function volumeNextOutput() {
-            const a = snd.data && snd.data.audio;
-            if (!a || !a.outputs.length) return;
-            const i = a.outputs.findIndex(o => o.name === a.output);
-            const next = a.outputs[(i + 1) % a.outputs.length];
-            volumeSet({ output: next.name }).then(() => showToast(`Sound: ${next.description}`));
-        }
-        async function tvKey(key) {
-            try {
-                const res = await fetch('/api/system/tv', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key }) });
-                if (!res.ok) { Sfx.play('error'); showToast((await res.json()).message || 'The TV did not take it'); }
-            } catch { showToast('The menu could not be reached.'); }
-        }
-        function tvInstall() {
-            withAdmin(async () => {
-                showToast('Installing v4l-utils…');
-                await volumeSet({}).catch(() => {});
-                try {
-                    const res = await fetch('/api/system/tv/install', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-                    const data = await res.json();
-                    if (!res.ok) { Sfx.play('error'); return showToast(data.message || 'Could not install it'); }
-                    snd.data = data; renderVolume(); showToast('Done');
-                } catch { showToast('The menu could not be reached.'); }
-            });
-        }
-        (() => {
-            const range = document.getElementById('vol-range');
-            range.addEventListener('input', () => { range.style.setProperty('--fill', `${range.value}%`); document.getElementById('vol-value').textContent = `· ${range.value}%`; });
-            range.addEventListener('change', () => volumeSet({ volume: Number(range.value) }));
-        })();
+        async function volumeSet() {}
+        function volumeNextOutput() {}
+        async function tvKey() {}
+        function tvInstall() {}
 
         function sysQuit() {
             sysConfirm('sys-quit', 'Close menu', 'Press again', async () => {
@@ -3722,7 +3893,7 @@
 
         // Mouse and keyboard on a select open the same list
         document.addEventListener('mousedown', e => {
-            const sel = e.target.closest && e.target.closest('#players-overlay select, #maps-overlay select');
+            const sel = e.target.closest && e.target.closest('#players-overlay select, #settings-overlay select');
             if (sel) { e.preventDefault(); sel.focus(); if (dd.open && dd.sel === sel) ddClose(); else ddOpen(sel); }
             else if (dd.open && !e.target.closest('#dd')) ddClose();
         }, true);
@@ -3963,8 +4134,7 @@
             actions.innerHTML = `<span class="hint">${escapeHtml(mps.error || mps.notice || (mps.dirty ? 'Unsaved changes' : ''))}</span>`
                 + (p.isNew ? btn('Save', 'save', true) + btn('Discard', 'discard')
                     : ro ? (real ? '' : btn('Duplicate to edit', 'dup', true)) + btn('New mapping', 'new')
-                    : btn('Save', 'save', mps.dirty) + btn('Duplicate', 'dup') + btn('New mapping', 'new') + btn('Delete', 'del'))
-                + btn('Close (B)', 'close');
+                    : btn('Save', 'save', mps.dirty) + btn('Duplicate', 'dup') + btn('New mapping', 'new') + btn('Delete', 'del'));
 
             // events
             list.querySelectorAll('.mp-item').forEach(el => el.addEventListener('click', () => {
@@ -3990,7 +4160,7 @@
         }
 
         function mpsHighlight() {
-            document.querySelectorAll('#maps-overlay .pad-focus').forEach(el => el.classList.remove('pad-focus'));
+            document.querySelectorAll('#settings-overlay [data-pane="mappings"] .pad-focus').forEach(el => el.classList.remove('pad-focus'));
             const items = mpsItems();
             mps.i = Math.max(0, Math.min(mps.i, items.length - 1));
             const el = items[mps.i];
@@ -4043,24 +4213,11 @@
         }
 
         async function openMaps() {
-            Object.assign(mps, { open: true, zone: 'list', i: 0, error: '', notice: '', warned: false, confirmDel: false });
-            document.getElementById('maps-overlay').classList.add('open');
-            mps.draft = null; renderMaps();
-            await mpsLoad();
-            mps.i = Math.max(0, mps.data.profiles.findIndex(p => p.id === mps.sel));
-            mpsHighlight();
+            await openSettings('mappings');
         }
 
         function closeMaps() {
-            if (mps.dirty && !mps.warned) { mps.warned = true; mps.notice = 'Unsaved changes. Press Close again to throw them away.'; return renderMaps(); }
-            ddClose(true);
-            mps.warned = false; mps.dirty = false;
-            mps.open = false;
-            document.getElementById('maps-overlay').classList.remove('open');
-            lastInputTime = Date.now() + 300;
-            Sfx.play('close');
-            if (plr.open) plrLoad();
-            refreshControllers();
+            closeSettings();
         }
 
         // ================= CONNECT A CONTROLLER =================
@@ -4352,11 +4509,23 @@
         }
 
         function closeSettings() {
+            if (settingsTab === 'mappings' && mps.dirty && !mps.warned) {
+                mps.warned = true;
+                mps.notice = 'Unsaved changes. Press Close again to throw them away.';
+                renderMaps();
+                return;
+            }
+            ddClose(true);
+            mps.warned = false;
+            mps.dirty = false;
+            mps.open = false;
             Sfx.play('close');
             settingsOpen = false;
             setPadFocus(null);
             document.getElementById('settings-overlay').classList.remove('open');
             lastInputTime = Date.now() + 300;
+            if (plr.open) plrLoad();
+            refreshControllers();
             loadGames();
         }
 
@@ -4446,15 +4615,22 @@
             showPauseHold(data.pauseHold === undefined ? 1.5 : data.pauseHold);
             renderIdle(data.idle);
             applyTheme(data.theme || 'system');
+            if (data.build) {
+                renderBuildInfo(data.build);
+            }
+            const wifiCard = document.getElementById('wifi-card');
+            if (wifiCard) {
+                wifiCard.style.display = data.platform === 'win32' ? 'none' : '';
+            }
             renderSound(await Sfx.load());
             refreshLibrarySettings();
 
             const list = document.getElementById('emulator-list');
             list.innerHTML = '';
             const note = document.getElementById('windows-note');
-            note.style.display = data.manual ? 'block' : 'none';
+            note.style.display = data.manual ? 'flex' : 'none';
             if (data.manual) {
-                note.innerHTML = `Install, or unzip into the emulators folder, or Locate the program. <button class="btn" id="open-emulators-folder" style="margin-left:6px">Open folder</button>`;
+                note.innerHTML = `<span>Install, unzip into the emulators folder, or Locate the executable.</span><button class="btn" id="open-emulators-folder">Open folder</button>`;
                 document.getElementById('open-emulators-folder').addEventListener('click', () => openFolder(data.emulatorsDir));
             }
 
@@ -4465,14 +4641,16 @@
                     // Windows: the menu can't install emulators, so it finds them, or you point at them
                     row.innerHTML = `
                         <div class="info">
-                            <div class="name">${escapeHtml(emu.name)} <span class="state">${emu.installed ? 'Found' : ''}</span></div>
+                            <div class="name">${escapeHtml(emu.name)} <span class="state">${emu.installed ? 'Found' : 'Not found'}</span></div>
                             <div class="progress" id="progress-${emu.id}" style="word-break:break-all">${emu.installed ? escapeHtml(emu.path || '') : 'Not found yet'}</div>
                         </div>
-                        ${emu.installed ? `<button class="btn" id="open-${emu.id}" title="Open ${escapeHtml(emu.name)} to set up controllers, BIOS and other settings">Open</button>` : ''}
-                        ${!emu.installed && emu.installable ? `<button class="btn primary" id="btn-${emu.id}">Install</button>` : ''}
-                        ${emu.menuInstalled ? `<button class="btn" id="btn-${emu.id}" title="Delete the copy the menu installed">Remove</button>` : ''}
-                        ${!emu.installed && emu.download ? `<button class="btn ${emu.installable ? '' : 'primary'}" id="dl-${emu.id}">${emu.installable ? 'Website' : 'Download'}</button>` : ''}
-                        <button class="btn ${emu.installed ? '' : ''}" id="loc-${emu.id}">Locate</button>`;
+                        <div class="setting-actions">
+                            ${emu.installed ? `<button class="btn" id="open-${emu.id}" title="Open ${escapeHtml(emu.name)} to set up controllers, BIOS and other settings">Open</button>` : ''}
+                            ${!emu.installed && emu.installable ? `<button class="btn primary" id="btn-${emu.id}">Install</button>` : ''}
+                            ${emu.menuInstalled ? `<button class="btn" id="btn-${emu.id}" title="Delete the copy the menu installed">Remove</button>` : ''}
+                            ${!emu.installed && emu.download ? `<button class="btn ${emu.installable ? '' : 'primary'}" id="dl-${emu.id}">${emu.installable ? 'Website' : 'Download'}</button>` : ''}
+                            <button class="btn" id="loc-${emu.id}">Locate</button>
+                        </div>`;
                     row.querySelector(`#loc-${emu.id}`).addEventListener('click', () => locateEmulator(emu));
                     const dlBtn = row.querySelector(`#dl-${emu.id}`);
                     if (dlBtn) dlBtn.addEventListener('click', () => openLink(emu.download));
@@ -4485,14 +4663,16 @@
                 }
                 row.innerHTML = `
                     <div class="info">
-                        <div class="name">${escapeHtml(emu.name)} <span class="state">${emu.installed ? 'Installed' : ''}</span></div>
+                        <div class="name">${escapeHtml(emu.name)} <span class="state">${emu.installed ? 'Installed' : 'Not installed'}</span></div>
                         <div class="desc">${emu.folders.map(escapeHtml).join(', ')}</div>
                         <div class="progress" id="progress-${emu.id}"></div>
                     </div>
-                    ${emu.installed ? `<button class="btn" id="open-${emu.id}" title="Open ${escapeHtml(emu.name)} to set up controllers, BIOS and other settings">Open</button>` : ''}
-                    <button class="btn ${emu.installed ? '' : 'primary'}" id="btn-${emu.id}" ${data.flatpak ? '' : 'disabled'}>
-                        ${emu.installed ? 'Remove' : 'Install'}
-                    </button>`;
+                    <div class="setting-actions">
+                        ${emu.installed ? `<button class="btn" id="open-${emu.id}" title="Open ${escapeHtml(emu.name)} to set up controllers, BIOS and other settings">Open</button>` : ''}
+                        <button class="btn ${emu.installed ? '' : 'primary'}" id="btn-${emu.id}" ${data.flatpak ? '' : 'disabled'}>
+                            ${emu.installed ? 'Remove' : 'Install'}
+                        </button>
+                    </div>`;
                 row.querySelector(`#btn-${emu.id}`).addEventListener('click', () => runEmulatorJob(emu, emu.installed ? 'uninstall' : 'install'));
                 const openBtn = row.querySelector(`#open-${emu.id}`);
                 if (openBtn) openBtn.addEventListener('click', () => openEmulator(emu));
@@ -4506,11 +4686,11 @@
         function renderSound(info) {
             const st = Sfx.settings;
             document.getElementById('sound-toggle-button').textContent = st.enabled ? 'On' : 'Off';
-            document.getElementById('sfx-volume-button').textContent = `Effects ${percent(st.sfxVolume)}`;
-            document.getElementById('music-volume-button').textContent = `Music ${percent(st.musicVolume)}`;
+            document.getElementById('sfx-volume-button').textContent = percent(st.sfxVolume);
+            document.getElementById('music-volume-button').textContent = percent(st.musicVolume);
             if (info) {
                 const el = document.getElementById('sound-desc');
-                el.textContent = info.effects || info.tracks ? 'Your own sounds' : '';
+                el.textContent = info.effects || info.tracks ? 'Using your custom sound pack' : 'Built-in Wii-inspired audio';
                 el.title = info.dir;
             }
         }
@@ -4893,7 +5073,7 @@
         // The right stick (or ZL / ZR) scrolls whatever is open, so text with nothing to focus can still be read.
         // It scrolls the panel that holds the focus, otherwise the first one in the open overlay that has more to show.
         function padScroll(amount) {
-            const overlays = ['padmap-overlay', 'maps-overlay', 'players-overlay', 'pair-overlay', 'guide-overlay', 'pause-overlay', 'settings-overlay'];
+            const overlays = ['padmap-overlay', 'players-overlay', 'pair-overlay', 'guide-overlay', 'pause-overlay', 'settings-overlay'];
             let root = null;
             if (dd.open) root = document.querySelector('.dd');
             else if (sheet.open && !settingsOpen) root = document.getElementById('sheet');
@@ -4963,12 +5143,14 @@
                         else if (st.down) { ddMove(1); lastInputTime = now; }
                         else if (st.up) { ddMove(-1); lastInputTime = now; }
                     }
-                } else if (mps.open) {
+                } else if (settingsOpen && settingsTab === 'mappings') {
                     const dir = st.down ? 'down' : st.up ? 'up' : st.right ? 'right' : st.left ? 'left' : null;
-                    if (pressA && ready) { mpsPress(1); lastInputTime = now; }      // "press Delete again" takes a quick second press
+                    if (pressA && ready) { mpsPress(1); lastInputTime = now; }
+                    else if (pressB && ready) { closeSettings(); }
                     else if (now - lastInputTime > 150) {
-                        if (st.x) { mpsPress(-1); lastInputTime = now + 250; }
-                        else if (st.b) { closeMaps(); lastInputTime = now + 400; }
+                        if (st.rb) { cycleTab(1); lastInputTime = now + 150; }
+                        else if (st.lb) { cycleTab(-1); lastInputTime = now + 150; }
+                        else if (st.x) { mpsPress(-1); lastInputTime = now + 250; }
                         else if (dir) { mpsMove(dir); lastInputTime = now; }
                     }
                 } else if (plr.open) {
@@ -5078,9 +5260,8 @@
                 else if (e.key === 'ArrowUp') ddMove(-1);
                 return e.preventDefault();
             }
-            if ((mps.open || plr.open) && e.target.tagName === 'SELECT' && ['Enter', ' ', 'ArrowDown', 'ArrowUp'].includes(e.key)) { ddOpen(e.target); return e.preventDefault(); }
-            if (mps.open) { if (e.key === 'Escape') closeMaps(); return; }
-            if (plr.open) { if (e.key === 'Escape') closePlayers(); return; }
+            if (((settingsOpen && settingsTab === 'mappings') || plr.open) && e.target.tagName === 'SELECT' && ['Enter', ' ', 'ArrowDown', 'ArrowUp'].includes(e.key)) { ddOpen(e.target); return e.preventDefault(); }
+            if (plr.open && !settingsOpen) { if (e.key === 'Escape') closePlayers(); return; }
             if (pair.open) {
                 if (e.key === 'Escape') pairBack();
                 else if (e.key === 'Enter' || e.key === ' ') pairPress();

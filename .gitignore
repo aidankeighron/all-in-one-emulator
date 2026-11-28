@@ -5,3 +5,4 @@ dist
 cloud-token.txt
 /daemon/target
 /ui/bin
+/ui/build-info.json

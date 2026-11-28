@@ -12,12 +12,16 @@ const config = require('../ui/lib/config');
 test('a config file that cannot be read does not wipe the favorites on the next change', () => {
     config.setFavorite('wii/Game A.iso', true);
     config.setFavorite('wii/Game B.iso', true);
+    config.setGameStatus('wii/Game C.iso', 'backlog');
+    config.recordLastPlayed('wii/Game C.iso', 123456789);
     config.setTheme('dark');
     assert.ok(fs.existsSync(`${config.configFile}.bak`), 'the previous file is kept');
     // something leaves the file broken (half written by another copy of the menu, a crash, a full disk)
     fs.writeFileSync(config.configFile, '{"favorites": ["wii/Gam');
     config.setPauseHold(1);                 // the next change
     assert.deepStrictEqual(config.getFavorites(), ['wii/Game A.iso', 'wii/Game B.iso']);
+    assert.deepStrictEqual(config.getBacklog(), ['wii/Game C.iso']);
+    assert.deepStrictEqual(config.getLastPlayed(), { 'wii/Game C.iso': 123456789 });
     assert.strictEqual(config.getTheme(), 'dark');
     assert.strictEqual(JSON.parse(fs.readFileSync(config.configFile, 'utf8')).pauseHold, 1);
     assert.ok(!fs.readdirSync(path.dirname(config.configFile)).some(f => f.includes('.tmp-')), 'no temporary files left behind');

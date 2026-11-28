@@ -36,6 +36,7 @@ const validate = require('./lib/validate');
 const { ValidationCache } = require('./lib/validation-cache');
 const { createDaemonBridge } = require('./lib/daemon-bridge');
 const inputconfigVirtual = require('./lib/inputconfig-virtual');
+const buildInfo = require('./lib/build-info');
 
 const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'emulators.json'), 'utf8'));
 const emulatorsById = new Map(manifest.emulators.map(e => [e.id, e]));
@@ -82,6 +83,24 @@ const validationCache = new ValidationCache({
     cacheFile: config.validationCacheFile,
     validator: validate.defaultValidator
 });
+let startupValidation = null;
+
+/**
+ * Runs static ROM validation for the current library and optionally clears prior cached entries first.
+ * @param {{ clearCache?: boolean }} [options]
+ * @returns {Promise<{ romsDir: string, scanned: Array<any>, validations: Map<string, any> }>}
+ */
+async function validateLibrary({ clearCache = false } = {}) {
+    if (clearCache) {
+        validationCache.clear();
+    }
+    const romsDir = config.getRomsDir();
+    const scanned = roms.scanGames(romsDir, manifest);
+    const ryujinxAdapter = slotAdapters.get('ryujinx');
+    const ryujinxDataRoot = ryujinxAdapter ? ryujinxAdapter.dataRoot() : undefined;
+    const validations = await validationCache.validateGames(romsDir, scanned, { ryujinxDataRoot });
+    return { romsDir, scanned, validations };
+}
 const saves = createManager({
     dir: path.join(path.dirname(config.configFile), 'saves'),
     adapters: slotAdapters,
@@ -484,6 +503,7 @@ async function startGame(relPath, slotId, onGameState) {
         }
     };
     current.child = runner.launch(emu, args, afterGame);
+    config.recordLastPlayed(relPath);
     if (onGameState) onGameState(true);
     return { status: 200, body: { status: 'launched', emulator: emu.id } };
 }
@@ -714,8 +734,8 @@ async function handleSystem(route, req, res) {
             await tv.install({ onLine: line => console.log(`[TV] ${line}`) });
             return sendJson(res, 200, { audio: await audio.status(), tv: await tv.status() }), true;
         }
-        if (route === 'GET /api/system/update') return sendJson(res, 200, { ...(await updater.status()), canRestart: !!restartHook }), true;
-        if (route === 'POST /api/system/update/check') return sendJson(res, 200, { ...(await updater.check()), canRestart: !!restartHook }), true;
+        if (route === 'GET /api/system/update') return sendJson(res, 200, { ...(await updater.status()), build: buildInfo.readBuildInfo(), canRestart: !!restartHook }), true;
+        if (route === 'POST /api/system/update/check') return sendJson(res, 200, { ...(await updater.check()), build: buildInfo.readBuildInfo(), canRestart: !!restartHook }), true;
         if (route === 'POST /api/system/update') {
             // Pulls the new version from GitHub, then the app starts again on it (kiosk mode included)
             if (current || launching) return sendJson(res, 409, { error: 'busy', message: 'Quit the game first' }), true;
@@ -1261,16 +1281,15 @@ function createServer(onGameState) {
             if (!allowed(req)) return sendJson(res, 403, { error: 'forbidden' });
             try {
                 if (route === 'GET /api/games') {
+                    if (startupValidation) {
+                        await startupValidation;
+                    }
                     const states = await emulatorStates();
                     const installed = new Set(states.emulators.filter(e => e.installed).map(e => e.id));
-                    const romsDir = config.getRomsDir();
-                    const scanned = roms.scanGames(romsDir, manifest);
+                    const { romsDir, scanned, validations } = await validateLibrary();
                     const covers = artworkFor(romsDir);
                     covers.ensure(scanned);
                     gamesById = new Map(scanned.map(g => [g.id, g]));
-                    const ryujinxAdapter = slotAdapters.get('ryujinx');
-                    const ryujinxDataRoot = ryujinxAdapter ? ryujinxAdapter.dataRoot() : undefined;
-                    const validations = await validationCache.validateGames(romsDir, scanned, { ryujinxDataRoot });
                     const games = scanned.map(g => ({
                         ...g,
                         installed: installed.has(g.emulator),
@@ -1282,32 +1301,57 @@ function createServer(onGameState) {
                     const have = new Set(scanned.map(g => g.path));
                     const onServer = theirs ? theirs.games.filter(g => !have.has(g.path)).map(g => ({ ...g, remote: true, installed: installed.has(g.emulator), art: null })) : [];
                     games.push(...onServer);
-                    // Games you have come first (favourites, then by title); the ones still on the other computer follow
-                    // and cannot be starred
+                    // Games you have come first: starred, then backlog, then everything else; within each tier, most recently played first, then title.
                     const stars = new Set(config.getFavorites());
-                    for (const g of games) g.favorite = !g.remote && stars.has(g.path);
-                    games.sort((a, b) => (!!a.remote - !!b.remote) || (b.favorite - a.favorite) || a.title.localeCompare(b.title));
+                    const backlog = new Set(config.getBacklog());
+                    const lastPlayed = config.getLastPlayed();
+                    for (const g of games) {
+                        const isStar = !g.remote && stars.has(g.path);
+                        const isBacklog = !g.remote && !isStar && backlog.has(g.path);
+                        g.favorite = isStar;
+                        g.backlog = isBacklog;
+                        g.status = isStar ? 'star' : isBacklog ? 'backlog' : 'none';
+                        g.lastPlayed = !g.remote && Number.isFinite(lastPlayed[g.path]) ? lastPlayed[g.path] : 0;
+                    }
+                    const tierOf = g => (g.remote ? 3 : g.favorite ? 0 : g.backlog ? 1 : 2);
+                    games.sort((a, b) => {
+                        const tierDiff = tierOf(a) - tierOf(b);
+                        if (tierDiff !== 0) {
+                            return tierDiff;
+                        }
+                        const playedDiff = (b.lastPlayed || 0) - (a.lastPlayed || 0);
+                        if (playedDiff !== 0) {
+                            return playedDiff;
+                        }
+                        return a.title.localeCompare(b.title);
+                    });
                     return sendJson(res, 200, { games, romsDir, artPending: covers.pending(), server: theirs ? { name: theirs.name, offline: !!remote.error } : null });
                 }
                 if (route === 'GET /api/appearance') return sendJson(res, 200, { theme: config.getTheme() });
                 if (route === 'POST /api/favorites') {
                     const body = await readJson(req);
-                    if (typeof body.path !== 'string' || typeof body.favorite !== 'boolean') return sendJson(res, 400, { error: 'invalid', message: 'Send a game path and true or false' });
-                    if (body.favorite && !roms.scanGames(config.getRomsDir(), manifest).some(g => g.path === body.path)) return sendJson(res, 400, { error: 'not_owned', message: 'Download the game before starring it' });
-                    config.setFavorite(body.path, body.favorite);
-                    return sendJson(res, 200, { path: body.path, favorite: body.favorite });
+                    let nextStatus = null;
+                    if (typeof body.status === 'string' && config.GAME_STATUSES.includes(body.status)) {
+                        nextStatus = body.status;
+                    }
+                    else if (typeof body.favorite === 'boolean') {
+                        nextStatus = body.favorite ? 'star' : 'none';
+                    }
+                    if (typeof body.path !== 'string' || !body.path || !nextStatus) {
+                        return sendJson(res, 400, { error: 'invalid', message: 'Send a game path and status (none, star, or backlog)' });
+                    }
+                    if (nextStatus !== 'none' && !roms.scanGames(config.getRomsDir(), manifest).some(g => g.path === body.path)) {
+                        return sendJson(res, 400, { error: 'not_owned', message: 'Download the game before starring or adding it to backlog' });
+                    }
+                    config.setGameStatus(body.path, nextStatus);
+                    return sendJson(res, 200, { path: body.path, status: nextStatus, favorite: nextStatus === 'star', backlog: nextStatus === 'backlog' });
                 }
                 if (route === 'POST /api/art/retry') {
                     const covers = artworkFor(config.getRomsDir());
                     return sendJson(res, 200, { cleared: covers.retryMisses() });
                 }
                 if (route === 'POST /api/games/validate') {
-                    validationCache.clear();
-                    const romsDir = config.getRomsDir();
-                    const scanned = roms.scanGames(romsDir, manifest);
-                    const ryujinxAdapter = slotAdapters.get('ryujinx');
-                    const ryujinxDataRoot = ryujinxAdapter ? ryujinxAdapter.dataRoot() : undefined;
-                    const validations = await validationCache.validateGames(romsDir, scanned, { ryujinxDataRoot });
+                    const { scanned, validations } = await validateLibrary({ clearCache: true });
                     let errors = 0;
                     for (const result of validations.values()) {
                         if (result.status === 'error') {
@@ -1386,7 +1430,7 @@ function createServer(onGameState) {
                     return sendJson(res, 200, { setup: setupControllers(ids) });
                 }
                 if (route === 'GET /api/settings') {
-                    return sendJson(res, 200, { romsDir: config.getRomsDir(), autoControllers: config.getAutoControllers(), switchTuning: config.getSwitchTuning(), sound: config.getSound(), pauseHold: config.getPauseHold(), theme: config.getTheme(), idle: config.getIdle(), ...await emulatorStates() });
+                    return sendJson(res, 200, { romsDir: config.getRomsDir(), autoControllers: config.getAutoControllers(), switchTuning: config.getSwitchTuning(), sound: config.getSound(), pauseHold: config.getPauseHold(), theme: config.getTheme(), idle: config.getIdle(), build: buildInfo.readBuildInfo(), ...await emulatorStates() });
                 }
                 if (route === 'POST /api/settings') {
                     const body = await readJson(req);
@@ -1516,7 +1560,14 @@ function start({ port = 3000, onGameState, onPause, onRestart, onActivity } = {}
             if (process.env.EMU_NO_DAEMON !== '1') {
                 daemonBridge.client.connect().catch(() => {});
             }
-            processRoms(); // pick up any zips dropped in while the app was closed
+            validationCache.clear();
+            const importingPromise = processRoms(); // pick up any zips dropped in while the app was closed
+            startupValidation = Promise.resolve(importingPromise)
+                .then(() => validateLibrary())
+                .catch(() => null)
+                .finally(() => {
+                    startupValidation = null;
+                });
             forgetBetterJoy();
             if (helper.supported) { refreshHelper(); setInterval(refreshHelper, 3000).unref(); }
             if (system.refreshKiosk()) console.log('[SYSTEM] kiosk mode now starts the menu again if it closes by accident');

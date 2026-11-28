@@ -7,6 +7,7 @@
 // (or Wine); the program has to be built on the system it is for.
 const path = require('path');
 const { spawnSync } = require('child_process');
+const buildInfo = require('./build-info');
 
 const BUILDS = {
     win: { flag: '--win', targets: ['nsis', 'portable'], label: 'Windows' },
@@ -34,6 +35,8 @@ function hint(key) {
 if (require.main === module) {
     let p;
     try { p = plan(); } catch (err) { console.error(err.message); process.exit(1); }
+    const info = buildInfo.generateBuildInfo();
+    console.log(`Build info: v${info.version} · Build #${info.buildNumber} · ${info.buildDate}`);
     console.log(`Building the ${p.label} app: electron-builder ${p.args.join(' ')}`);
     const cli = require.resolve('electron-builder/cli.js');
     const res = spawnSync(process.execPath, [cli, ...p.args], { stdio: 'inherit', cwd: path.resolve(__dirname, '..') });

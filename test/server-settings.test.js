@@ -49,6 +49,61 @@ test('favourite games are listed first, kept between runs, and can be removed', 
     } finally { srv.close(); }
 });
 
+test('home menu sorts by star, then backlog, then rest, ordered by last played within each tier', async () => {
+    const config = require('../ui/lib/config');
+    const { server: srv, port } = await server.start({ port: 0 });
+    try {
+        // Set statuses: Alpha -> none, Bravo -> backlog, Charlie -> star
+        assert.strictEqual((await api(port, 'POST', '/api/favorites', { path: 'wii/Charlie.iso', status: 'star' })).status, 200);
+        let r = await api(port, 'POST', '/api/favorites', { path: 'wii/Bravo.iso', status: 'backlog' });
+        assert.strictEqual(r.status, 200);
+        assert.strictEqual(r.body.backlog, true);
+        assert.strictEqual(r.body.favorite, false);
+
+        r = await api(port, 'GET', '/api/games');
+        assert.deepStrictEqual(r.body.games.map(g => g.title), ['Charlie', 'Bravo', 'Alpha']);
+        assert.strictEqual(r.body.games[0].status, 'star');
+        assert.strictEqual(r.body.games[1].status, 'backlog');
+        assert.strictEqual(r.body.games[2].status, 'none');
+
+        // Reject invalid status
+        r = await api(port, 'POST', '/api/favorites', { path: 'wii/Alpha.iso', status: 'invalid' });
+        assert.strictEqual(r.status, 400);
+
+        // Clear Charlie & Bravo, test lastPlayed sorting within same tier and with a starred game
+        await api(port, 'POST', '/api/favorites', { path: 'wii/Charlie.iso', status: 'none' });
+        await api(port, 'POST', '/api/favorites', { path: 'wii/Bravo.iso', status: 'none' });
+        config.recordLastPlayed('wii/Bravo.iso', 1000);
+        config.recordLastPlayed('wii/Charlie.iso', 2000);
+        config.recordLastPlayed('wii/Alpha.iso', 500);
+        await api(port, 'POST', '/api/favorites', { path: 'wii/Alpha.iso', status: 'star' });
+
+        r = await api(port, 'GET', '/api/games');
+        // Alpha is starred so it stays at the front despite older lastPlayed; Charlie (2000) beats Bravo (1000)
+        assert.deepStrictEqual(r.body.games.map(g => g.title), ['Alpha', 'Charlie', 'Bravo']);
+
+        // Move Bravo to backlog: Alpha (star) -> Bravo (backlog) -> Charlie (none)
+        await api(port, 'POST', '/api/favorites', { path: 'wii/Bravo.iso', status: 'backlog' });
+        r = await api(port, 'GET', '/api/games');
+        assert.deepStrictEqual(r.body.games.map(g => g.title), ['Alpha', 'Bravo', 'Charlie']);
+
+        // Clean up status for subsequent tests
+        await api(port, 'POST', '/api/favorites', { path: 'wii/Alpha.iso', status: 'none' });
+        await api(port, 'POST', '/api/favorites', { path: 'wii/Bravo.iso', status: 'none' });
+    } finally { srv.close(); }
+});
+
+test('settings includes build version, build number, and build date metadata', async () => {
+    const { server: srv, port } = await server.start({ port: 0 });
+    try {
+        const r = await api(port, 'GET', '/api/settings');
+        assert.strictEqual(r.status, 200);
+        assert.ok(r.body.build && typeof r.body.build.version === 'string');
+        assert.strictEqual(typeof r.body.build.buildNumber, 'number');
+        assert.ok('buildDate' in r.body.build);
+    } finally { srv.close(); }
+});
+
 test('the pause hold time is 0 to 2 seconds in half-second steps, 1.5 by default', async () => {
     const { server: srv, port } = await server.start({ port: 0 });
     try {

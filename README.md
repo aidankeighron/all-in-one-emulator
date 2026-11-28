@@ -53,7 +53,9 @@ The menu runs on Windows too. The differences from Linux:
   | major (`1.1.0` -> `2.0.0`) | changes to how the menu works as a whole |
 
   Then delete the old `Emulator-Menu-*.exe` (and `.exe.blockmap`) from `dist/` so only the version you just built is there and
-  there is no doubt which file is the new one. `dist/` is not in git, so nothing is committed either way.
+  there is no doubt which file is the new one. `dist/` is not in git, so nothing is committed either way. Every build also
+  writes `ui/build-info.json` with the version, an incrementing build number, and the build timestamp, shown under
+  **Settings -> System -> Software & Build** (and in the Settings header/footer).
 
   Do not run the tests on Windows. Most of them are written for Linux (`/proc`, `flatpak`, `bluetoothctl`, sysfs), so they fail
   for reasons that say nothing about the build, and `test/e2e-controllers.test.js` cannot fake an emulator on Windows: it starts
@@ -210,8 +212,8 @@ Nothing else to install: the AppImage already contains the menu and its runtime.
    | `wii`, `gamecube` | Dolphin | iso, rvz, wbfs, gcm, ciso, gcz, wia, wad |
    | `switch` | Ryujinx (Ryubing) | nsp, xci, nca, nro, nso |
 
-4. Click a game (or press **A**) to play. To favorite a game press **X** or **Y** on it (or **F**, or click the star on its tile; only games you have can be starred):
-   games you have are listed first (favorites at the top), and games that are only on your other computer start on their own page. Favorites are listed first and keep their star between runs. Closing the emulator brings you back to the menu.
+4. Click a game (or press **A**) to play. To set a game's priority, press **X** or **Y** on it (or **F**, or click the top-right badge on its tile; only local games can be marked):
+   pressing cycles **Starred** (gold star) → **Backlog** (green square) → **Cleared**. On the home menu, local games are grouped by tier (**Starred** first, then **Backlog**, then everything else), and sorted by **last played** (most recently played first, falling back to title order) within each tier; games only on another computer follow on their own page. Priority and last-played timestamps are saved between runs. Closing the emulator brings you back to the menu.
 
    **Pause menu:** hold **Back + Start** (1.5 seconds by default; Settings -> Sound & controls has a slider from 0 to 2
    seconds in half-second steps, 0 opens it at once). The game is frozen (its processes are stopped, so
@@ -286,9 +288,9 @@ If the controller does nothing in the menu, check the Controllers page: it lists
 it is empty, press a button on the controller with the window focused (browsers only expose a controller
 after its first button press).
 
-**Settings.** Three sections, switched with the tabs or **LB / RB**: **Games** (ROMs folder, emulators),
-**Sound & controls** (menu sound, automatic controller setup) and **Game library** (sharing games between
-computers, with a **How does this work?** walkthrough).
+**Settings.** Five sections, switched with the tabs or **LB / RB**: **Games** (ROMs folder, emulators),
+**Sound & controls** (menu sound, automatic controller setup, theme), **Mappings** (controller mapping editor),
+**Game library** (sharing games between computers, with a **How it works** walkthrough), and **System** (version/build info, power, audio, kiosk mode).
 
 **Artwork.** Each game tile shows a picture when one can be found, and the game's name otherwise:
 
@@ -302,10 +304,11 @@ games work offline afterwards. Compressed `.ciso`/`.gcz` Dolphin images and Swit
 same-name picture for those.
 
 **ROM validation.** Without launching an emulator, the menu checks each local game's file header and structure (and
-whether `prod.keys` is present in Ryujinx's `system` folder for encrypted Switch formats `.nsp`, `.xci`, `.nca`). Results
-are cached in `~/.config/all-in-one-emulator/validation-cache.json` by file size, modification time, and key state, and
-re-checked when files change or you press Refresh. Games that fail validation stay visible in the grid with a warning icon
-showing the reason on hover or in the game's save sheet.
+whether `prod.keys` is present in Ryujinx's `system` folder for encrypted Switch formats `.nsp`, `.xci`, `.nca`). Static
+validation runs automatically on app launch/load (after importing any dropped archives), caches results in
+`~/.config/all-in-one-emulator/validation-cache.json` during the session by file size, modification time, and key
+state, and re-checks when files change or you press Refresh. Games that fail validation stay visible in the grid with a
+warning icon showing the reason on hover or in the game's save sheet.
 
 **Sound.** The menu has sound effects (moving, selecting, paging, opening Settings, starting a game,
 errors) and background music that pauses while a game runs, while another window is in front, and after five

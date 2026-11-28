@@ -151,7 +151,7 @@ async function createWindow() {
         height: 720,
         fullscreen: startFullscreen,
         autoHideMenuBar: true,
-        backgroundColor: nativeTheme.shouldUseDarkColors ? '#0d1218' : '#e3eaf0',   // matches the page's first paint (the saved Light/Dark choice then applies)
+        backgroundColor: nativeTheme.shouldUseDarkColors ? '#0a0f16' : '#e3eaf0',   // matches the page's first paint (the saved Light/Dark choice then applies)
         title: 'Emulator Menu',
         icon: path.join(__dirname, '..', 'ui', 'assets', 'icon.png'),
         webPreferences: {

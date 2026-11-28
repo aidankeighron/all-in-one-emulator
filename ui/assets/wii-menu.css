@@ -1,0 +1,1131 @@
+/* Dark-mode-first Wii System Menu aesthetic & clean cross-platform Settings UI */
+
+:root {
+    --wii-blue: #3ab4f2;
+    --wii-cyan: #67d1ff;
+    --wii-blue-deep: #1b87cc;
+    --wii-blue-glow: rgba(58, 180, 242, 0.48);
+    --wii-backlog: #22c55e;
+    --wii-backlog-deep: #15803d;
+    --wii-backlog-glow: rgba(34, 197, 94, 0.55);
+
+    --wii-dock-fill-top: #f7fafd;
+    --wii-dock-fill-bottom: #dfe7ef;
+    --wii-dock-rim: #77c7f5;
+    --wii-dock-shadow: rgba(45, 70, 95, 0.18);
+    --wii-well-bg: #dce4ec;
+    --wii-well-border: #c1ccd6;
+
+    --bd-subtle: rgba(120, 140, 160, 0.18);
+    --card-bg: linear-gradient(180deg, #ffffff 0%, #f4f7fa 100%);
+    --card-shadow: 0 3px 12px rgba(45, 70, 95, 0.08);
+    --settings-head-bg: #f4f7fa;
+    --tabs-bg: #e4ebf2;
+    --input-bg: #ffffff;
+    --input-fg: #2b343d;
+    --tx-strong: #2b343d;
+    --tx-muted: #65727e;
+    --empty-emblem: rgba(90, 115, 140, 0.28);
+    --scanline-alpha: 0.025;
+}
+
+:root[data-theme="dark"] {
+    --wii-blue: #3ab4f2;
+    --wii-cyan: #6fd5ff;
+    --wii-blue-deep: #5ac8fa;
+    --wii-blue-glow: rgba(58, 180, 242, 0.52);
+
+    --wii-dock-fill-top: #18202c;
+    --wii-dock-fill-bottom: #0d1219;
+    --wii-dock-rim: #3584b8;
+    --wii-dock-shadow: rgba(0, 0, 0, 0.65);
+    --wii-well-bg: #0c1118;
+    --wii-well-border: #273342;
+
+    --bd-subtle: rgba(148, 175, 205, 0.14);
+    --card-bg: linear-gradient(180deg, #171f2b 0%, #121822 100%);
+    --card-shadow: 0 6px 20px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    --settings-head-bg: #111720;
+    --tabs-bg: #0b1017;
+    --input-bg: #0c1118;
+    --input-fg: #e4ebf2;
+    --tx-strong: #e6edf4;
+    --tx-muted: #93a1b0;
+    --empty-emblem: rgba(175, 208, 240, 0.24);
+    --scanline-alpha: 0.022;
+
+    --wii-edge: #2b3847;
+    --wii-gray: #9fb0c2;
+    --overlay-bg: rgba(6, 10, 16, 0.84);
+}
+
+/* Custom subtle scrollbars so Windows Chromium doesn't render bright white bars in dark mode */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(130, 150, 170, 0.32);
+    border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(58, 180, 242, 0.55);
+}
+
+/* ---- Wii System Menu Canvas & Scanlines ---- */
+body {
+    font-family: "Nunito", "Varela Round", "Segoe UI Rounded", ui-rounded, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    background:
+        repeating-linear-gradient(
+            0deg,
+            rgba(0, 0, 0, var(--scanline-alpha)) 0px,
+            rgba(0, 0, 0, var(--scanline-alpha)) 1px,
+            transparent 1px,
+            transparent 4px
+        ),
+        radial-gradient(ellipse 75% 55% at 50% 42%, rgba(58, 180, 242, 0.12) 0%, rgba(58, 180, 242, 0) 70%),
+        linear-gradient(to bottom, var(--bg-f7fafc) 0%, var(--bg-e6edf2) 100%);
+}
+
+:root[data-theme="dark"] body {
+    background:
+        repeating-linear-gradient(
+            0deg,
+            rgba(255, 255, 255, 0.018) 0px,
+            rgba(255, 255, 255, 0.018) 1px,
+            transparent 1px,
+            transparent 4px
+        ),
+        radial-gradient(ellipse 72% 52% at 50% 42%, rgba(58, 180, 242, 0.13) 0%, rgba(25, 65, 100, 0.06) 45%, rgba(0, 0, 0, 0) 75%),
+        radial-gradient(ellipse 90% 45% at 50% 0%, #192433 0%, rgba(25, 36, 51, 0) 70%),
+        linear-gradient(180deg, #0d131b 0%, #0a0f16 55%, #070a0f 100%);
+}
+
+/* ---- Top Bar ---- */
+.top-bar {
+    height: 46px;
+    padding: 4px 36px 0;
+    position: relative;
+    z-index: 4;
+}
+
+.system-title {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    font-size: 13px;
+    font-weight: 800;
+    color: var(--tx-muted);
+    letter-spacing: 0.18em;
+}
+
+.system-title small {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: var(--tx-muted);
+    opacity: 0.78;
+    margin-left: 0;
+}
+
+.controller-status {
+    font-size: 12px;
+    font-weight: 700;
+    padding: 5px 14px;
+    border-radius: 999px;
+    background: rgba(var(--glass-rgb), 0.78);
+    border: 1px solid var(--wii-edge);
+    color: var(--tx-muted);
+    backdrop-filter: blur(8px);
+}
+
+:root[data-theme="dark"] .controller-status {
+    background: rgba(19, 27, 37, 0.85);
+    border-color: #2b3949;
+    color: #93a2b3;
+}
+
+.controller-status.connected {
+    color: var(--wii-blue-deep);
+    border-color: var(--wii-blue);
+    box-shadow: 0 0 12px rgba(58, 180, 242, 0.18);
+}
+
+/* ---- Wii Channel Grid & Tiles ---- */
+.grid-container {
+    padding: 6px 68px 10px;
+}
+
+.page-arrow.left {
+    left: 10px;
+}
+
+.page-arrow.right {
+    right: 10px;
+}
+
+.wii-grid {
+    gap: 16px;
+}
+
+.wii-channel {
+    border-radius: 22px;
+    padding: 12px;
+    border: 2px solid var(--wii-edge);
+    transition: transform 0.16s cubic-bezier(0.2, 0.85, 0.3, 1), border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+:root[data-theme="dark"] .wii-channel {
+    background: linear-gradient(180deg, #1b2431 0%, #141c26 56%, #0f151d 100%);
+    border-color: #2b3848;
+    box-shadow:
+        0 6px 18px rgba(0, 0, 0, 0.48),
+        inset 0 1px 0 rgba(255, 255, 255, 0.11),
+        inset 0 -4px 10px rgba(0, 0, 0, 0.35);
+}
+
+.wii-channel::before {
+    height: 46%;
+    border-radius: 20px 20px 55% 55% / 20px 20px 28% 28%;
+}
+
+:root[data-theme="dark"] .wii-channel::before {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.025) 75%, rgba(255, 255, 255, 0) 100%);
+    opacity: 0.72;
+}
+
+/* Keep the Wii channel frame visible around cover art so every game looks like an authentic Wii Channel */
+.wii-channel.has-art {
+    padding: 10px;
+    background: linear-gradient(180deg, #ffffff 0%, #eef3f7 100%);
+    border: 2px solid var(--wii-edge);
+    box-shadow: 0 4px 12px rgba(60, 80, 100, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+
+:root[data-theme="dark"] .wii-channel.has-art {
+    background:
+        radial-gradient(ellipse 80% 70% at 50% 50%, #1c2635 0%, #10161f 78%, #0c1118 100%);
+    border-color: #2c3a4b;
+    box-shadow:
+        0 6px 18px rgba(0, 0, 0, 0.52),
+        inset 0 1px 0 rgba(255, 255, 255, 0.12),
+        inset 0 0 24px rgba(0, 0, 0, 0.45);
+}
+
+.wii-channel.has-art::before {
+    display: block;
+    z-index: 2;
+    opacity: 0.32;
+}
+
+:root[data-theme="dark"] .wii-channel.has-art::before {
+    opacity: 0.38;
+}
+
+.wii-channel.has-art .channel-art {
+    inset: 8px;
+    width: calc(100% - 16px);
+    height: calc(100% - 16px);
+    filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.45));
+}
+
+.wii-channel:hover,
+.wii-channel.selected,
+.wii-channel.has-art:hover,
+.wii-channel.has-art.selected {
+    transform: scale(1.045);
+    border-color: var(--wii-cyan);
+    box-shadow:
+        0 0 0 3px rgba(58, 180, 242, 0.4),
+        0 0 26px var(--wii-blue-glow),
+        0 10px 24px rgba(0, 0, 0, 0.42);
+    z-index: 5;
+}
+
+:root[data-theme="dark"] .wii-channel:hover,
+:root[data-theme="dark"] .wii-channel.selected {
+    background: linear-gradient(180deg, #1f2b3a 0%, #16202c 58%, #101822 100%);
+}
+
+:root[data-theme="dark"] .wii-channel.has-art:hover,
+:root[data-theme="dark"] .wii-channel.has-art.selected {
+    background: radial-gradient(ellipse 85% 75% at 50% 50%, #223044 0%, #121a26 80%, #0e141d 100%);
+}
+
+.channel-title {
+    color: var(--tx-strong);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+
+.has-art .channel-title {
+    background: rgba(248, 251, 255, 0.94);
+    border-color: var(--wii-edge);
+    color: #263038;
+    text-shadow: none;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22);
+    z-index: 4;
+}
+
+:root[data-theme="dark"] .has-art .channel-title {
+    background: rgba(13, 19, 28, 0.92);
+    border-color: #35475b;
+    color: #eef4fa;
+    backdrop-filter: blur(8px);
+}
+
+/* Empty Wii Channels: clear frosted channel bubbles/cards with scanline ribs & centered emblem */
+.channel-empty {
+    background:
+        repeating-linear-gradient(
+            0deg,
+            rgba(0, 0, 0, 0.03) 0px,
+            rgba(0, 0, 0, 0.03) 2px,
+            transparent 2px,
+            transparent 5px
+        ),
+        linear-gradient(180deg, #f3f7fb 0%, #e4ebf2 62%, #d8e1ea 100%);
+    border: 2px solid #c5d1dc;
+    box-shadow:
+        0 3px 8px rgba(60, 80, 100, 0.1),
+        inset 0 1px 0 rgba(255, 255, 255, 0.8),
+        inset 0 -3px 8px rgba(0, 0, 0, 0.05);
+}
+
+:root[data-theme="dark"] .channel-empty {
+    background:
+        repeating-linear-gradient(
+            0deg,
+            rgba(255, 255, 255, 0.03) 0px,
+            rgba(255, 255, 255, 0.03) 2px,
+            transparent 2px,
+            transparent 5px
+        ),
+        linear-gradient(180deg, #17212e 0%, #111822 58%, #0d131c 100%);
+    border: 2px solid #2b3c50;
+    box-shadow:
+        0 5px 14px rgba(0, 0, 0, 0.42),
+        inset 0 1px 0 rgba(255, 255, 255, 0.09),
+        inset 0 -4px 10px rgba(0, 0, 0, 0.45);
+}
+
+.channel-empty::before {
+    display: block;
+    opacity: 0.35;
+}
+
+:root[data-theme="dark"] .channel-empty::before {
+    display: block;
+    opacity: 0.38;
+}
+
+.channel-empty:hover {
+    border-color: #c5d1dc;
+}
+
+:root[data-theme="dark"] .channel-empty:hover {
+    border-color: #2b3c50;
+    box-shadow:
+        0 5px 14px rgba(0, 0, 0, 0.42),
+        inset 0 1px 0 rgba(255, 255, 255, 0.09),
+        inset 0 -4px 10px rgba(0, 0, 0, 0.45);
+}
+
+/* ---- Star -> Green Square Backlog -> None Priority Button ---- */
+.fav-star {
+    top: 10px;
+    right: 10px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: rgba(var(--glass-rgb), 0.88);
+    border: 1.5px solid var(--wii-edge);
+    color: var(--tx-muted);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+}
+
+:root[data-theme="dark"] .fav-star {
+    background: rgba(16, 23, 33, 0.9);
+    border-color: #354659;
+    color: #7d8d9e;
+}
+
+.fav-star:hover {
+    transform: scale(1.14);
+    border-color: var(--wii-blue);
+    color: var(--wii-cyan);
+}
+
+.fav-star.on {
+    opacity: 1;
+    color: #f6bd2c;
+    border-color: rgba(246, 189, 44, 0.65);
+    box-shadow: 0 0 10px rgba(246, 189, 44, 0.45);
+}
+
+.fav-star.on svg {
+    fill: currentColor;
+    stroke: #c48400;
+}
+
+.fav-star.backlog {
+    opacity: 1;
+    color: var(--wii-backlog);
+    border-color: rgba(34, 197, 94, 0.65);
+    box-shadow: 0 0 10px var(--wii-backlog-glow);
+}
+
+.fav-star.backlog svg {
+    fill: currentColor;
+    stroke: var(--wii-backlog-deep);
+}
+
+/* Clean card overlay layout:
+   top-left = platform badge, top-right = priority button,
+   bottom = title (always centered when no art, fades in on hover/select when art) */
+.wii-channel .channel-title {
+    padding-bottom: 0;
+}
+
+.wii-channel.has-art .channel-title {
+    left: 10px;
+    right: 10px;
+    bottom: 10px;
+    padding: 5px 10px;
+}
+
+/* Bottom-left sleek notification card */
+.toast {
+    left: 22px;
+    right: auto;
+    bottom: 124px;
+    transform: translateY(10px);
+    max-width: min(360px, calc(100vw - 44px));
+    padding: 11px 16px 11px 18px;
+    border-radius: 14px;
+    border: 1.5px solid var(--wii-edge);
+    background: rgba(255, 255, 255, 0.94);
+    color: var(--tx-strong);
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.35;
+    box-shadow: 0 10px 26px rgba(45, 70, 95, 0.22);
+    backdrop-filter: blur(12px);
+    overflow: hidden;
+    transition: opacity 0.2s ease, transform 0.2s cubic-bezier(0.2, 0.85, 0.3, 1);
+}
+
+.toast::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 6px;
+    bottom: 6px;
+    width: 4px;
+    border-radius: 0 4px 4px 0;
+    background: linear-gradient(180deg, var(--wii-cyan), var(--wii-blue-deep));
+}
+
+:root[data-theme="dark"] .toast {
+    background: rgba(16, 23, 33, 0.94);
+    border-color: #2e4257;
+    color: #eaf2fa;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.55), 0 0 18px rgba(58, 180, 242, 0.14);
+}
+
+.toast.show {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+body.sheet-open .toast {
+    top: 56px;
+    bottom: auto;
+    left: 22px;
+}
+
+.slider-box input[type="range"]:disabled {
+    opacity: 0.36;
+    cursor: default;
+    filter: grayscale(0.85);
+}
+
+/* ---- Side Page Arrows ---- */
+.page-arrow {
+    width: 52px;
+    height: 52px;
+    background: linear-gradient(180deg, #ffffff 0%, #e2eaf1 100%);
+    border: 2px solid var(--wii-edge);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+:root[data-theme="dark"] .page-arrow {
+    background: linear-gradient(180deg, #1d2735 0%, #121822 100%);
+    border-color: #2f3e50;
+    color: var(--wii-cyan);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.page-arrow:hover,
+.page-arrow.pad-focus {
+    border-color: var(--wii-cyan);
+    box-shadow: 0 0 0 3px rgba(58, 180, 242, 0.35), 0 0 20px var(--wii-blue-glow);
+}
+
+/* ---- Iconic Wii Curved Bottom Dock ---- */
+.bottom-bar {
+    position: relative;
+    height: 116px;
+    background: transparent !important;
+    border-top: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    padding: 12px 44px 10px;
+    align-items: flex-end;
+    justify-content: space-between;
+    z-index: 8;
+}
+
+.wii-dock-svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 0;
+    filter: drop-shadow(0 -6px 18px var(--wii-dock-shadow));
+}
+
+.dock-wing {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    padding-bottom: 6px;
+}
+
+.dock-slot {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+
+.dock-well {
+    padding: 4px;
+    border-radius: 50%;
+    background: var(--wii-well-bg);
+    border: 1.5px solid var(--wii-well-border);
+    box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+
+.round-button {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    border: 2.5px solid var(--bd-c9d1d8);
+    background: linear-gradient(180deg, #ffffff 0%, #e4ecf3 100%);
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.18), inset 0 -4px 8px rgba(0, 0, 0, 0.06);
+}
+
+:root[data-theme="dark"] .round-button {
+    border-color: #36475b;
+    background: linear-gradient(180deg, #243040 0%, #151c27 65%, #101620 100%);
+    color: #a9bacb;
+    box-shadow:
+        0 4px 12px rgba(0, 0, 0, 0.55),
+        inset 0 1px 0 rgba(255, 255, 255, 0.16),
+        inset 0 -4px 8px rgba(0, 0, 0, 0.45);
+}
+
+.round-button::before {
+    top: 3px;
+    left: 12%;
+    right: 12%;
+    height: 40%;
+}
+
+:root[data-theme="dark"] .round-button::before {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0) 100%);
+}
+
+.round-button svg {
+    width: 26px;
+    height: 26px;
+}
+
+.round-button:hover,
+.round-button.pad-focus {
+    border-color: var(--wii-cyan);
+    color: var(--wii-cyan);
+    box-shadow: 0 0 0 3px rgba(58, 180, 242, 0.35), 0 0 20px var(--wii-blue-glow);
+    transform: scale(1.08);
+}
+
+.dock-caption {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--tx-muted);
+    line-height: 1;
+}
+
+.center-time {
+    position: relative;
+    z-index: 2;
+    padding-bottom: 4px;
+    min-width: 200px;
+}
+
+.time-display {
+    font-size: 38px;
+    font-weight: 300;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 2px;
+    line-height: 1.02;
+    color: var(--tx-strong);
+}
+
+:root[data-theme="dark"] .time-display {
+    color: #dbe6f2;
+    text-shadow: 0 0 18px rgba(58, 180, 242, 0.25);
+}
+
+.date-display {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: var(--tx-muted);
+    margin-top: 2px;
+}
+
+.pad-hints {
+    position: relative;
+    z-index: 2;
+    padding-bottom: 10px;
+}
+
+/* ---- Cohesive Dark Panels, Sheets, Pause Menu, Dropdowns ---- */
+:root[data-theme="dark"] .panel,
+:root[data-theme="dark"] .sheet,
+:root[data-theme="dark"] .dd,
+:root[data-theme="dark"] .wp-top,
+:root[data-theme="dark"] .wp-bottom {
+    background: linear-gradient(180deg, #17202b 0%, #10161f 100%);
+    border-color: #2b3848;
+    color: #dbe4ed;
+}
+
+:root[data-theme="dark"] .panel h2,
+:root[data-theme="dark"] .sheet h1,
+:root[data-theme="dark"] #pause-title {
+    color: #edf3f9;
+}
+
+:root[data-theme="dark"] .slot-card,
+:root[data-theme="dark"] .wp-btn,
+:root[data-theme="dark"] .dd-item,
+:root[data-theme="dark"] .pm-col,
+:root[data-theme="dark"] .pair-device,
+:root[data-theme="dark"] .mp-item,
+:root[data-theme="dark"] .kb-key {
+    background: linear-gradient(180deg, #1e2836 0%, #141b25 100%);
+    border-color: #2d3b4d;
+    color: #e0e8f0;
+}
+
+:root[data-theme="dark"] .wp-pad {
+    background: #121822;
+    border-color: #273342;
+}
+
+:root[data-theme="dark"] .wp-pad.here {
+    background: #192230;
+    border-color: #34526e;
+    color: #e8eff6;
+}
+
+:root[data-theme="dark"] .kb-field {
+    background: #0c1118;
+    color: #eef4fa;
+}
+
+/* ---- Professional Settings UI (Windows & Linux, fixed height & top-anchored) ---- */
+#settings-overlay {
+    align-items: flex-start;
+    padding-top: 5vh;
+}
+
+#settings-overlay .panel {
+    width: min(1080px, 94vw);
+    height: min(630px, 86vh);
+    max-height: none;
+    min-height: 0;
+    padding: 0;
+    border-radius: 20px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+#settings-overlay .settings-head {
+    flex: none;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px 16px;
+    padding: 13px 22px 12px;
+    margin: 0;
+    background: var(--settings-head-bg);
+    border-bottom: 1px solid var(--bd-subtle);
+}
+
+.settings-title-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.settings-title-group h2 {
+    margin: 0;
+    font-size: 19px;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    color: var(--tx-strong);
+}
+
+.build-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    color: var(--wii-blue-deep);
+    background: rgba(58, 180, 242, 0.12);
+    border: 1px solid rgba(58, 180, 242, 0.35);
+    font-variant-numeric: tabular-nums;
+}
+
+#settings-overlay .tabs {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    padding: 3px;
+    border-radius: 12px;
+    background: var(--tabs-bg);
+    border: 1px solid var(--bd-subtle);
+}
+
+#settings-overlay .tab {
+    font: inherit;
+    font-weight: 700;
+    font-size: 12.5px;
+    padding: 6px 13px;
+    border-radius: 9px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--tx-muted);
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+#settings-overlay .tab:hover {
+    color: var(--tx-strong);
+    border-color: transparent;
+}
+
+#settings-overlay .tab.active {
+    background: linear-gradient(180deg, #57c3fa 0%, #2496db 100%);
+    border-color: #2496db;
+    color: #ffffff;
+    box-shadow: 0 2px 8px rgba(44, 159, 224, 0.35);
+}
+
+#settings-overlay .tab-pane:not([hidden]) {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    align-content: start;
+    padding: 14px 22px 16px;
+    margin: 0;
+}
+
+#settings-overlay .tab-pane.maps-pane:not([hidden]) {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 14px 22px;
+}
+
+.settings-mp-wrap {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: 245px minmax(0, 1fr);
+    gap: 16px;
+}
+
+.settings-mp-wrap .mp-list {
+    max-height: none;
+    height: 100%;
+    padding: 2px 6px 2px 2px;
+    margin: 0;
+}
+
+.mp-edit-col {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    min-width: 0;
+}
+
+.settings-mp-wrap .mp-edit {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;
+    padding: 2px 6px 2px 2px;
+    margin: 0;
+}
+
+.settings-mp-wrap .mp-actions {
+    flex: none;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--bd-subtle);
+}
+
+#settings-overlay .set-card {
+    min-width: 0;
+    padding: 14px 16px;
+    border: 1.5px solid var(--wii-edge);
+    border-radius: 15px;
+    background: var(--card-bg);
+    box-shadow: var(--card-shadow);
+    display: flex;
+    flex-direction: column;
+}
+
+#settings-overlay .set-card.wide {
+    grid-column: 1 / -1;
+}
+
+#settings-overlay .set-card.tall {
+    grid-row: span 2;
+}
+
+#settings-overlay .set-card > h3:first-child {
+    margin: 0 0 9px;
+    padding-bottom: 7px;
+    border-bottom: 1px solid var(--bd-subtle);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--wii-blue-deep);
+}
+
+#settings-overlay .set-card > #wifi-section > h3:first-child {
+    margin: 0 0 9px;
+    padding-bottom: 7px;
+    border-bottom: 1px solid var(--bd-subtle);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--wii-blue-deep);
+}
+
+#settings-overlay .emu-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px 14px;
+    padding: 9px 0;
+    border-top: 1px solid var(--bd-subtle);
+}
+
+#settings-overlay .set-card > h3 + .emu-row,
+#settings-overlay .set-card > .emu-row:first-child,
+#settings-overlay #wifi-section > h3 + .emu-row,
+#settings-overlay #emulator-list > .emu-row:first-child,
+#settings-overlay .software-update-row {
+    border-top: none;
+    padding-top: 2px;
+}
+
+#settings-overlay .set-card > .emu-row:last-child {
+    padding-bottom: 2px;
+}
+
+#settings-overlay .emu-row .info {
+    flex: 1 1 190px;
+    min-width: 0;
+}
+
+#settings-overlay .emu-row .name {
+    font-size: 13.5px;
+    font-weight: 700;
+    color: var(--tx-strong);
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+#settings-overlay .emu-row .desc {
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--tx-muted);
+    margin-top: 2px;
+}
+
+#settings-overlay .emu-row .progress {
+    font-size: 11.5px;
+    line-height: 1.35;
+    color: var(--wii-blue-deep);
+    margin-top: 3px;
+    word-break: break-word;
+}
+
+#settings-overlay .emu-row .state {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 10.5px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    background: rgba(58, 180, 242, 0.14);
+    color: var(--wii-blue-deep);
+}
+
+.setting-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    flex-shrink: 0;
+}
+
+.setting-field-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.setting-field-label {
+    font-size: 11.5px;
+    font-weight: 700;
+    color: var(--tx-muted);
+    margin-bottom: -3px;
+}
+
+.folder-chips {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--tx-muted);
+}
+
+.folder-chips code {
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    background: rgba(58, 180, 242, 0.1);
+    border: 1px solid var(--bd-subtle);
+    color: var(--tx-strong);
+}
+
+/* Fix inputs on Windows in both Light and Dark mode */
+.panel input[type="text"],
+.panel input[type="password"] {
+    flex: 1 1 0;
+    min-width: 0;
+    height: 34px;
+    padding: 0 11px;
+    border-radius: 9px;
+    border: 1.5px solid var(--wii-edge);
+    background: var(--input-bg);
+    color: var(--input-fg);
+    font-size: 13px;
+    font-weight: 600;
+    outline: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.panel input[type="text"]::placeholder,
+.panel input[type="password"]::placeholder {
+    color: var(--tx-muted);
+    opacity: 0.72;
+}
+
+.panel input[type="text"]:focus,
+.panel input[type="password"]:focus {
+    border-color: var(--wii-blue);
+    box-shadow: 0 0 0 3px rgba(58, 180, 242, 0.22);
+}
+
+.btn {
+    min-height: 33px;
+    padding: 6px 14px;
+    border-radius: 9px;
+    font-size: 12.5px;
+    font-weight: 700;
+    border: 1.5px solid var(--bd-c9d1d8);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    line-height: 1.2;
+    transition: border-color 0.14s ease, color 0.14s ease, transform 0.1s ease, box-shadow 0.14s ease;
+}
+
+:root[data-theme="dark"] .btn {
+    background: linear-gradient(180deg, #212c3b 0%, #171f2b 100%);
+    border-color: #324152;
+    color: #dce5ef;
+}
+
+:root[data-theme="dark"] .btn:hover {
+    border-color: var(--wii-cyan);
+    color: #ffffff;
+}
+
+.btn.primary {
+    background: linear-gradient(180deg, #57c3fa 0%, #2496db 100%);
+    border-color: #2496db;
+    color: #ffffff;
+}
+
+:root[data-theme="dark"] .btn.primary {
+    background: linear-gradient(180deg, #47baf5 0%, #1d86cb 100%);
+    border-color: #38a8e8;
+    color: #ffffff;
+}
+
+#settings-overlay .notice {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 8px 12px;
+    border-radius: 10px;
+    border-width: 1.5px;
+    font-size: 12.5px;
+    line-height: 1.4;
+    margin: 0 0 10px;
+}
+
+#settings-overlay .power-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin-bottom: 4px;
+}
+
+/* Compact Software & Build strip */
+.software-bar {
+    display: grid;
+    grid-template-columns: minmax(0, 1.85fr) minmax(220px, 1fr);
+    gap: 16px;
+    align-items: center;
+}
+
+.build-grid {
+    display: grid;
+    grid-template-columns: minmax(76px, 0.7fr) minmax(110px, 0.9fr) minmax(170px, 1.45fr);
+    gap: 8px;
+}
+
+.build-stat {
+    padding: 8px 10px;
+    border-radius: 10px;
+    background: rgba(58, 180, 242, 0.07);
+    border: 1px solid var(--bd-subtle);
+    min-width: 0;
+}
+
+:root[data-theme="dark"] .build-stat {
+    background: rgba(12, 17, 24, 0.72);
+    border-color: #263343;
+}
+
+.build-stat-label {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--tx-muted);
+    margin-bottom: 2px;
+}
+
+.build-stat-value {
+    font-size: 12.5px;
+    font-weight: 800;
+    color: var(--tx-strong);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#settings-overlay .settings-foot {
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 22px;
+    margin: 0;
+    background: var(--settings-head-bg);
+    border-top: 1px solid var(--bd-subtle);
+}
+
+.settings-foot-meta {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--tx-muted);
+}
+
+@media (max-width: 700px) {
+    #settings-overlay .tab-pane:not([hidden]) {
+        grid-template-columns: 1fr;
+    }
+
+    #settings-overlay .set-card.tall {
+        grid-row: auto;
+    }
+
+    .software-bar,
+    .build-grid,
+    .settings-mp-wrap {
+        grid-template-columns: 1fr;
+    }
+}

@@ -71,6 +71,8 @@ class ValidationCache {
         /** @type {Map<string, ValidationCacheEntry>} */
         this.entries = new Map();
         this.loaded = false;
+        /** @type {Promise<unknown>} */
+        this.queue = Promise.resolve();
     }
 
     /**
@@ -119,7 +121,7 @@ class ValidationCache {
             version: CACHE_VERSION,
             entries: Object.fromEntries(this.entries.entries())
         };
-        const temporaryFile = `${this.cacheFile}.tmp-${process.pid}`;
+        const temporaryFile = `${this.cacheFile}.tmp-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
         fs.writeFileSync(temporaryFile, JSON.stringify(payload, null, 2));
         fs.renameSync(temporaryFile, this.cacheFile);
     }
@@ -141,12 +143,26 @@ class ValidationCache {
 
     /**
      * Validates all scanned games, reusing cached results when size, mtime, and key signature are unchanged.
+     * Serializes concurrent calls so startup pre-warming and API requests never race on cache writes.
      * @param {string} romsDir
      * @param {GameEntry[]} games
      * @param {ValidatorOptions} [options]
      * @returns {Promise<Map<string, ValidationResult>>}
      */
-    async validateGames(romsDir, games, options = {}) {
+    validateGames(romsDir, games, options = {}) {
+        const nextRun = this.queue.then(() => this._validateGamesInternal(romsDir, games, options));
+        this.queue = nextRun.catch(() => undefined);
+        return nextRun;
+    }
+
+    /**
+     * Internal single-flight implementation for validateGames.
+     * @param {string} romsDir
+     * @param {GameEntry[]} games
+     * @param {ValidatorOptions} [options]
+     * @returns {Promise<Map<string, ValidationResult>>}
+     */
+    async _validateGamesInternal(romsDir, games, options = {}) {
         this.load();
         /** @type {Map<string, ValidationResult>} */
         const results = new Map();

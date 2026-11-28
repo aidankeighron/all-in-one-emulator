@@ -114,16 +114,71 @@ function setIdle(next) {
     save({ ...load(), idle: { action, minutes } });
 }
 
-// Favourite games, by their path under the ROMs folder (so a game keeps its star when its picture or title changes)
+// Favourite and backlog games, by their path under the ROMs folder (so a game keeps its tier when its picture or title changes)
+const GAME_STATUSES = ['none', 'star', 'backlog'];
+
+function isValidGamePath(gamePath) {
+    return typeof gamePath === 'string' && gamePath.length > 0 && gamePath.length <= 500;
+}
+
 function getFavorites() {
     const list = load().favorites;
     return Array.isArray(list) ? list.filter(x => typeof x === 'string') : [];
 }
 
+function getBacklog() {
+    const list = load().backlog;
+    return Array.isArray(list) ? list.filter(x => typeof x === 'string') : [];
+}
+
+function setGameStatus(gamePath, status) {
+    if (!isValidGamePath(gamePath) || !GAME_STATUSES.includes(status)) {
+        return false;
+    }
+    const cfg = load();
+    const favorites = (Array.isArray(cfg.favorites) ? cfg.favorites : []).filter(x => typeof x === 'string' && x !== gamePath);
+    const backlog = (Array.isArray(cfg.backlog) ? cfg.backlog : []).filter(x => typeof x === 'string' && x !== gamePath);
+    if (status === 'star') {
+        favorites.push(gamePath);
+    }
+    else if (status === 'backlog') {
+        backlog.push(gamePath);
+    }
+    save({ ...cfg, favorites, backlog });
+    return true;
+}
+
 function setFavorite(gamePath, on) {
-    if (typeof gamePath !== 'string' || !gamePath || gamePath.length > 500) return;
-    const rest = getFavorites().filter(x => x !== gamePath);
-    save({ ...load(), favorites: on ? [...rest, gamePath] : rest });
+    setGameStatus(gamePath, on ? 'star' : 'none');
+}
+
+function setBacklog(gamePath, on) {
+    setGameStatus(gamePath, on ? 'backlog' : 'none');
+}
+
+function getLastPlayed() {
+    const raw = load().lastPlayed;
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+        return {};
+    }
+    const result = {};
+    for (const [gamePath, timestamp] of Object.entries(raw)) {
+        if (isValidGamePath(gamePath) && typeof timestamp === 'number' && Number.isFinite(timestamp) && timestamp > 0) {
+            result[gamePath] = Math.round(timestamp);
+        }
+    }
+    return result;
+}
+
+function recordLastPlayed(gamePath, timestamp = Date.now()) {
+    if (!isValidGamePath(gamePath) || typeof timestamp !== 'number' || !Number.isFinite(timestamp) || timestamp <= 0) {
+        return false;
+    }
+    const cfg = load();
+    const current = getLastPlayed();
+    current[gamePath] = Math.round(timestamp);
+    save({ ...cfg, lastPlayed: current });
+    return true;
 }
 
 // How many Wii Remotes to use as real remotes in Dolphin (0-4); they take the first Wii Remote slots
@@ -270,4 +325,4 @@ const mappingsDir = path.join(path.dirname(configFile), 'mappings');
 const artworkDir = path.join(path.dirname(configFile), 'artwork');
 const soundsDir = process.env.SOUNDS_DIR || path.join(path.dirname(configFile), 'sounds');
 
-module.exports = { getIdle, setIdle, IDLE_ACTIONS, IDLE_MINUTES, getRomsDir, setRomsDir, getAutoControllers, setAutoControllers, getSwitchTuning, setSwitchTuning, getWiiRemotes, setWiiRemotes, getTheme, setTheme, THEMES, getPauseHold, setPauseHold, PAUSE_HOLD_STEPS, getFavorites, setFavorite, getPlayers, setPlayers, getJoyconPairs, setJoyconPairs, getJoyconHelper, setJoyconHelper, getSound, setSound, getCloud, getCloudToken, getLibrary, setLibrary, libraryCacheFile, validationCacheFile, getEmulatorPaths, getEmulatorUrls, setEmulatorPath, emulatorsDir, configFile, mappingsDir, artworkDir, soundsDir };
+module.exports = { getIdle, setIdle, IDLE_ACTIONS, IDLE_MINUTES, getRomsDir, setRomsDir, getAutoControllers, setAutoControllers, getSwitchTuning, setSwitchTuning, getWiiRemotes, setWiiRemotes, getTheme, setTheme, THEMES, getPauseHold, setPauseHold, PAUSE_HOLD_STEPS, GAME_STATUSES, getFavorites, setFavorite, getBacklog, setBacklog, setGameStatus, getLastPlayed, recordLastPlayed, getPlayers, setPlayers, getJoyconPairs, setJoyconPairs, getJoyconHelper, setJoyconHelper, getSound, setSound, getCloud, getCloudToken, getLibrary, setLibrary, libraryCacheFile, validationCacheFile, getEmulatorPaths, getEmulatorUrls, setEmulatorPath, emulatorsDir, configFile, mappingsDir, artworkDir, soundsDir };

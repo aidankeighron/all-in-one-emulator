@@ -1,6 +1,6 @@
 {
   "name": "emulator-menu",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Wii-style menu that launches Dolphin (Wii/GameCube) and Ryujinx (Switch) on Linux and Windows",
   "author": "aidankeighron",
   "license": "UNLICENSED",
@@ -13,8 +13,8 @@
     "start": "electron . --no-sandbox",
     "server": "node ui/server.js",
     "test": "node --test test/*.test.js",
-    "dist": "electron-builder --linux AppImage",
-    "dist:win": "electron-builder --win portable",
+    "dist": "node scripts/build-info.js && electron-builder --linux AppImage",
+    "dist:win": "node scripts/build-info.js && electron-builder --win portable",
     "build": "node scripts/build.js",
     "build:daemon": "node scripts/build-daemon.js",
     "build:win": "node scripts/build.js win",

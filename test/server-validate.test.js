@@ -84,3 +84,56 @@ test('GET /api/games attaches validation results and POST /api/games/validate re
         httpServer.close();
     }
 });
+
+test('server.start runs fresh static validation on load and ignores stale cache from prior sessions', async () => {
+    const cacheFile = path.join(configHome, 'all-in-one-emulator', 'validation-cache.json');
+    const validPath = path.join(romsDir, 'wii', 'Valid Game.iso');
+    const brokenPath = path.join(romsDir, 'wii', 'Broken Game.iso');
+    const brokenStat = fs.statSync(brokenPath);
+
+    // Seed a deliberately stale "error" result matching the current file size/mtime in the disk cache.
+    fs.mkdirSync(path.dirname(cacheFile), { recursive: true });
+    fs.writeFileSync(
+        cacheFile,
+        JSON.stringify({
+            version: 1,
+            entries: {
+                'wii/Broken Game.iso': {
+                    size: brokenStat.size,
+                    mtimeMs: Math.round(brokenStat.mtimeMs),
+                    keysSignature: 'n/a',
+                    result: {
+                        status: 'error',
+                        code: 'EMPTY_FILE',
+                        reason: 'Stale cached error from previous run',
+                        checkedAt: 1
+                    }
+                }
+            }
+        })
+    );
+
+    // Server start clears prior session cache and runs static validation proactively on load.
+    const { server: httpServer } = await server.start({ port: 0 });
+    try {
+        let written = null;
+        for (let attempt = 0; attempt < 50; attempt += 1) {
+            if (fs.existsSync(cacheFile)) {
+                const parsed = JSON.parse(fs.readFileSync(cacheFile, 'utf8'));
+                if (parsed.entries && parsed.entries['wii/Broken Game.iso'] && parsed.entries['wii/Valid Game.iso']) {
+                    written = parsed.entries;
+                    break;
+                }
+            }
+            await new Promise((resolve) => setTimeout(resolve, 25));
+        }
+
+        assert.ok(written, 'expected startup load validation to populate validation-cache.json without hitting /api/games');
+        assert.strictEqual(written['wii/Valid Game.iso'].result.status, 'ok');
+        assert.strictEqual(written['wii/Broken Game.iso'].result.status, 'ok');
+        assert.strictEqual(fs.existsSync(validPath), true);
+    }
+    finally {
+        httpServer.close();
+    }
+});
