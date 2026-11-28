@@ -1,6 +1,7 @@
 const { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, screen, shell } = require('electron');
 const path = require('path');
 const server = require('../ui/server');
+const daemonLifecycle = require('../ui/lib/daemon-lifecycle');
 
 // Note: Ubuntu 24.04 blocks Chromium's sandbox for apps like this. That is checked before any JS
 // runs, so --no-sandbox is passed by `npm start` and by the AppImage launcher (scripts/after-pack.js).
@@ -134,6 +135,14 @@ function restartApp() {
 }
 
 async function createWindow() {
+    const daemonResult = await daemonLifecycle.start({
+        wsPort: Number(process.env.VIRTUALPAD_PORT) || 26780,
+        dsuPort: Number(process.env.VIRTUALPAD_DSU_PORT) || 26760
+    });
+    if (!daemonResult.started) {
+        console.warn(`[MAIN] Virtualpad daemon not started (${daemonResult.reason || 'unavailable'}); using fallback controller mode`);
+    }
+
     const { port } = await server.start({ port: 0, onGameState, onPause, onRestart: restartApp, onActivity });
     serverPort = port;
 
@@ -204,5 +213,10 @@ if (!app.requestSingleInstanceLock()) {
     // Windows groups the taskbar icon (and keeps a pinned one working) by this id: it matches the installer's appId
     if (process.platform === 'win32') app.setAppUserModelId('com.aidankeighron.emulatormenu');
     app.whenReady().then(createWindow);
-    app.on('window-all-closed', () => app.quit());
+    app.on('before-quit', () => {
+        void daemonLifecycle.stop();
+    });
+    app.on('window-all-closed', () => {
+        void daemonLifecycle.stop().finally(() => app.quit());
+    });
 }

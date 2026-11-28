@@ -301,6 +301,12 @@ Downloaded pictures are cached in `~/.config/all-in-one-emulator/artwork`, so ea
 games work offline afterwards. Compressed `.ciso`/`.gcz` Dolphin images and Switch games have no automatic source; use the
 same-name picture for those.
 
+**ROM validation.** Without launching an emulator, the menu checks each local game's file header and structure (and
+whether `prod.keys` is present in Ryujinx's `system` folder for encrypted Switch formats `.nsp`, `.xci`, `.nca`). Results
+are cached in `~/.config/all-in-one-emulator/validation-cache.json` by file size, modification time, and key state, and
+re-checked when files change or you press Refresh. Games that fail validation stay visible in the grid with a warning icon
+showing the reason on hover or in the game's save sheet.
+
 **Sound.** The menu has sound effects (moving, selecting, paging, opening Settings, starting a game,
 errors) and background music that pauses while a game runs, while another window is in front, and after five
 minutes without input (the next press brings it back). Out of the box it plays small built-in
@@ -592,6 +598,16 @@ cp -r ~/all-in-one-emulator/profiles/profile_1/home/.config/dolphin-emu ~/.var/a
 
 Switch (Ryujinx, which needs `prod.keys` plus a
 firmware install) need BIOS, key or firmware files that cannot be redistributed. Each person installs their own through the emulator's own settings.
+
+## Virtual Controller Slots (Daemon Mode)
+
+Emulator Menu includes an optional native Rust helper daemon (`daemon/`, built to `ui/bin/virtualpad-daemon` via `npm run build:daemon`) that exposes **4 persistent virtual controller slots (Player 1 – Player 4)** to emulators:
+
+- **Persistent virtual gamepads:** Emulators (`Dolphin`, `Ryujinx`) bind statically to `Virtual Pad 1`–`Virtual Pad 4` (`uinput` on Linux, `ViGEmBus` on Windows) so controllers can hot-swap, reconnect, reorder, or split/combine Joy-Cons mid-game without restarting the emulator.
+- **DSU / Cemuhook motion server:** Exposes per-slot gyroscope and accelerometer data over UDP on `127.0.0.1:26760` (`--dsu-port`).
+- **Home/Guide button interception:** Pressing Home/Guide toggles the pause/quick menu overlay regardless of which emulator has focus.
+- **Real Wii Remote passthrough:** Physical Wii Remotes are excluded from the virtual slot layer and continue using Dolphin's native passthrough (`ui/lib/wiimote.js` / `ui/lib/wiimoteaccess.js`).
+- **Graceful fallback:** When the daemon binary is not built or cannot start, the app automatically falls back to direct OS detection and dynamic emulator config generation.
 
 # Adding another emulator
 

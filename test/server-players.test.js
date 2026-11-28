@@ -155,3 +155,140 @@ test('closing the Connect screen gives every controller without a player a free 
         assert.strictEqual(players[2].device, 'pad:045e:028e:Microsoft X-Box 360 pad#0', 'the Xbox pad stays player 3');
     } finally { srv.close(); controllers.detect = realDetect; }
 });
+
+test('daemon endpoints expose slot status, assign, swap, joycon-mode, and auto-assign via mocked virtualpad daemon', async () => {
+    const net = require('net');
+    const receivedCommands = [];
+    let currentState = {
+        type: 'StateUpdate',
+        slots: [
+            { index: 0, assignedPhysical: 'jc-l', active: true },
+            { index: 1, assignedPhysical: 'jc-r', active: true },
+            { index: 2, assignedPhysical: null, active: false },
+            { index: 3, assignedPhysical: null, active: false }
+        ],
+        physicalControllers: [
+            {
+                id: 'jc-l',
+                name: 'Nintendo Switch Joy-Con (L)',
+                kind: 'switch_joycon_left',
+                vendorId: 0x057e,
+                productId: 0x2006,
+                hasGyro: true,
+                hasAccelerometer: true,
+                batteryLevel: 'high',
+                connectionType: 'bluetooth',
+                assignedSlot: 0,
+                joyconMode: 'split_left'
+            },
+            {
+                id: 'jc-r',
+                name: 'Nintendo Switch Joy-Con (R)',
+                kind: 'switch_joycon_right',
+                vendorId: 0x057e,
+                productId: 0x2007,
+                hasGyro: true,
+                hasAccelerometer: true,
+                batteryLevel: 'low',
+                connectionType: 'bluetooth',
+                assignedSlot: 1,
+                joyconMode: 'split_right'
+            }
+        ]
+    };
+
+    const daemonSockets = new Set();
+    const mockDaemon = net.createServer((socket) => {
+        daemonSockets.add(socket);
+        socket.on('close', () => daemonSockets.delete(socket));
+        socket.write(`${JSON.stringify(currentState)}\n`);
+        let buf = '';
+        socket.on('data', (chunk) => {
+            buf += chunk.toString('utf8');
+            let nl = buf.indexOf('\n');
+            while (nl !== -1) {
+                const line = buf.slice(0, nl).trim();
+                buf = buf.slice(nl + 1);
+                if (line) {
+                    const cmd = JSON.parse(line);
+                    receivedCommands.push(cmd);
+                    if (cmd.type === 'SwapSlots') {
+                        const tmpSlot = currentState.slots[cmd.slotA].assignedPhysical;
+                        currentState.slots[cmd.slotA].assignedPhysical = currentState.slots[cmd.slotB].assignedPhysical;
+                        currentState.slots[cmd.slotB].assignedPhysical = tmpSlot;
+                        socket.write(`${JSON.stringify(currentState)}\n`);
+                    }
+                }
+                nl = buf.indexOf('\n');
+            }
+        });
+    });
+
+    await new Promise((resolve) => mockDaemon.listen(0, '127.0.0.1', resolve));
+    const daemonPort = mockDaemon.address().port;
+
+    // Point the server's daemonBridge client at our mock daemon for this test
+    const originalHost = server.daemonBridge.client._host;
+    const originalPort = server.daemonBridge.client._port;
+    server.daemonBridge.client._host = '127.0.0.1';
+    server.daemonBridge.client._port = daemonPort;
+
+    const { server: srv, port } = await server.start({ port: 0 });
+    try {
+        const deadline = Date.now() + 2000;
+        while ((!server.daemonBridge.daemonConnected || server.daemonBridge.getStatus().physicalControllers.length < 2) && Date.now() < deadline) {
+            await new Promise((r) => setTimeout(r, 20));
+        }
+        assert.strictEqual(server.daemonBridge.daemonConnected, true);
+        await api(port, 'POST', '/api/players', { players: [] });
+
+        let r = await api(port, 'GET', '/api/daemon/status');
+        assert.strictEqual(r.status, 200);
+        assert.strictEqual(r.body.connected, true);
+        assert.strictEqual(r.body.physicalControllers.length, 2);
+
+        r = await api(port, 'GET', '/api/controllers');
+        assert.strictEqual(r.status, 200);
+        assert.strictEqual(r.body.daemonConnected, true);
+        assert.strictEqual(r.body.controllers[0].battery.level, 'high');
+        assert.strictEqual(r.body.controllers[1].battery.low, true);
+
+        r = await api(port, 'POST', '/api/daemon/assign', { controllerId: 'jc-l', slotIndex: 2 });
+        assert.strictEqual(r.status, 200);
+        r = await api(port, 'POST', '/api/daemon/swap', { slotA: 0, slotB: 1 });
+        assert.strictEqual(r.status, 200);
+        r = await api(port, 'POST', '/api/daemon/joycon-mode', { controllerId: 'jc-l', mode: 'combined' });
+        assert.strictEqual(r.status, 200);
+        r = await api(port, 'POST', '/api/daemon/auto-assign', {});
+        assert.strictEqual(r.status, 200);
+        r = await api(port, 'POST', '/api/daemon/unassign', { controllerId: 'jc-r' });
+        assert.strictEqual(r.status, 200);
+
+        assert.deepStrictEqual(receivedCommands.map(c => c.type), [
+            'AssignController',
+            'SwapSlots',
+            'SetJoyConMode',
+            'AutoAssign',
+            'UnassignController'
+        ]);
+
+        // Validation error returns 400
+        r = await api(port, 'POST', '/api/daemon/assign', { controllerId: 'jc-l', slotIndex: 99 });
+        assert.strictEqual(r.status, 400);
+
+        // Home button event updates status homeOverlayRequestedAt
+        const beforeHome = (await api(port, 'GET', '/api/status')).body.homeOverlayRequestedAt;
+        for (const s of daemonSockets) {
+            s.write(`${JSON.stringify({ type: 'HomeButtonPressed', controllerId: 'jc-l', slotIndex: 0 })}\n`);
+        }
+        await new Promise((r) => setTimeout(r, 30));
+        const afterHome = (await api(port, 'GET', '/api/status')).body.homeOverlayRequestedAt;
+        assert.ok(afterHome > beforeHome, 'home-button event recorded');
+    } finally {
+        srv.close();
+        server.daemonBridge.client._host = originalHost;
+        server.daemonBridge.client._port = originalPort;
+        for (const s of daemonSockets) s.destroy();
+        await new Promise((resolve) => mockDaemon.close(resolve));
+    }
+});

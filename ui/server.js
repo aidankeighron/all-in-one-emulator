@@ -32,6 +32,10 @@ const playersLib = require('./lib/players');
 const joycondLib = require('./lib/joycond');
 const systemLib = require('./lib/system');
 const wifiLib = require('./lib/wifi');
+const validate = require('./lib/validate');
+const { ValidationCache } = require('./lib/validation-cache');
+const { createDaemonBridge } = require('./lib/daemon-bridge');
+const inputconfigVirtual = require('./lib/inputconfig-virtual');
 
 const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'emulators.json'), 'utf8'));
 const emulatorsById = new Map(manifest.emulators.map(e => [e.id, e]));
@@ -74,6 +78,10 @@ let gamesById = new Map();
 
 // Save slots and cloud saves (see lib/saves)
 const slotAdapters = saveAdapters.create(platformCtx);
+const validationCache = new ValidationCache({
+    cacheFile: config.validationCacheFile,
+    validator: validate.defaultValidator
+});
 const saves = createManager({
     dir: path.join(path.dirname(config.configFile), 'saves'),
     adapters: slotAdapters,
@@ -186,7 +194,45 @@ function forgetBetterJoy() {
 // What is plugged in now, with any Switch controllers the person put together shown as one
 const wiimoteReader = wiimoteLib.createReader();
 const keepOrder = controllers.createOrder();
-const detectPads = () => keepOrder(controllers.detect({ platform: runner.platform, merge: config.getJoyconPairs(), }));
+const daemonPort = Number(process.env.VIRTUALPAD_PORT) || 26780;
+const daemonDsuPort = Number(process.env.VIRTUALPAD_DSU_PORT) || 26760;
+const daemonBridge = createDaemonBridge({
+    port: daemonPort,
+    autoConnect: false,
+    log: console.log
+});
+let homeOverlayRequestedAt = 0;
+
+daemonBridge.client.on('home-button', () => {
+    idle.controllerUsed();
+    try { activityHook(); } catch { /* window closed */ }
+    if (current && current.path) {
+        togglePause();
+    } else {
+        homeOverlayRequestedAt = Date.now();
+    }
+});
+
+daemonBridge.client.on('connected', () => {
+    syncNow().catch(err => console.error(`[DAEMON] sync on connect failed: ${err.message}`));
+});
+
+const detectPads = () => {
+    if (daemonBridge.daemonConnected) {
+        return daemonBridge.detectControllers({ platform: runner.platform, merge: config.getJoyconPairs() });
+    }
+    return keepOrder(controllers.detect({ platform: runner.platform, merge: config.getJoyconPairs() }));
+};
+
+function realWiimoteMask(playersList, wiiRemotesCount) {
+    const normalized = playersLib.normalize(playersList);
+    return normalized.map((player, index) => {
+        if (player.device === 'real') {
+            return true;
+        }
+        return player.device === 'auto' && index < (wiiRemotesCount || 0);
+    });
+}
 
 // Writes the controller settings of one emulator (or all installed ones) from what is plugged in now
 // The last problem lines in the emulator's own log file (Ryujinx keeps one per run), for a game that closed right away
@@ -215,6 +261,21 @@ const pendingSetup = new Set();
 // differs from what the players are now, the game has to start again to use it; when it is the same (a controller that
 // dropped out and came back, a real Wii Remote connecting) the emulator picks it up by itself.
 function controllerPlan(emulatorId, game = null) {
+    if (daemonBridge.daemonConnected) {
+        const players = playersLib.normalize(config.getPlayers());
+        const realMask = realWiimoteMask(players, config.getWiiRemotes());
+        const field = emulatorId === 'ryujinx' ? ['sw'] : game === 'wii' ? ['wii'] : game === 'gamecube' ? ['gc'] : ['wii', 'gc'];
+        const dolphin = emulatorId !== 'ryujinx';
+        return JSON.stringify(players.map((player, index) => {
+            if (dolphin && game !== 'gamecube' && realMask[index]) {
+                return ['real'];
+            }
+            if (dolphin && game === 'gamecube' && realMask[index]) {
+                return ['none'];
+            }
+            return ['virtual', ...field.map(f => player[f])];
+        }));
+    }
     const view = inputconfig.describe(detectPads(), { players: config.getPlayers(), wiiRemotes: config.getWiiRemotes() }, mappings);
     const field = emulatorId === 'ryujinx' ? ['sw'] : game === 'wii' ? ['wii'] : game === 'gamecube' ? ['gc'] : ['wii', 'gc'];
     // Dolphin: a real Wii Remote has nothing to map (one that drops out and comes back is the same plan)
@@ -232,6 +293,24 @@ function setupControllers(emulatorIds, { game = null } = {}) {
     if (running && emulatorIds.includes(running)) {
         pendingSetup.add(running);
         emulatorIds = emulatorIds.filter(id => id !== running);
+    }
+    if (daemonBridge.daemonConnected) {
+        const playersList = config.getPlayers();
+        const realWiimotes = realWiimoteMask(playersList, config.getWiiRemotes());
+        const results = emulatorIds.map(id => {
+            const result = inputconfigVirtual.apply(id, platformCtx, {
+                activePlayers: playersLib.PLAYERS,
+                realWiimotes,
+                game: id === 'dolphin' ? game : null,
+                dsuPort: daemonDsuPort,
+                profiles: mappings,
+                players: playersList
+            });
+            console.log(`[PADS:VIRTUAL] ${id}: ${result.status}${result.message ? ` (${result.message})` : ''}`);
+            return result;
+        });
+        lastSetup = [...lastSetup.filter(r => !emulatorIds.includes(r.emulator)), ...results];
+        return results;
     }
     const connected = detectPads();
     const results = emulatorIds.map(id => {
@@ -775,7 +854,7 @@ function controllersView() {
     // what the player picked for each console ('auto' or a mapping id) and what automatic means for this controller
     const choicesOf = s => (s ? { choice: { wii: s.request.wii, gc: s.request.gc, sw: s.request.sw }, auto: s.auto } : { choice: null, auto: null });
     const mapOf = s => ({ wii: { id: s.wii.id, name: s.wii.name }, gc: { id: s.gc.id, name: s.gc.name }, sw: { id: s.sw.id, name: s.sw.name } });
-    const charge = runner.platform === 'win32' ? new Map() : controllers.batteries();
+    const charge = (runner.platform === 'win32' || daemonBridge.daemonConnected) ? new Map() : controllers.batteries();
     const shown = list.map(c => {
         const slot = slotOf(c.id);
         const s = slot === null ? null : view.slots[slot];
@@ -784,7 +863,7 @@ function controllersView() {
             ...c, key: playersLib.padKey(c), roles: view.roles[c.id], family,
             slot, player: slot === null ? null : slot + 1, maps: s ? mapOf(s) : null, ...choicesOf(s),
             canCombine: c.pad && !c.adapter && c.kind === 'switch',
-            battery: controllers.batteryOf(c, charge)
+            battery: c.battery || controllers.batteryOf(c, charge)
         };
     });
     // Real Wii Remotes a player is set to use but that are not connected yet: Dolphin connects them itself
@@ -795,9 +874,13 @@ function controllersView() {
     const ordered = [...shown, ...waiting].sort((a, b) => (a.slot ?? 99) - (b.slot ?? 99));
     // Which buttons each kind of controller has (by vendor:product), so the menu window can tell what the browser's button numbers mean
     const keyMap = {};
-    for (const c of controllers.detect({ platform: runner.platform })) if (c.keys && c.keys.length) keyMap[`${c.vendor}:${c.product}`] = c.keys;
+    if (!daemonBridge.daemonConnected) {
+        for (const c of controllers.detect({ platform: runner.platform })) if (c.keys && c.keys.length) keyMap[`${c.vendor}:${c.product}`] = c.keys;
+    }
     return {
         platform: runner.platform,
+        daemonConnected: daemonBridge.daemonConnected,
+        daemon: daemonBridge.getStatus(),
         controllers: ordered,
         keyMap,
         slots: view.slots.map(s => ({ index: s.index, mode: s.mode, controller: s.controller ? s.controller.name : (s.mode === 'real' ? 'Wii Remote' : null) })),
@@ -814,6 +897,50 @@ async function syncNow() {
     const states = await emulatorStates();
     const ids = states.emulators.filter(e => e.installed).map(e => e.id);
     return setupControllers(ids);
+}
+
+// /api/daemon/*. Returns true when it sent a response.
+async function handleDaemon(route, req, res) {
+    try {
+        if (route === 'GET /api/daemon/status') {
+            return sendJson(res, 200, daemonBridge.getStatus()), true;
+        }
+        if (!route.startsWith('POST ')) {
+            return false;
+        }
+        const body = await readJson(req);
+        if (route === 'POST /api/daemon/assign') {
+            await daemonBridge.assign(body.controllerId, Number(body.slotIndex));
+            await syncNow();
+            return sendJson(res, 200, daemonBridge.getStatus()), true;
+        }
+        if (route === 'POST /api/daemon/unassign') {
+            await daemonBridge.unassign(body.controllerId);
+            await syncNow();
+            return sendJson(res, 200, daemonBridge.getStatus()), true;
+        }
+        if (route === 'POST /api/daemon/swap') {
+            await daemonBridge.swapSlots(Number(body.slotA), Number(body.slotB));
+            await syncNow();
+            return sendJson(res, 200, daemonBridge.getStatus()), true;
+        }
+        if (route === 'POST /api/daemon/joycon-mode') {
+            await daemonBridge.setJoyConMode(body.controllerId, body.mode);
+            await syncNow();
+            return sendJson(res, 200, daemonBridge.getStatus()), true;
+        }
+        if (route === 'POST /api/daemon/auto-assign') {
+            await daemonBridge.autoAssign();
+            await syncNow();
+            return sendJson(res, 200, daemonBridge.getStatus()), true;
+        }
+    }
+    catch (err) {
+        const isValidation = err instanceof TypeError || err instanceof RangeError;
+        const status = isValidation ? 400 : (err.message && err.message.includes('not connected') ? 503 : 500);
+        return sendJson(res, status, { error: isValidation ? 'invalid' : 'daemon_error', message: err.message }), true;
+    }
+    return false;
 }
 
 // /api/players and /api/mappings. Returns true when it sent a response.
@@ -835,14 +962,20 @@ async function handlePlayers(route, req, res) {
             // A controller (or a player's Wii Remote) moves to another player; whoever was there takes its old place
             const body = await readJson(req);
             const to = Number(body.to);
-            const { slots } = inputconfig.describe(detectPads(), { players: config.getPlayers(), wiiRemotes: config.getWiiRemotes() }, mappings);
+            const detected = detectPads();
+            const { slots } = inputconfig.describe(detected, { players: config.getPlayers(), wiiRemotes: config.getWiiRemotes() }, mappings);
             if (!Number.isInteger(to) || to < 0 || to >= playersLib.PLAYERS) return sendJson(res, 400, { error: 'bad_player', message: 'Choose player 1 to 4' }), true;
             if (body.from !== undefined && body.from !== null) {
                 const from = Number(body.from);
                 if (!Number.isInteger(from) || from < 0 || from >= playersLib.PLAYERS) return sendJson(res, 400, { error: 'bad_player', message: 'Choose player 1 to 4' }), true;
                 config.setPlayers(playersLib.swap(config.getPlayers(), slots, from, to));
+                if (daemonBridge.daemonConnected) await daemonBridge.swapSlots(from, to);
             } else if (typeof body.key === 'string' && body.key.startsWith('pad:')) {
                 config.setPlayers(playersLib.place(config.getPlayers(), slots, body.key, to));
+                if (daemonBridge.daemonConnected) {
+                    const target = detected.find(c => playersLib.padKey(c) === body.key);
+                    if (target && target.daemonId) await daemonBridge.assign(target.daemonId, to);
+                }
             } else return sendJson(res, 400, { error: 'bad_move', message: 'Say which controller to move' }), true;
             await syncNow();
             return sendJson(res, 200, controllersView()), true;
@@ -876,6 +1009,10 @@ async function handlePlayers(route, req, res) {
                 // the player that had either of them keeps the pair
                 const pair = detectPads().find(c => c.combined && c.memberKeys.includes(body.a) && c.memberKeys.includes(body.b));
                 if (pair) config.setPlayers(playersLib.repin(config.getPlayers(), [body.a, body.b], playersLib.padKey(pair)));
+                if (daemonBridge.daemonConnected) {
+                    const leftPad = before.find(c => playersLib.padKey(c) === body.a);
+                    if (leftPad && leftPad.daemonId) await daemonBridge.setJoyConMode(leftPad.daemonId, 'combined').catch(() => {});
+                }
             } else {
                 const members = Array.isArray(body.members) ? body.members : [];
                 if (members.length !== 2 || members.some(m => typeof m !== 'string')) return sendJson(res, 400, { error: 'bad_pair', message: 'Say which controller to split' }), true;
@@ -886,6 +1023,9 @@ async function handlePlayers(route, req, res) {
                 // the player that had the pair keeps its first half
                 const pair = before.find(c => c.combined && c.memberKeys.includes(a) && c.memberKeys.includes(b));
                 if (pair) config.setPlayers(playersLib.repin(config.getPlayers(), [playersLib.padKey(pair)], a));
+                if (daemonBridge.daemonConnected && pair && pair.daemonId) {
+                    await daemonBridge.setJoyConMode(pair.daemonId, 'split_left').catch(() => {});
+                }
             }
             await syncNow();
             return sendJson(res, 200, controllersView()), true;
@@ -1128,7 +1268,15 @@ function createServer(onGameState) {
                     const covers = artworkFor(romsDir);
                     covers.ensure(scanned);
                     gamesById = new Map(scanned.map(g => [g.id, g]));
-                    const games = scanned.map(g => ({ ...g, installed: installed.has(g.emulator), art: covers.find(g) ? `/api/art/${g.id}` : null }));
+                    const ryujinxAdapter = slotAdapters.get('ryujinx');
+                    const ryujinxDataRoot = ryujinxAdapter ? ryujinxAdapter.dataRoot() : undefined;
+                    const validations = await validationCache.validateGames(romsDir, scanned, { ryujinxDataRoot });
+                    const games = scanned.map(g => ({
+                        ...g,
+                        installed: installed.has(g.emulator),
+                        art: covers.find(g) ? `/api/art/${g.id}` : null,
+                        validation: validations.get(g.path) || null
+                    }));
                     // Games that are on the other computer but not on this one
                     const theirs = await remoteIndex();
                     const have = new Set(scanned.map(g => g.path));
@@ -1152,6 +1300,21 @@ function createServer(onGameState) {
                 if (route === 'POST /api/art/retry') {
                     const covers = artworkFor(config.getRomsDir());
                     return sendJson(res, 200, { cleared: covers.retryMisses() });
+                }
+                if (route === 'POST /api/games/validate') {
+                    validationCache.clear();
+                    const romsDir = config.getRomsDir();
+                    const scanned = roms.scanGames(romsDir, manifest);
+                    const ryujinxAdapter = slotAdapters.get('ryujinx');
+                    const ryujinxDataRoot = ryujinxAdapter ? ryujinxAdapter.dataRoot() : undefined;
+                    const validations = await validationCache.validateGames(romsDir, scanned, { ryujinxDataRoot });
+                    let errors = 0;
+                    for (const result of validations.values()) {
+                        if (result.status === 'error') {
+                            errors++;
+                        }
+                    }
+                    return sendJson(res, 200, { count: scanned.length, errors });
                 }
                 const a = url.pathname.match(/^\/api\/art\/(\w+)$/);
                 if (req.method === 'GET' && a) {
@@ -1211,6 +1374,9 @@ function createServer(onGameState) {
                     return sendJson(res, 200, { ok: true });
                 }
                 if (route === 'GET /api/controllers') return sendJson(res, 200, controllersView());
+                if (url.pathname.startsWith('/api/daemon')) {
+                    if (await handleDaemon(route, req, res)) return;
+                }
                 if (url.pathname.startsWith('/api/players') || url.pathname.startsWith('/api/mappings') || /^\/api\/controllers\/(combine|split|remove)$/.test(url.pathname)) {
                     if (await handlePlayers(route, req, res)) return;
                 }
@@ -1287,7 +1453,7 @@ function createServer(onGameState) {
                     lastError = null;
                     // Whether the controllers now differ from what the running game started with (it needs a Reset to use them)
                     const controllersChanged = !!(current && current.plan && controllerPlan(current.emulator, current.game) !== current.plan);
-                    return sendJson(res, 200, { running: !!current || restarting, controllersChanged, game: current && { emulator: current.emulator, path: current.path }, paused: !!(current && current.paused), frozen: !!(current && current.frozenPids && current.frozenPids.length), error, sync: saves.activity() });
+                    return sendJson(res, 200, { running: !!current || restarting, controllersChanged, daemonConnected: daemonBridge.daemonConnected, homeOverlayRequestedAt, game: current && { emulator: current.emulator, path: current.path }, paused: !!(current && current.paused), frozen: !!(current && current.frozenPids && current.frozenPids.length), error, sync: saves.activity() });
                 }
                 if (route === 'POST /api/game/resume') { resumeGame(); return sendJson(res, 200, { ok: true }); }
                 if (route === 'POST /api/game/pause-combo') { padCombo(!!(await readJson(req)).held); return sendJson(res, 200, { ok: true }); }
@@ -1340,10 +1506,16 @@ function start({ port = 3000, onGameState, onPause, onRestart, onActivity } = {}
     return new Promise((resolve, reject) => {
         const server = createServer(onGameState);
         server.on('error', reject);
+        server.on('close', () => {
+            daemonBridge.disconnect();
+        });
         server.listen(port, '127.0.0.1', () => {
             const actual = server.address().port;
             console.log(`Menu running at: http://localhost:${actual}`);
             console.log(`ROMs folder: ${config.getRomsDir()}`);
+            if (process.env.EMU_NO_DAEMON !== '1') {
+                daemonBridge.client.connect().catch(() => {});
+            }
             processRoms(); // pick up any zips dropped in while the app was closed
             forgetBetterJoy();
             if (helper.supported) { refreshHelper(); setInterval(refreshHelper, 3000).unref(); }
@@ -1384,7 +1556,7 @@ function watchControllers() {
 // Whether a game (or an emulator's own window) is up: the app keeps its window on screen only when not
 const isGameRunning = () => !!current || launching || restarting;
 
-module.exports = { start, isGameRunning };
+module.exports = { start, isGameRunning, daemonBridge };
 
 if (require.main === module) {
     start({ port: Number(process.env.PORT) || 3000 }).catch(err => {

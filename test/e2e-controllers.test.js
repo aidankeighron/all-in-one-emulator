@@ -135,3 +135,102 @@ test('the same controllers in a Switch game: Xbox is Player 1, the Joy-Con pair 
         srv.close();
     }
 });
+
+test('virtual slot daemon mode: hot-swap, reorder, and Joy-Con split/combine keep static emulator configs and never require restart', async () => {
+    const net = require('net');
+    const state = {
+        type: 'StateUpdate',
+        slots: [
+            { index: 0, assignedPhysical: 'xbox-1', active: true },
+            { index: 1, assignedPhysical: 'jc-l', active: true },
+            { index: 2, assignedPhysical: null, active: false },
+            { index: 3, assignedPhysical: null, active: false }
+        ],
+        physicalControllers: [
+            {
+                id: 'xbox-1', name: 'Xbox Series X Controller', kind: 'xbox',
+                vendorId: 0x045e, productId: 0x0b12, hasGyro: false, hasAccelerometer: false,
+                batteryLevel: 'wired', connectionType: 'usb', assignedSlot: 0, joyconMode: null
+            },
+            {
+                id: 'jc-l', name: 'Nintendo Switch Joy-Con (L)', kind: 'switch_joycon_left',
+                vendorId: 0x057e, productId: 0x2006, hasGyro: true, hasAccelerometer: true,
+                batteryLevel: 'high', connectionType: 'bluetooth', assignedSlot: 1, joyconMode: 'combined'
+            }
+        ]
+    };
+    const sockets = new Set();
+    const mockDaemon = net.createServer((socket) => {
+        sockets.add(socket);
+        socket.on('close', () => sockets.delete(socket));
+        socket.write(`${JSON.stringify(state)}\n`);
+        let buf = '';
+        socket.on('data', (chunk) => {
+            buf += chunk.toString('utf8');
+            let nl = buf.indexOf('\n');
+            while (nl !== -1) {
+                const line = buf.slice(0, nl).trim();
+                buf = buf.slice(nl + 1);
+                if (line) {
+                    const cmd = JSON.parse(line);
+                    if (cmd.type === 'SwapSlots') {
+                        const tmpSlot = state.slots[cmd.slotA].assignedPhysical;
+                        state.slots[cmd.slotA].assignedPhysical = state.slots[cmd.slotB].assignedPhysical;
+                        state.slots[cmd.slotB].assignedPhysical = tmpSlot;
+                        socket.write(`${JSON.stringify(state)}\n`);
+                    } else if (cmd.type === 'SetJoyConMode') {
+                        state.physicalControllers[1].joyconMode = cmd.mode;
+                        socket.write(`${JSON.stringify(state)}\n`);
+                    }
+                }
+                nl = buf.indexOf('\n');
+            }
+        });
+    });
+    await new Promise((resolve) => mockDaemon.listen(0, '127.0.0.1', resolve));
+    const origHost = server.daemonBridge.client._host;
+    const origPort = server.daemonBridge.client._port;
+    server.daemonBridge.client._host = '127.0.0.1';
+    server.daemonBridge.client._port = mockDaemon.address().port;
+
+    fs.mkdirSync(path.join(roms, 'wii'), { recursive: true });
+    fs.writeFileSync(path.join(roms, 'wii', 'VirtualGame.iso'), 'x');
+    const { server: srv, port } = await server.start({ port: 0 });
+    try {
+        assert.ok(await until(() => server.daemonBridge.daemonConnected && server.daemonBridge.getStatus().physicalControllers.length === 2), 'daemon connected and state received');
+        let r = await api(port, 'POST', '/api/players', { players: [{ device: 'auto' }, { device: 'auto' }, { device: 'auto' }, { device: 'auto' }] });
+        assert.strictEqual(r.status, 200);
+
+        if (process.platform === 'linux') {
+            r = await api(port, 'POST', '/api/launch', { path: 'wii/VirtualGame.iso' });
+            assert.strictEqual(r.status, 200);
+            const wm = Ini.read(path.join(dolphinDir, 'WiimoteNew.ini'));
+            assert.strictEqual(wm.get('Wiimote1', 'Device'), 'SDL/0/Virtual Pad 1');
+            assert.strictEqual(wm.get('Wiimote2', 'Device'), 'SDL/1/Virtual Pad 2');
+            const mainIni = Ini.read(path.join(dolphinDir, 'Dolphin.ini'));
+            assert.strictEqual(mainIni.get('Input', 'DSUServerAddress'), '127.0.0.1');
+
+            // Mid-game slot swap & Joy-Con split do NOT require emulator restart
+            await api(port, 'POST', '/api/daemon/swap', { slotA: 0, slotB: 1 });
+            await api(port, 'POST', '/api/daemon/joycon-mode', { controllerId: 'jc-l', mode: 'split_left' });
+            const st = await api(port, 'GET', '/api/status');
+            assert.strictEqual(st.body.controllersChanged, false);
+
+            await api(port, 'POST', '/api/game/quit');
+            assert.ok(await until(async () => !(await api(port, 'GET', '/api/status')).body.running), 'game exited');
+        } else {
+            // Even on Windows without flatpak, daemon slot operations and static config generation work cleanly
+            await api(port, 'POST', '/api/daemon/swap', { slotA: 0, slotB: 1 });
+            await api(port, 'POST', '/api/daemon/joycon-mode', { controllerId: 'jc-l', mode: 'split_left' });
+            const statusRes = await api(port, 'GET', '/api/daemon/status');
+            assert.strictEqual(statusRes.body.slots[0].assignedPhysical, 'jc-l');
+            assert.strictEqual(statusRes.body.physicalControllers[1].joyconMode, 'split_left');
+        }
+    } finally {
+        srv.close();
+        server.daemonBridge.client._host = origHost;
+        server.daemonBridge.client._port = origPort;
+        for (const s of sockets) s.destroy();
+        await new Promise((resolve) => mockDaemon.close(resolve));
+    }
+});

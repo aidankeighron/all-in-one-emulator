@@ -219,6 +219,71 @@
         .fav-star:hover { transform: scale(1.15); color: var(--tx-e0a820); }
         .fav-star.on { opacity: 1; color: var(--tx-f2b01e); box-shadow: 0 0 8px rgba(242, 176, 30, 0.6); }
         .fav-star.on svg { fill: currentColor; stroke: #c98a00; }
+
+        /* Static ROM validation warning/error badge and hover/focus tooltip */
+        .validation-badge {
+            position: absolute;
+            top: 9px;
+            right: 44px;
+            z-index: 7;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--bg-fdecea);
+            border: 2px solid var(--bd-f1a9a4);
+            color: var(--tx-8a1a14);
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+            cursor: help;
+        }
+        .validation-badge svg { width: 15px; height: 15px; display: block; }
+        .validation-tooltip {
+            position: absolute;
+            top: 34px;
+            right: 0;
+            min-width: 190px;
+            max-width: 240px;
+            padding: 7px 10px;
+            border-radius: 10px;
+            background: var(--bg-fdecea);
+            border: 1.5px solid var(--bd-f1a9a4);
+            color: var(--tx-8a1a14);
+            font-size: 11px;
+            font-weight: 700;
+            line-height: 1.35;
+            text-align: left;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22);
+            opacity: 0;
+            pointer-events: none;
+            transform: translateY(-4px);
+            transition: opacity 0.15s ease, transform 0.15s ease;
+            z-index: 12;
+        }
+        .validation-badge:hover .validation-tooltip,
+        .wii-channel.selected .validation-badge .validation-tooltip {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .channel-invalid {
+            border-color: var(--bd-f1a9a4);
+        }
+        .sheet-validation-banner {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 0 0 12px;
+            padding: 9px 14px;
+            border-radius: 14px;
+            background: var(--bg-fdecea);
+            border: 1.5px solid var(--bd-f1a9a4);
+            color: var(--tx-8a1a14);
+            font-size: 13px;
+            font-weight: 700;
+            line-height: 1.4;
+        }
+        .sheet-validation-banner svg { width: 18px; height: 18px; flex: none; }
         .channel-title {
             font-size: 15px;
             font-weight: 700;
@@ -1500,7 +1565,16 @@
         // the tile there lost its hover look and got it back a moment later: the flicker on the home screen.
         let gridKey = null;
         const tilesKey = () => (onControllers() ? null : JSON.stringify([page, pageCount(), COLUMNS, CHANNELS_PER_PAGE,
-            (gamePages()[page] || []).map(g => [g.path, g.title, g.console, !!g.installed, !!g.favorite, !!g.remote, g.size || 0])]));
+            (gamePages()[page] || []).map(g => [
+                g.path,
+                g.title,
+                g.console,
+                !!g.installed,
+                !!g.favorite,
+                !!g.remote,
+                g.size || 0,
+                g.validation ? `${g.validation.status}:${g.validation.code || ''}:${g.validation.reason || ''}` : ''
+            ])]));
 
         // Pictures that arrived since the tiles were made go into them as they are
         function patchArt(grid) {
@@ -1582,10 +1656,12 @@
                     channel.addEventListener('click', () => openSaveSheet(game));
                 } else if (game) {
                     const badgeClass = `badge-${game.console}`;
-                    channel.className = `wii-channel ${game.installed ? '' : 'channel-uninstalled'} ${game.art ? 'has-art' : ''}`;
+                    const invalid = !!(game.validation && game.validation.status === 'error');
+                    channel.className = `wii-channel ${game.installed ? '' : 'channel-uninstalled'} ${game.art ? 'has-art' : ''} ${invalid ? 'channel-invalid' : ''}`;
                     channel.dataset.path = game.path;
                     channel.innerHTML = `
                         ${starHtml(game)}
+                        ${validationBadgeHtml(game)}
                         ${game.art ? `<img class="channel-art" src="${game.art}" alt="" draggable="false">` : ''}
                         <span class="channel-badge ${badgeClass}">${escapeHtml(game.console)}</span>
                         <div class="channel-title">${escapeHtml(game.title)}</div>
@@ -1614,6 +1690,26 @@
         }
 
         const starHtml = game => `<button type="button" class="fav-star ${game.favorite ? 'on' : ''}" title="${game.favorite ? 'Remove from favorites' : 'Add to favorites'} (X or Y)" aria-label="${game.favorite ? 'Remove from favorites' : 'Add to favorites'}" aria-pressed="${!!game.favorite}"><svg viewBox="0 0 24 24" width="18" height="18" stroke-linejoin="round" stroke-width="2"><path d="M12 3.2l2.6 5.6 6.1.7-4.5 4.2 1.2 6-5.4-3-5.4 3 1.2-6-4.5-4.2 6.1-.7z"/></svg></button>`;
+
+        const WARNING_ICON_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
+
+        function validationBadgeHtml(game) {
+            if (!game || !game.validation || game.validation.status !== 'error') {
+                return '';
+            }
+            const reason = game.validation.reason || game.validation.code || 'ROM validation failed';
+            const label = game.validation.code ? `${game.validation.code}: ${reason}` : reason;
+            return `<span class="validation-badge" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}">${WARNING_ICON_SVG}<span class="validation-tooltip">${escapeHtml(reason)}</span></span>`;
+        }
+
+        function validationBannerHtml(game) {
+            if (!game || !game.validation || game.validation.status !== 'error') {
+                return '';
+            }
+            const reason = game.validation.reason || 'ROM validation failed';
+            const prefix = game.validation.code ? `${game.validation.code}: ` : '';
+            return `<div class="sheet-validation-banner" role="alert">${WARNING_ICON_SVG}<span>${escapeHtml(prefix + reason)}</span></div>`;
+        }
 
         // Favourites come first. The game stays selected wherever it lands.
         async function toggleFavorite(game) {
@@ -1652,7 +1748,9 @@
                         <div class="pad-name">${escapeHtml(c.adapter ? 'GameCube Adapter' : c.name)}</div>
                         <div class="pad-meta">
                             <span class="pill ${c.connection === 'Bluetooth' ? 'bt' : ''}">${escapeHtml(c.connection)}</span>
-                            ${c.combined ? '<span class="pill pair">Combined</span>' : ''}
+                            ${c.player ? `<span class="pill">Slot ${c.player}</span>` : ''}
+                            ${c.combined ? '<span class="pill pair">Combined</span>' : (c.joyconMode && c.joyconMode.startsWith('split_') ? '<span class="pill">Split Joy-Con</span>' : '')}
+                            ${c.hasGyro ? '<span class="pill">Gyro</span>' : ''}
                             ${c.battery ? `<span class="pill batt ${c.battery.low ? 'low' : ''}">${escapeHtml(batteryText(c.battery))}</span>` : ''}
                             ${wiiBlocked(c) ? '<span class="pill fail">Not in games yet: X</span>' : ''}
                         </div>
@@ -1687,11 +1785,18 @@
             const c = zone === 'grid' ? padList[selectedIndex] : null;
             const chips = [];
             if (c) {
-                chips.push(['A', c.player ? 'Change player slot' : 'Give it a player slot', 'a']);
+                chips.push(['A', c.player ? 'Change Grip / Order (Slot)' : 'Assign to Virtual Slot', 'a']);
                 if (c.family !== 'wiimote' && !c.adapter) chips.push(['X', 'Change mapping', 'x']);
                 if (wiiBlocked(c)) chips.push(['X', 'Let Dolphin use Wii Remotes (password once)', 'x']);
+                if (c.canCombine) {
+                    if (c.combined && c.memberKeys && c.memberKeys.length === 2) {
+                        chips.push(['Split', 'Split Joy-Cons', 'split']);
+                    } else if (!c.combined && nintendoUnits().filter(u => !u.entry.combined).length >= 2) {
+                        chips.push(['Join', 'Combine Joy-Cons', 'combine']);
+                    }
+                }
                 chips.push(['B', c.virtual ? 'Free this player' : 'Remove this controller', 'b']);
-                if (nintendoUnits().length >= 2) chips.push(['L + R', 'Press both bumpers on two Joy-Cons: join them, or split them again', null]);
+                if (nintendoUnits().length >= 2) chips.push(['L + R', 'Press both bumpers on two Joy-Cons: join or split', null]);
             } else if (zone === 'bottom') chips.push(['A', 'Press the button', 'a']);
             chips.push(['Y', 'Connect a controller', 'y']);
             chips.push(['LB / RB', 'Change page', null]);
@@ -1747,6 +1852,17 @@
             if (act === 'x' && wiiBlocked(c)) return allowWiimotes();
             if (act === 'x') return padMapPicker(c);
             if (act === 'b') return padRemove(c);
+            if (act === 'split' && c.combined && c.memberKeys && c.memberKeys.length === 2) {
+                Sfx.play('back');
+                return padChange('/api/controllers/split', { members: c.memberKeys }, x => x.key === c.memberKeys[0], 'Split into two controllers');
+            }
+            if (act === 'combine') {
+                const others = padList.filter(x => x.canCombine && !x.combined && x.key !== c.key);
+                if (others.length > 0) {
+                    Sfx.play('select');
+                    return padChange('/api/controllers/combine', { a: c.key, b: others[0].key }, x => x.combined && x.memberKeys.includes(c.key), 'Joined into one controller');
+                }
+            }
         }
 
         // One password prompt, then Dolphin can use the Wii Remotes connected to this computer
@@ -2055,10 +2171,11 @@
 
         // Takes the server's controller list; true when it differs from what was showing
         let padAccess = null;       // can Dolphin use the Wii Remotes the computer holds (see lib/wiimoteaccess.js)
+        let padDaemonConnected = false;
         // A connected Wii Remote Dolphin is not allowed to use yet: in a game it would do nothing
         const wiiBlocked = c => !!(c && c.kind === 'wiimote' && !c.virtual && padAccess && padAccess.supported && padAccess.blocked > 0);
         function applyControllers(data) {
-            const json = JSON.stringify([data.controllers, data.slots]);
+            const json = JSON.stringify([data.controllers, data.slots, data.daemonConnected]);
             const changed = json !== padJson;
             padJson = json;
             padList = data.controllers;
@@ -2066,6 +2183,7 @@
             padKeyMap = data.keyMap || {};
             padProfiles = data.profiles || [];
             padAccess = data.wiimoteAccess || null;
+            padDaemonConnected = Boolean(data.daemonConnected);
             updateControllerChip();
             return changed;
         }
@@ -2109,7 +2227,7 @@
             const chip = document.getElementById('controller-status');
             const n = padList.length;
             const low = padList.filter(c => c.battery && c.battery.low);
-            chip.innerText = !n ? 'No controller detected' : low.length ? `${low.length === 1 ? low[0].name : `${low.length} controllers`}: battery low` : `${n} controller${n === 1 ? '' : 's'} connected`;
+            chip.innerText = !n ? (padDaemonConnected ? 'Virtual Slots Ready (0 pads)' : 'No controller detected') : low.length ? `${low.length === 1 ? low[0].name : `${low.length} controllers`}: battery low` : `${n} controller${n === 1 ? '' : 's'} connected${padDaemonConnected ? ' · Virtual Slots' : ''}`;
             chip.classList.toggle('connected', n > 0 && !low.length);
             chip.classList.toggle('warn', low.length > 0);
             noticeBatteries();
@@ -2201,7 +2319,15 @@
         }
 
         async function rescan() {
-            try { await fetch('/api/art/retry', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }); } catch { /* optional */ }
+            try {
+                await Promise.all([
+                    fetch('/api/art/retry', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }),
+                    fetch('/api/games/validate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+                ]);
+            }
+            catch {
+                /* optional */
+            }
             await Promise.all([loadGames(), refreshControllers()]);
             const synced = await syncAtStart(true);
             if (!synced || !synced.updated || !synced.updated.length) showToast('Refreshed');
@@ -2332,7 +2458,7 @@
             const body = document.getElementById('sheet-body');
             const g = sheet.game;
             const badge = g ? `<span class="channel-badge badge-${escapeHtml(g.console)}">${escapeHtml(g.console)}</span>` : '';
-            const head = title => `<div class="sheet-head"><div class="who"><h1>${title}</h1>${badge}<span class="game">${g ? escapeHtml(g.title) : ''}</span></div>${chipHtml()}</div>`;
+            const head = title => `<div class="sheet-head"><div class="who"><h1>${title}</h1>${badge}<span class="game">${g ? escapeHtml(g.title) : ''}</span></div>${chipHtml()}</div>${validationBannerHtml(g)}`;
             const busy = `<div class="sheet-busy" id="sheet-busy">${sheet.busy ? `<span class="spinner"></span><span>${escapeHtml(sheet.busy)}</span>` : ''}</div>`;
 
             if (sheet.view === 'loading') {

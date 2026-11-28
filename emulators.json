@@ -28,6 +28,10 @@
         "-e",
         "{rom}"
       ],
+      "dsu": {
+        "host": "127.0.0.1",
+        "port": 26760
+      },
       "windows": {
         "exe": "Dolphin.exe",
         "dirs": [
@@ -62,6 +66,10 @@
         "--fullscreen",
         "{rom}"
       ],
+      "dsu": {
+        "host": "127.0.0.1",
+        "port": 26760
+      },
       "windows": {
         "exe": "Ryujinx.exe",
         "dirs": [

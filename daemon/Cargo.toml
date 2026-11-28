@@ -1,0 +1,30 @@
+[package]
+name = "virtualpad-daemon"
+version = "0.1.0"
+edition = "2021"
+description = "Virtual controller slot daemon for all-in-one-emulator"
+
+[dependencies]
+sdl2 = { version = "0.37", features = ["bundled", "static-link"] }
+tokio = { version = "1", features = ["full"] }
+tokio-tungstenite = "0.24"
+futures-util = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+log = "0.4"
+env_logger = "0.11"
+uuid = { version = "1", features = ["v4"] }
+clap = { version = "4", features = ["derive"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+uinput = "0.1"
+nix = { version = "0.29", features = ["ioctl", "fs"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+vigem-client = { version = "0.1", features = ["unstable_xtarget_notification"] }
+windows = { version = "0.58", features = ["Win32_Devices_HumanInterfaceDevice"] }
+
+[profile.release]
+strip = true
+lto = true
+opt-level = "s"
